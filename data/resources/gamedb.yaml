@@ -154899,6 +154899,8 @@ SLES-02886:
   traits:
     - ForceRecompilerICache # Game is very timing sensitive.
     - ForcePGXPCPUMode # Reduces jitter slightly.
+  settings:
+    gpuPGXPTolerance: 3 # Fixes glitch polygons due to sign bit flip and lightning effects.
   metadata:
     publisher: "Activision"
     developer: "Neversoft Entertainment"
@@ -154921,6 +154923,8 @@ SLES-02887:
   traits:
     - ForceRecompilerICache # Game is very timing sensitive.
     - ForcePGXPCPUMode # Reduces jitter slightly.
+  settings:
+    gpuPGXPTolerance: 3 # Fixes glitch polygons due to sign bit flip and lightning effects.
   metadata:
     publisher: "Activision"
     developer: "Neversoft Entertainment"
@@ -154943,6 +154947,8 @@ SLES-02888:
   traits:
     - ForceRecompilerICache # Game is very timing sensitive.
     - ForcePGXPCPUMode # Reduces jitter slightly.
+  settings:
+    gpuPGXPTolerance: 3 # Fixes glitch polygons due to sign bit flip and lightning effects.
   metadata:
     publisher: "Activision"
     developer: "Neversoft Entertainment"
@@ -154965,6 +154971,8 @@ SLES-02889:
   traits:
     - ForceRecompilerICache # Game is very timing sensitive.
     - ForcePGXPCPUMode # Reduces jitter slightly.
+  settings:
+    gpuPGXPTolerance: 3 # Fixes glitch polygons due to sign bit flip and lightning effects.
   metadata:
     publisher: "Activision"
     developer: "Neversoft Entertainment"
@@ -154987,6 +154995,8 @@ SLPM-86739:
   traits:
     - ForceRecompilerICache # Game is very timing sensitive.
     - ForcePGXPCPUMode # Reduces jitter slightly.
+  settings:
+    gpuPGXPTolerance: 3 # Fixes glitch polygons due to sign bit flip and lightning effects.
   codes:
     - SLPM-86739
     - SLPM-87163
@@ -155015,6 +155025,8 @@ SLES-02890:
   traits:
     - ForceRecompilerICache # Game is very timing sensitive.
     - ForcePGXPCPUMode # Reduces jitter slightly.
+  settings:
+    gpuPGXPTolerance: 3 # Fixes glitch polygons due to sign bit flip and lightning effects.
   metadata:
     publisher: "Activision"
     developer: "Neversoft Entertainment"
@@ -155040,6 +155052,8 @@ SLUS-00875:
   traits:
     - ForceRecompilerICache # Game is very timing sensitive.
     - ForcePGXPCPUMode # Reduces jitter slightly.
+  settings:
+    gpuPGXPTolerance: 3 # Fixes glitch polygons due to sign bit flip and lightning effects.
   metadata:
     publisher: "Activision"
     developer: "Neversoft Entertainment"
@@ -155061,6 +155075,8 @@ SLES-03623:
     - DigitalController
   traits:
     - ForcePGXPCPUMode # Reduces jitter slightly.
+  settings:
+    gpuPGXPTolerance: 3 # Fixes glitch polygons due to sign bit flip and lightning effects.
   metadata:
     publisher: "Activision"
     developer: "Vicarious Visions"
@@ -155082,6 +155098,8 @@ SLES-03625:
     - DigitalController
   traits:
     - ForcePGXPCPUMode # Reduces jitter slightly.
+  settings:
+    gpuPGXPTolerance: 3 # Fixes glitch polygons due to sign bit flip and lightning effects.
   metadata:
     publisher: "Activision"
     developer: "Vicarious Visions"
@@ -155103,6 +155121,8 @@ SLPM-87073:
     - DigitalController
   traits:
     - ForcePGXPCPUMode # Reduces jitter slightly.
+  settings:
+    gpuPGXPTolerance: 3 # Fixes glitch polygons due to sign bit flip and lightning effects.
   metadata:
     publisher: "Success"
     developer: "Vicarious Visions"
@@ -155127,6 +155147,8 @@ SLUS-01378:
     - DigitalController
   traits:
     - ForcePGXPCPUMode # Reduces jitter slightly.
+  settings:
+    gpuPGXPTolerance: 3 # Fixes glitch polygons due to sign bit flip and lightning effects.
   metadata:
     publisher: "Activision"
     developer: "Vicarious Visions"
@@ -155148,6 +155170,8 @@ SLES-03624:
     - DigitalController
   traits:
     - ForcePGXPCPUMode # Reduces jitter slightly.
+  settings:
+    gpuPGXPTolerance: 3 # Fixes glitch polygons due to sign bit flip and lightning effects.
   metadata:
     publisher: "Activision"
     developer: "Vicarious Visions"

@@ -328,6 +328,11 @@ void ImGuiFullscreen::SetSmoothScrolling(bool enabled)
   UIStyle.SmoothScrolling = enabled;
 }
 
+void ImGuiFullscreen::SetMenuBorders(bool enabled)
+{
+  UIStyle.MenuBorders = enabled;
+}
+
 const std::shared_ptr<GPUTexture>& ImGuiFullscreen::GetPlaceholderTexture()
 {
   return s_state.placeholder_texture;
@@ -980,7 +985,8 @@ void ImGuiFullscreen::EndFullscreenColumns()
   ImGui::PopStyleVar(3);
 }
 
-bool ImGuiFullscreen::BeginFullscreenColumnWindow(float start, float end, const char* name, const ImVec4& background)
+bool ImGuiFullscreen::BeginFullscreenColumnWindow(float start, float end, const char* name, const ImVec4& background,
+                                                  const ImVec2& padding)
 {
   start = LayoutScale(start);
   end = LayoutScale(end);
@@ -994,15 +1000,19 @@ bool ImGuiFullscreen::BeginFullscreenColumnWindow(float start, float end, const 
   const ImVec2 size(end - start, ImGui::GetCurrentWindow()->Size.y);
 
   ImGui::PushStyleColor(ImGuiCol_ChildBg, background);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, LayoutScale(padding));
 
   ImGui::SetCursorPos(pos);
 
-  return ImGui::BeginChild(name, size, false, ImGuiWindowFlags_NavFlattened);
+  return ImGui::BeginChild(name, size,
+                           (padding.x != 0.0f || padding.y != 0.0f) ? ImGuiChildFlags_AlwaysUseWindowPadding : 0,
+                           ImGuiWindowFlags_NavFlattened);
 }
 
 void ImGuiFullscreen::EndFullscreenColumnWindow()
 {
   ImGui::EndChild();
+  ImGui::PopStyleVar();
   ImGui::PopStyleColor();
 }
 
@@ -1246,7 +1256,8 @@ void ImGuiFullscreen::PrerenderMenuButtonBorder()
 void ImGuiFullscreen::BeginMenuButtons(u32 num_items /* = 0 */, float y_align /* = 0.0f */,
                                        float x_padding /* = LAYOUT_MENU_BUTTON_X_PADDING */,
                                        float y_padding /* = LAYOUT_MENU_BUTTON_Y_PADDING */,
-                                       float item_height /* = LAYOUT_MENU_BUTTON_HEIGHT */)
+                                       float item_height /* = LAYOUT_MENU_BUTTON_HEIGHT */,
+                                       float item_spacing /* = LAYOUT_MENU_BUTTON_SPACING */)
 {
   s_state.menu_button_index = 0;
 
@@ -1278,12 +1289,13 @@ void ImGuiFullscreen::BeginMenuButtons(u32 num_items /* = 0 */, float y_align /*
 
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, LayoutScale(x_padding, y_padding));
   ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
-  ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, LayoutScale(1.0f));
-  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, LayoutScale(UIStyle.MenuBorders ? 1.0f : 0.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, LayoutScale(LAYOUT_MENU_BUTTON_SPACING)));
 
   if (y_align != 0.0f)
   {
-    const float real_item_height = LayoutScale(item_height) + (LayoutScale(y_padding) * 2.0f);
+    const float real_item_height =
+      LayoutScale(item_height) + (LayoutScale(y_padding) * 2.0f) + LayoutScale(item_spacing);
     const float total_size = (static_cast<float>(num_items) * real_item_height) + (LayoutScale(y_padding) * 2.0f);
     const float window_height = ImGui::GetWindowHeight();
     if (window_height > total_size)
@@ -1919,14 +1931,19 @@ bool ImGuiFullscreen::RangeButton(std::string_view title, std::string_view summa
 
   if (IsFixedPopupDialogOpen(title) &&
       BeginFixedPopupDialog(LayoutScale(LAYOUT_SMALL_POPUP_PADDING), LayoutScale(LAYOUT_SMALL_POPUP_PADDING),
-                            LayoutScale(500.0f, 194.0f)))
+                            LayoutScale(500.0f, 200.0f)))
   {
     BeginMenuButtons();
 
     const float end = ImGui::GetCurrentWindow()->WorkRect.GetWidth();
     ImGui::SetNextItemWidth(end);
 
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, LayoutScale(LAYOUT_WIDGET_FRAME_ROUNDING));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
+
     changed = ImGui::SliderInt("##value", value, min, max, format, ImGuiSliderFlags_NoInput);
+
+    ImGui::PopStyleVar(2);
 
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + LayoutScale(10.0f));
     if (MenuButtonWithoutSummary(ok_text, true, LAYOUT_MENU_BUTTON_HEIGHT_NO_SUMMARY, UIStyle.LargeFont,
@@ -1980,14 +1997,19 @@ bool ImGuiFullscreen::RangeButton(std::string_view title, std::string_view summa
 
   if (IsFixedPopupDialogOpen(title) &&
       BeginFixedPopupDialog(LayoutScale(LAYOUT_SMALL_POPUP_PADDING), LayoutScale(LAYOUT_SMALL_POPUP_PADDING),
-                            LayoutScale(500.0f, 194.0f)))
+                            LayoutScale(500.0f, 200.0f)))
   {
     BeginMenuButtons();
 
     const float end = ImGui::GetCurrentWindow()->WorkRect.GetWidth();
     ImGui::SetNextItemWidth(end);
 
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, LayoutScale(LAYOUT_WIDGET_FRAME_ROUNDING));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
+
     changed = ImGui::SliderFloat("##value", value, min, max, format, ImGuiSliderFlags_NoInput);
+
+    ImGui::PopStyleVar(2);
 
     if (MenuButtonWithoutSummary(ok_text, true, LAYOUT_MENU_BUTTON_HEIGHT_NO_SUMMARY, UIStyle.LargeFont,
                                  ImVec2(0.5f, 0.0f)))
@@ -2285,13 +2307,13 @@ bool ImGuiFullscreen::BeginHorizontalMenu(const char* name, const ImVec2& positi
 
   const float item_padding = LayoutScale(LAYOUT_HORIZONTAL_MENU_PADDING);
   const float item_width = LayoutScale(LAYOUT_HORIZONTAL_MENU_ITEM_WIDTH);
-  const float item_spacing = LayoutScale(30.0f);
+  const float item_spacing = LayoutScale(40.0f);
   const float menu_width = static_cast<float>(num_items) * (item_width + item_spacing) - item_spacing;
   const float menu_height = LayoutScale(LAYOUT_HORIZONTAL_MENU_HEIGHT);
 
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(item_padding, item_padding));
   ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
-  ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, LayoutScale(1.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, LayoutScale(UIStyle.MenuBorders ? 1.0f : 0.0f));
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(item_spacing, 0.0f));
 
   if (!BeginFullscreenWindow(position, size, name, bg_color, 0.0f, ImVec2()))
@@ -2802,7 +2824,8 @@ void ImGuiFullscreen::ChoiceDialog::Draw()
   const float title_height =
     UIStyle.LargeFont->FontSize + (LayoutScale(LAYOUT_MENU_BUTTON_Y_PADDING) * 2.0f) + (LayoutScale(10.0f) * 2.0f);
   const float item_height =
-    (LayoutScale(LAYOUT_MENU_BUTTON_HEIGHT_NO_SUMMARY) + LayoutScale(LAYOUT_MENU_BUTTON_Y_PADDING) * 2.0f);
+    (LayoutScale(LAYOUT_MENU_BUTTON_HEIGHT_NO_SUMMARY) + (LayoutScale(LAYOUT_MENU_BUTTON_Y_PADDING) * 2.0f) +
+     LayoutScale(LAYOUT_MENU_BUTTON_SPACING));
   const float height = title_height + (item_height * static_cast<float>(std::min<size_t>(9, m_options.size())));
 
   if (!BeginRender(LayoutScale(10.0f), LayoutScale(20.0f), ImVec2(width, height)))
@@ -2848,7 +2871,7 @@ void ImGuiFullscreen::ChoiceDialog::Draw()
 
       ImVec2 pos, size;
       GetMenuButtonFrameBounds(LAYOUT_MENU_BUTTON_HEIGHT_NO_SUMMARY, &pos, &size);
-      pos.y += size.y * static_cast<float>(i);
+      pos.y += (size.y + ImGui::GetStyle().ItemSpacing.y) * static_cast<float>(i);
       ImGui::RenderFrame(pos, pos + size, ImGui::GetColorU32(UIStyle.PrimaryColor), false,
                          LayoutScale(MENU_ITEM_BORDER_ROUNDING));
       if (!found_selected)
@@ -3306,16 +3329,16 @@ void ImGuiFullscreen::RenderLoadingScreen(std::string_view image, std::string_vi
 
   DrawLoadingScreen(image, message, progress_min, progress_max, progress_value, false);
 
-  ImGui::EndFrame();
+  ImGuiManager::CreateDrawLists();
 
   GPUSwapChain* swap_chain = g_gpu_device->GetMainSwapChain();
   if (g_gpu_device->BeginPresent(swap_chain) == GPUDevice::PresentResult::OK)
   {
-    g_gpu_device->RenderImGui(swap_chain);
+    ImGuiManager::RenderDrawLists(swap_chain);
     g_gpu_device->EndPresent(swap_chain, false);
   }
 
-  ImGui::NewFrame();
+  ImGuiManager::NewFrame();
 }
 
 void ImGuiFullscreen::OpenOrUpdateLoadingScreen(std::string_view image, std::string_view message,
@@ -3908,7 +3931,7 @@ void ImGuiFullscreen::SetTheme(std::string_view theme)
     // dark
     UIStyle.BackgroundColor = HEX_TO_IMVEC4(0x212121, 0xff);
     UIStyle.BackgroundTextColor = HEX_TO_IMVEC4(0xffffff, 0xff);
-    UIStyle.BackgroundLineColor = HEX_TO_IMVEC4(0xf0f0f0, 0xff);
+    UIStyle.BackgroundLineColor = HEX_TO_IMVEC4(0xaaaaaa, 0xff);
     UIStyle.BackgroundHighlight = HEX_TO_IMVEC4(0x4b4b4b, 0xc0);
     UIStyle.PopupBackgroundColor = HEX_TO_IMVEC4(0x212121, 0xf2);
     UIStyle.PopupFrameBackgroundColor = HEX_TO_IMVEC4(0x313131, 0xf2);

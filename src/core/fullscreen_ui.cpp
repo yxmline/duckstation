@@ -97,6 +97,7 @@ using ImGuiFullscreen::LAYOUT_MENU_BUTTON_Y_PADDING;
 using ImGuiFullscreen::LAYOUT_SCREEN_HEIGHT;
 using ImGuiFullscreen::LAYOUT_SCREEN_WIDTH;
 using ImGuiFullscreen::LAYOUT_SMALL_POPUP_PADDING;
+using ImGuiFullscreen::LAYOUT_WIDGET_FRAME_ROUNDING;
 using ImGuiFullscreen::UIStyle;
 
 using ImGuiFullscreen::AddNotification;
@@ -250,7 +251,7 @@ static void UpdateTransitionState();
 // Backgrounds
 //////////////////////////////////////////////////////////////////////////
 
-static constexpr const char* DEFAULT_BACKGROUND_NAME = "Default";
+static constexpr const char* DEFAULT_BACKGROUND_NAME = "StaticGray";
 
 static bool HasBackground();
 static void LoadBackground();
@@ -737,6 +738,7 @@ bool FullscreenUI::Initialize()
 
   ImGuiFullscreen::SetAnimations(Host::GetBaseBoolSettingValue("Main", "FullscreenUIAnimations", true));
   ImGuiFullscreen::SetSmoothScrolling(Host::GetBaseBoolSettingValue("Main", "FullscreenUISmoothScrolling", true));
+  ImGuiFullscreen::SetMenuBorders(Host::GetBaseBoolSettingValue("Main", "FullscreenUIMenuBorders", true));
   ImGuiFullscreen::UpdateLayoutScale();
 
   if (Host::GetBaseBoolSettingValue("Main", "FullscreenUIDisplayPSIcons", false))
@@ -2933,12 +2935,15 @@ void FullscreenUI::DrawIntRangeSetting(SettingsInterface* bsi, std::string_view 
 
   if (!IsFixedPopupDialogOpen(title) ||
       !BeginFixedPopupDialog(LayoutScale(LAYOUT_SMALL_POPUP_PADDING), LayoutScale(LAYOUT_SMALL_POPUP_PADDING),
-                             LayoutScale(500.0f, 194.0f)))
+                             LayoutScale(500.0f, 200.0f)))
   {
     return;
   }
 
   BeginMenuButtons();
+
+  ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, LayoutScale(LAYOUT_WIDGET_FRAME_ROUNDING));
+  ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
 
   ImGui::SetNextItemWidth(ImGui::GetCurrentWindow()->WorkRect.GetWidth());
   s32 dlg_value = static_cast<s32>(value.value_or(default_value));
@@ -2951,6 +2956,8 @@ void FullscreenUI::DrawIntRangeSetting(SettingsInterface* bsi, std::string_view 
 
     SetSettingsChanged(bsi);
   }
+
+  ImGui::PopStyleVar(2);
 
   ImGui::SetCursorPosY(ImGui::GetCursorPosY() + LayoutScale(10.0f));
   if (MenuButtonWithoutSummary(FSUI_VSTR("OK"), true, LAYOUT_MENU_BUTTON_HEIGHT_NO_SUMMARY, UIStyle.LargeFont,
@@ -2979,12 +2986,15 @@ void FullscreenUI::DrawFloatRangeSetting(SettingsInterface* bsi, std::string_vie
 
   if (!IsFixedPopupDialogOpen(title) ||
       !BeginFixedPopupDialog(LayoutScale(LAYOUT_SMALL_POPUP_PADDING), LayoutScale(LAYOUT_SMALL_POPUP_PADDING),
-                             LayoutScale(500.0f, 194.0f)))
+                             LayoutScale(500.0f, 200.0f)))
   {
     return;
   }
 
   BeginMenuButtons();
+
+  ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, LayoutScale(LAYOUT_WIDGET_FRAME_ROUNDING));
+  ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
 
   const float end = ImGui::GetCurrentWindow()->WorkRect.GetWidth();
   ImGui::SetNextItemWidth(end);
@@ -3001,6 +3011,8 @@ void FullscreenUI::DrawFloatRangeSetting(SettingsInterface* bsi, std::string_vie
 
     SetSettingsChanged(bsi);
   }
+
+  ImGui::PopStyleVar(2);
 
   ImGui::SetCursorPosY(ImGui::GetCursorPosY() + LayoutScale(10.0f));
   if (MenuButtonWithoutSummary(FSUI_VSTR("OK"), true, LAYOUT_MENU_BUTTON_HEIGHT_NO_SUMMARY, UIStyle.LargeFont,
@@ -3034,7 +3046,7 @@ void FullscreenUI::DrawFloatSpinBoxSetting(SettingsInterface* bsi, std::string_v
 
   if (!IsFixedPopupDialogOpen(title) ||
       !BeginFixedPopupDialog(LayoutScale(LAYOUT_SMALL_POPUP_PADDING), LayoutScale(LAYOUT_SMALL_POPUP_PADDING),
-                             LayoutScale(500.0f, 194.0f)))
+                             LayoutScale(500.0f, 200.0f)))
   {
     return;
   }
@@ -3059,11 +3071,16 @@ void FullscreenUI::DrawFloatSpinBoxSetting(SettingsInterface* bsi, std::string_v
                     ((tmp_value.value() - std::floor(tmp_value.value())) < 0.01f) ? "%.0f" : "%f", tmp_value.value());
     }
 
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, LayoutScale(LAYOUT_WIDGET_FRAME_ROUNDING));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
+
     if (ImGui::InputText("##value", str_value, std::size(str_value), ImGuiInputTextFlags_CharsDecimal))
     {
       dlg_value = StringUtil::FromChars<float>(str_value).value_or(dlg_value);
       dlg_value_changed = true;
     }
+
+    ImGui::PopStyleVar(2);
 
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + LayoutScale(10.0f));
   }
@@ -3172,6 +3189,9 @@ bool FullscreenUI::DrawIntRectSetting(SettingsInterface* bsi, std::string_view t
 
   BeginMenuButtons();
 
+  ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, LayoutScale(LAYOUT_WIDGET_FRAME_ROUNDING));
+  ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
+
   const float midpoint = LayoutScale(150.0f);
   const float end = (ImGui::GetCurrentWindow()->WorkRect.GetWidth() - midpoint) + ImGui::GetStyle().WindowPadding.x;
   ImGui::TextUnformatted("Left: ");
@@ -3231,6 +3251,8 @@ bool FullscreenUI::DrawIntRectSetting(SettingsInterface* bsi, std::string_view t
   if (changed)
     SetSettingsChanged(bsi);
 
+  ImGui::PopStyleVar(2);
+
   if (MenuButtonWithoutSummary(FSUI_VSTR("OK"), true, LAYOUT_MENU_BUTTON_HEIGHT_NO_SUMMARY, UIStyle.LargeFont,
                                ImVec2(0.5f, 0.0f)))
   {
@@ -3267,7 +3289,7 @@ void FullscreenUI::DrawIntSpinBoxSetting(SettingsInterface* bsi, std::string_vie
 
   if (!IsFixedPopupDialogOpen(title) ||
       !BeginFixedPopupDialog(LayoutScale(LAYOUT_SMALL_POPUP_PADDING), LayoutScale(LAYOUT_SMALL_POPUP_PADDING),
-                             LayoutScale(500.0f, 194.0f)))
+                             LayoutScale(500.0f, 200.0f)))
   {
     return;
   }
@@ -3285,12 +3307,17 @@ void FullscreenUI::DrawIntSpinBoxSetting(SettingsInterface* bsi, std::string_vie
     const float end = ImGui::GetCurrentWindow()->WorkRect.GetWidth();
     ImGui::SetNextItemWidth(end);
 
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, LayoutScale(LAYOUT_WIDGET_FRAME_ROUNDING));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
+
     std::snprintf(str_value, std::size(str_value), "%d", dlg_value);
     if (ImGui::InputText("##value", str_value, std::size(str_value), ImGuiInputTextFlags_CharsDecimal))
     {
       dlg_value = StringUtil::FromChars<s32>(str_value).value_or(dlg_value);
       dlg_value_changed = true;
     }
+
+    ImGui::PopStyleVar(2);
 
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + LayoutScale(10.0f));
   }
@@ -4208,6 +4235,13 @@ void FullscreenUI::DrawInterfaceSettingsPage()
     ImGuiFullscreen::SetSmoothScrolling(bsi->GetBoolValue("Main", "FullscreenUISmoothScrolling", true));
   }
 
+  if (DrawToggleSetting(bsi, FSUI_ICONVSTR(ICON_FA_BORDER_ALL, "Menu Borders"),
+                        FSUI_VSTR("Draws a border around the currently-selected item for readability."), "Main",
+                        "FullscreenUIMenuBorders", true))
+  {
+    ImGuiFullscreen::SetMenuBorders(bsi->GetBoolValue("Main", "FullscreenUIMenuBorders", true));
+  }
+
   MenuHeading(FSUI_VSTR("Behavior"));
 
   DrawToggleSetting(
@@ -5065,7 +5099,7 @@ void FullscreenUI::DrawControllerSettingsPage()
 
       if (IsFixedPopupDialogOpen(freq_label) &&
           BeginFixedPopupDialog(LayoutScale(LAYOUT_SMALL_POPUP_PADDING), LayoutScale(LAYOUT_SMALL_POPUP_PADDING),
-                                LayoutScale(500.0f, 194.0f)))
+                                LayoutScale(500.0f, 200.0f)))
       {
         BeginMenuButtons();
 
@@ -5911,7 +5945,7 @@ void FullscreenUI::DrawPostProcessingSettingsPage()
 
           if (IsFixedPopupDialogOpen(tstr) &&
               BeginFixedPopupDialog(LayoutScale(LAYOUT_SMALL_POPUP_PADDING), LayoutScale(LAYOUT_SMALL_POPUP_PADDING),
-                                    LayoutScale(500.0f, 194.0f)))
+                                    LayoutScale(500.0f, 200.0f)))
           {
             BeginMenuButtons();
 
@@ -5982,7 +6016,7 @@ void FullscreenUI::DrawPostProcessingSettingsPage()
 
           if (IsFixedPopupDialogOpen(tstr) &&
               BeginFixedPopupDialog(LayoutScale(LAYOUT_SMALL_POPUP_PADDING), LayoutScale(LAYOUT_SMALL_POPUP_PADDING),
-                                    LayoutScale(500.0f, 194.0f)))
+                                    LayoutScale(500.0f, 200.0f)))
           {
             BeginMenuButtons();
 
@@ -6371,7 +6405,28 @@ void FullscreenUI::DrawAchievementsLoginWindow()
     return;
   }
 
+  const std::string_view ra_title = "RetroAchivements";
+  const ImVec2 ra_title_size =
+    UIStyle.LargeFont->CalcTextSizeA(UIStyle.LargeFont->FontSize, FLT_MAX, 0.0f, IMSTR_START_END(ra_title));
+  const float ra_title_spacing = LayoutScale(10.0f);
+  GPUTexture* ra_logo = GetCachedTexture("images/ra-icon.webp");
+  const ImVec2 ra_logo_size = ImVec2(UIStyle.LargeFont->FontSize * 1.85f, UIStyle.LargeFont->FontSize);
+  const ImVec2 ra_logo_imgsize = CenterImage(ra_logo_size, ra_logo).GetSize();
+  const ImRect work_rect = ImGui::GetCurrentWindow()->WorkRect;
+  const float indent = (work_rect.GetWidth() - (ra_logo_size.x + ra_title_spacing + ra_title_size.x)) * 0.5f;
+  ImDrawList* const dl = ImGui::GetWindowDrawList();
+  const ImVec2 ra_logo_pos = work_rect.Min + ImVec2(indent, 0.0f);
+  dl->AddImage(ra_logo, ra_logo_pos, ra_logo_pos + ra_logo_imgsize);
+  dl->AddText(UIStyle.LargeFont, UIStyle.LargeFont->FontSize,
+              ra_logo_pos + ImVec2(ra_logo_size.x + ra_title_spacing, 0.0f), ImGui::GetColorU32(ImGuiCol_Text),
+              IMSTR_START_END(ra_title));
+
+  ImGui::SetCursorPosY(ImGui::GetCursorPosY() + ra_logo_size.y + LayoutScale(15.0f));
+
   BeginMenuButtons();
+  ImGui::PushStyleColor(ImGuiCol_Text, DarkerColor(ImGui::GetStyle().Colors[ImGuiCol_Text]));
+  ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, LayoutScale(LAYOUT_WIDGET_FRAME_ROUNDING));
+  ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
 
   if (!login_error)
   {
@@ -6389,7 +6444,6 @@ void FullscreenUI::DrawAchievementsLoginWindow()
   const bool is_logging_in = ImGuiFullscreen::IsBackgroundProgressDialogOpen(LOGIN_PROGRESS_NAME);
   ResetFocusHere();
 
-  const float item_margin = LayoutScale(10.0f);
   const float item_width = LayoutScale(550.0f);
 
   ImGui::SetCursorPosX((ImGui::GetWindowWidth() - item_width) * 0.5f);
@@ -6399,13 +6453,16 @@ void FullscreenUI::DrawAchievementsLoginWindow()
   ImGui::NextColumn();
 
   ImGui::SetCursorPosX((ImGui::GetWindowWidth() - item_width) * 0.5f);
-  ImGui::SetCursorPosY(ImGui::GetCursorPosY() + item_margin);
+  ImGui::SetCursorPosY(ImGui::GetCursorPosY() + LayoutScale(10.0f));
   ImGui::SetNextItemWidth(item_width);
   ImGui::InputTextWithHint("##password", FSUI_CSTR("Password"), password, sizeof(password),
                            is_logging_in ? (ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_Password) :
                                            ImGuiInputTextFlags_Password);
 
-  ImGui::SetCursorPosY(ImGui::GetCursorPosY() + item_margin);
+  ImGui::PopStyleVar(2);
+  ImGui::PopStyleColor();
+
+  ImGui::SetCursorPosY(ImGui::GetCursorPosY() + LayoutScale(15.0f));
 
   const bool login_enabled = (std::strlen(username) > 0 && std::strlen(password) > 0 && !is_logging_in);
 
@@ -6619,7 +6676,7 @@ void FullscreenUI::DrawPatchesOrCheatsSettingsPage(bool cheats)
 
       if (IsFixedPopupDialogOpen(title) &&
           BeginFixedPopupDialog(LayoutScale(LAYOUT_SMALL_POPUP_PADDING), LayoutScale(LAYOUT_SMALL_POPUP_PADDING),
-                                LayoutScale(500.0f, 194.0f)))
+                                LayoutScale(500.0f, 200.0f)))
       {
         BeginMenuButtons();
 
@@ -7066,8 +7123,7 @@ void FullscreenUI::InitializePlaceholderSaveStateListEntry(SaveStateListEntry* l
 bool FullscreenUI::InitializeSaveStateListEntryFromSerial(SaveStateListEntry* li, const std::string& serial, s32 slot,
                                                           bool global)
 {
-  const std::string path =
-    (global ? System::GetGlobalSaveStatePath(slot) : System::GetGameSaveStatePath(serial, slot));
+  const std::string path = (global ? System::GetGlobalSaveStatePath(slot) : System::GetGameSaveStatePath(serial, slot));
   if (!InitializeSaveStateListEntryFromPath(li, path.c_str(), slot, global))
   {
     InitializePlaceholderSaveStateListEntry(li, slot, global);
@@ -7488,6 +7544,7 @@ bool FullscreenUI::OpenLoadStateSelectorForGameResume(const GameList::Entry* ent
   if (!InitializeSaveStateListEntryFromSerial(&slentry, entry->serial, -1, false))
     return false;
 
+  slentry.game_path = entry->path;
   s_state.save_state_selector_slots.push_back(std::move(slentry));
   OpenFixedPopupDialog(RESUME_STATE_SELECTOR_DIALOG_NAME);
   return true;
@@ -7495,7 +7552,7 @@ bool FullscreenUI::OpenLoadStateSelectorForGameResume(const GameList::Entry* ent
 
 void FullscreenUI::DrawResumeStateSelector()
 {
-  if (!BeginFixedPopupDialog(LayoutScale(30.0f), LayoutScale(40.0f), LayoutScale(820.0f, 625.0f)))
+  if (!BeginFixedPopupDialog(LayoutScale(30.0f), LayoutScale(40.0f), LayoutScale(820.0f, 640.0f)))
   {
     ClearSaveStateEntryList();
     return;
@@ -7819,7 +7876,7 @@ void FullscreenUI::DrawGameList(const ImVec2& heading_size)
     ImGui::SetNextWindowScroll(ImVec2(0.0f, 0.0f));
 
   if (BeginFullscreenColumnWindow(0.0f, -530.0f, "game_list_entries",
-                                  ModAlpha(UIStyle.BackgroundColor, GetBackgroundAlpha())))
+                                  ModAlpha(UIStyle.BackgroundColor, GetBackgroundAlpha()), ImVec2(10.0f, 10.0f)))
   {
     const ImVec2 image_size(LayoutScale(LAYOUT_MENU_BUTTON_HEIGHT, LAYOUT_MENU_BUTTON_HEIGHT));
 
@@ -8617,7 +8674,7 @@ void FullscreenUI::CopyTextToClipboard(std::string title, std::string_view text)
 void FullscreenUI::DrawAboutWindow()
 {
   if (!BeginFixedPopupDialog(LayoutScale(LAYOUT_LARGE_POPUP_PADDING), LayoutScale(LAYOUT_LARGE_POPUP_ROUNDING),
-                             LayoutScale(1020.0f, 590.0f)))
+                             LayoutScale(1020.0f, 600.0f)))
   {
     return;
   }
@@ -9223,6 +9280,7 @@ TRANSLATE_NOOP("FullscreenUI", "Downloads covers from a user-specified URL templ
 TRANSLATE_NOOP("FullscreenUI", "Downsamples the rendered image prior to displaying it. Can improve overall image quality in mixed 2D/3D games.");
 TRANSLATE_NOOP("FullscreenUI", "Downsampling");
 TRANSLATE_NOOP("FullscreenUI", "Downsampling Display Scale");
+TRANSLATE_NOOP("FullscreenUI", "Draws a border around the currently-selected item for readability.");
 TRANSLATE_NOOP("FullscreenUI", "Duck icon by icons8 (https://icons8.com/icon/74847/platforms.undefined.short-title)");
 TRANSLATE_NOOP("FullscreenUI", "DuckStation is a free simulator/emulator of the Sony PlayStation(TM) console, focusing on playability, speed, and long-term maintainability.");
 TRANSLATE_NOOP("FullscreenUI", "Dump Replaced Textures");
@@ -9401,6 +9459,7 @@ TRANSLATE_NOOP("FullscreenUI", "Memory Card Port {}");
 TRANSLATE_NOOP("FullscreenUI", "Memory Card Settings");
 TRANSLATE_NOOP("FullscreenUI", "Memory Card {} Type");
 TRANSLATE_NOOP("FullscreenUI", "Menu Background");
+TRANSLATE_NOOP("FullscreenUI", "Menu Borders");
 TRANSLATE_NOOP("FullscreenUI", "Merge Multi-Disc Games");
 TRANSLATE_NOOP("FullscreenUI", "Merges multi-disc games into one item in the game list.");
 TRANSLATE_NOOP("FullscreenUI", "Minimal Output Latency");

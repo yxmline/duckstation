@@ -40,6 +40,7 @@ static constexpr float LAYOUT_MENU_BUTTON_HEIGHT = 50.0f;
 static constexpr float LAYOUT_MENU_BUTTON_HEIGHT_NO_SUMMARY = 26.0f;
 static constexpr float LAYOUT_MENU_BUTTON_X_PADDING = 15.0f;
 static constexpr float LAYOUT_MENU_BUTTON_Y_PADDING = 10.0f;
+static constexpr float LAYOUT_MENU_BUTTON_SPACING = 4.0f;
 static constexpr float LAYOUT_MENU_WINDOW_X_PADDING = 12.0f;
 static constexpr float LAYOUT_FOOTER_PADDING = 10.0f;
 static constexpr float LAYOUT_FOOTER_HEIGHT = LAYOUT_MEDIUM_FONT_SIZE + LAYOUT_FOOTER_PADDING * 2.0f;
@@ -51,6 +52,7 @@ static constexpr float LAYOUT_SHADOW_OFFSET = 1.0f;
 static constexpr float LAYOUT_SMALL_POPUP_PADDING = 20.0f;
 static constexpr float LAYOUT_LARGE_POPUP_PADDING = 30.0f;
 static constexpr float LAYOUT_LARGE_POPUP_ROUNDING = 40.0f;
+static constexpr float LAYOUT_WIDGET_FRAME_ROUNDING = 20.0f;
 
 struct ALIGN_TO_CACHE_LINE UIStyles
 {
@@ -86,6 +88,7 @@ struct ALIGN_TO_CACHE_LINE UIStyles
 
   bool Animations;
   bool SmoothScrolling;
+  bool MenuBorders;
 };
 
 extern UIStyles UIStyle;
@@ -175,6 +178,7 @@ bool Initialize(const char* placeholder_image_path);
 void SetTheme(std::string_view theme);
 void SetAnimations(bool enabled);
 void SetSmoothScrolling(bool enabled);
+void SetMenuBorders(bool enabled);
 void SetFonts(ImFont* medium_font, ImFont* large_font);
 bool UpdateLayoutScale();
 
@@ -241,7 +245,7 @@ bool BeginFullscreenColumns(const char* title = nullptr, float pos_y = 0.0f, boo
 void EndFullscreenColumns();
 
 bool BeginFullscreenColumnWindow(float start, float end, const char* name,
-                                 const ImVec4& background = UIStyle.BackgroundColor);
+                                 const ImVec4& background = UIStyle.BackgroundColor, const ImVec2& padding = ImVec2());
 void EndFullscreenColumnWindow();
 
 bool BeginFullscreenWindow(float left, float top, float width, float height, const char* name,
@@ -265,7 +269,8 @@ void DrawFullscreenFooter();
 
 void PrerenderMenuButtonBorder();
 void BeginMenuButtons(u32 num_items = 0, float y_align = 0.0f, float x_padding = LAYOUT_MENU_BUTTON_X_PADDING,
-                      float y_padding = LAYOUT_MENU_BUTTON_Y_PADDING, float item_height = LAYOUT_MENU_BUTTON_HEIGHT);
+                      float y_padding = LAYOUT_MENU_BUTTON_Y_PADDING, float item_height = LAYOUT_MENU_BUTTON_HEIGHT,
+                      float item_spacing = LAYOUT_MENU_BUTTON_SPACING);
 void EndMenuButtons();
 void GetMenuButtonFrameBounds(float height, ImVec2* pos, ImVec2* size);
 bool MenuButtonFrame(std::string_view str_id, bool enabled, float height, bool* visible, bool* hovered, ImVec2* min,

@@ -61,9 +61,8 @@ struct GPUThreadCommand
 
   static constexpr u32 AlignCommandSize(u32 size)
   {
-    // Ensure size is a multiple of 8 (minimum data size) so we don't end up with an unaligned command.
-    // NOTE: If we ever end up putting vectors in the command packets, this should be raised.
-    constexpr u32 COMMAND_QUEUE_ALLOCATION_ALIGNMENT = 8;
+    // Ensure size is a multiple of 16 (minimum data size) so we don't end up with an unaligned command.
+    constexpr u32 COMMAND_QUEUE_ALLOCATION_ALIGNMENT = 16;
     return Common::AlignUpPow2(size, COMMAND_QUEUE_ALLOCATION_ALIGNMENT);
   }
 };
