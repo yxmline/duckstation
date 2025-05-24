@@ -795,9 +795,9 @@ System::BootMode System::GetBootMode()
   return s_state.boot_mode;
 }
 
-bool System::IsUsingPS2BIOS()
+bool System::IsUsingKnownPS1BIOS()
 {
-  return (s_state.bios_image_info && s_state.bios_image_info->fastboot_patch == BIOS::ImageInfo::FastBootPatch::Type2);
+  return (s_state.bios_image_info && s_state.bios_image_info->fastboot_patch == BIOS::ImageInfo::FastBootPatch::Type1);
 }
 
 bool System::IsDiscPath(std::string_view path)
@@ -3504,15 +3504,17 @@ void System::FormatLatencyStats(SmallStringBase& str)
   AudioStream* audio_stream = SPU::GetOutputStream();
   const u32 audio_latency =
     AudioStream::GetMSForBufferSize(audio_stream->GetSampleRate(), audio_stream->GetBufferedFramesRelaxed());
+  const u32 queued_frame_count = GPUBackend::GetQueuedFrameCount();
 
   const double active_frame_time = std::ceil(Timer::ConvertValueToMilliseconds(s_state.last_active_frame_time));
   const double pre_frame_time = std::ceil(Timer::ConvertValueToMilliseconds(s_state.pre_frame_sleep_time));
   const double input_latency = std::ceil(
-    Timer::ConvertValueToMilliseconds(s_state.frame_period - s_state.pre_frame_sleep_time) -
+    Timer::ConvertValueToMilliseconds((s_state.frame_period - s_state.pre_frame_sleep_time) *
+                                      static_cast<float>(std::max(queued_frame_count, 1u))) -
     Timer::ConvertValueToMilliseconds(static_cast<Timer::Value>(s_state.runahead_frames) * s_state.frame_period));
 
   str.format("AL: {}ms | AF: {:.0f}ms | PF: {:.0f}ms | IL: {:.0f}ms | QF: {}", audio_latency, active_frame_time,
-             pre_frame_time, input_latency, GPUBackend::GetQueuedFrameCount());
+             pre_frame_time, input_latency, queued_frame_count);
 }
 
 void System::UpdateSpeedLimiterState()
@@ -4753,6 +4755,10 @@ void System::WarnAboutUnsafeSettings()
     messages.append_vformat(fmt, fmt::make_format_args(args...));
     messages.append('\n');
   };
+  const auto has_trait = [](GameDatabase::Trait trait) {
+    return (g_settings.apply_compatibility_settings && s_state.running_game_entry &&
+            s_state.running_game_entry->HasTrait(trait));
+  };
 
   if (!g_settings.disable_all_enhancements)
   {
@@ -4762,8 +4768,11 @@ void System::WarnAboutUnsafeSettings()
         ICON_EMOJI_WARNING, TRANSLATE_FS("System", "CPU clock speed is set to {}% ({} / {}). This may crash games."),
         g_settings.GetCPUOverclockPercent(), g_settings.cpu_overclock_numerator, g_settings.cpu_overclock_denominator);
     }
-    if (g_settings.cdrom_read_speedup != 1 || g_settings.cdrom_seek_speedup != 1)
+    if ((g_settings.cdrom_read_speedup != 1 && !has_trait(GameDatabase::Trait::DisableCDROMReadSpeedup)) ||
+        (g_settings.cdrom_seek_speedup != 1 && !has_trait(GameDatabase::Trait::DisableCDROMSeekSpeedup)))
+    {
       append(ICON_EMOJI_WARNING, TRANSLATE_SV("System", "CD-ROM read/seek speedup is enabled. This may crash games."));
+    }
     if (g_settings.gpu_force_video_timing != ForceVideoTimingMode::Disabled)
       append(ICON_FA_TV,
              TRANSLATE_SV("System", "Frame rate is not set to automatic. Games may run at incorrect speeds."));

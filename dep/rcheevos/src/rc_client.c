@@ -64,6 +64,7 @@ typedef struct rc_client_load_state_t
 
 #ifdef RC_CLIENT_SUPPORTS_HASH
   rc_hash_iterator_t hash_iterator;
+  rc_client_game_hash_t* tried_hashes[4];
 #endif
   rc_client_pending_media_t* pending_media;
 
@@ -975,6 +976,126 @@ void rc_client_get_user_game_summary(const rc_client_t* client, rc_client_user_g
   rc_client_subset_get_user_game_summary(client->game->subsets, summary, unlock_bit);
 
   rc_mutex_unlock((rc_mutex_t*)&client->state.mutex); /* remove const cast for mutex access */
+}
+
+typedef struct rc_client_fetch_all_user_progress_callback_data_t {
+  rc_client_t* client;
+  rc_client_fetch_all_user_progress_callback_t callback;
+  void* callback_userdata;
+  uint32_t console_id;
+  rc_client_async_handle_t async_handle;
+} rc_client_fetch_all_user_progress_callback_data_t;
+
+static void rc_client_fetch_all_user_progress_callback(const rc_api_server_response_t* server_response,
+                                                       void* callback_data)
+{
+  rc_client_fetch_all_user_progress_callback_data_t* ap_callback_data =
+    (rc_client_fetch_all_user_progress_callback_data_t*)callback_data;
+  rc_client_t* client = ap_callback_data->client;
+  rc_api_fetch_all_user_progress_response_t ap_response;
+  const char* error_message;
+  int result;
+
+  result = rc_client_end_async(client, &ap_callback_data->async_handle);
+  if (result) {
+    if (result != RC_CLIENT_ASYNC_DESTROYED)
+      RC_CLIENT_LOG_VERBOSE(client, "Fetch all progress aborted");
+
+    free(ap_callback_data);
+    return;
+  }
+
+  result = rc_api_process_fetch_all_user_progress_server_response(&ap_response, server_response);
+  error_message = rc_client_server_error_message(&result, server_response->http_status_code, &ap_response.response);
+  if (error_message) {
+    RC_CLIENT_LOG_ERR_FORMATTED(client, "Fetch all progress for console %u failed: %s", ap_callback_data->console_id,
+                                error_message);
+    ap_callback_data->callback(result, error_message, NULL, client, ap_callback_data->callback_userdata);
+  } else {
+    rc_client_all_user_progress_t* list;
+    const size_t list_size = sizeof(*list) + sizeof(rc_client_all_user_progress_entry_t) * ap_response.num_entries;
+
+    list = (rc_client_all_user_progress_t*)malloc(list_size);
+    if (!list) {
+      ap_callback_data->callback(RC_OUT_OF_MEMORY, rc_error_str(RC_OUT_OF_MEMORY), NULL, client,
+                                 ap_callback_data->callback_userdata);
+    } else {
+      rc_client_all_user_progress_entry_t* entry = list->entries =
+        (rc_client_all_user_progress_entry_t*)((uint8_t*)list + sizeof(*list));
+      const rc_api_all_user_progress_entry_t* hlentry = ap_response.entries;
+      const rc_api_all_user_progress_entry_t* stop = hlentry + ap_response.num_entries;
+
+      for (; hlentry < stop; ++hlentry, ++entry)
+      {
+        entry->game_id = hlentry->game_id;
+        entry->num_achievements = hlentry->num_achievements;
+        entry->num_unlocked_achievements = hlentry->num_unlocked_achievements;
+        entry->num_unlocked_achievements_hardcore = hlentry->num_unlocked_achievements_hardcore;
+      }
+
+      list->num_entries = ap_response.num_entries;
+
+      ap_callback_data->callback(RC_OK, NULL, list, client, ap_callback_data->callback_userdata);
+    }
+  }
+
+  rc_api_destroy_fetch_all_user_progress_response(&ap_response);
+  free(ap_callback_data);
+}
+
+rc_client_async_handle_t* rc_client_begin_fetch_all_user_progress(rc_client_t* client, uint32_t console_id,
+                                                                  rc_client_fetch_all_user_progress_callback_t callback,
+                                                                  void* callback_userdata)
+{
+  rc_api_fetch_all_user_progress_request_t api_params;
+  rc_client_fetch_all_user_progress_callback_data_t* callback_data;
+  rc_client_async_handle_t* async_handle;
+  rc_api_request_t request;
+  int result;
+  const char* error_message;
+
+  if (!client) {
+    callback(RC_INVALID_STATE, "client is required", NULL, client, callback_userdata);
+    return NULL;
+  } else if (client->state.user != RC_CLIENT_USER_STATE_LOGGED_IN) {
+    callback(RC_INVALID_STATE, "client must be logged in", NULL, client, callback_userdata);
+    return NULL;
+  }
+
+  api_params.username = client->user.username;
+  api_params.api_token = client->user.token;
+  api_params.console_id = console_id;
+
+  result = rc_api_init_fetch_all_user_progress_request_hosted(&request, &api_params, &client->state.host);
+
+  if (result != RC_OK) {
+    error_message = rc_error_str(result);
+    callback(result, error_message, NULL, client, callback_userdata);
+    return NULL;
+  }
+
+  callback_data = (rc_client_fetch_all_user_progress_callback_data_t*)calloc(1, sizeof(*callback_data));
+  if (!callback_data) {
+    callback(RC_OUT_OF_MEMORY, rc_error_str(RC_OUT_OF_MEMORY), NULL, client, callback_userdata);
+    return NULL;
+  }
+
+  callback_data->client = client;
+  callback_data->callback = callback;
+  callback_data->callback_userdata = callback_userdata;
+  callback_data->console_id = console_id;
+
+  async_handle = &callback_data->async_handle;
+  rc_client_begin_async(client, async_handle);
+  client->callbacks.server_call(&request, rc_client_fetch_all_user_progress_callback, callback_data, client);
+  rc_api_destroy_request(&request);
+
+  return rc_client_async_handle_valid(client, async_handle) ? async_handle : NULL;
+}
+
+void rc_client_destroy_all_user_progress(rc_client_all_user_progress_t* list)
+{
+  free(list);
 }
 
 /* ===== Game ===== */
@@ -2235,40 +2356,31 @@ static void rc_client_process_resolved_hash(rc_client_load_state_t* load_state)
       return;
     }
 
-    if (load_state->game->media_hash &&
-        load_state->game->media_hash->game_hash &&
-        load_state->game->media_hash->game_hash->next) {
+    if (load_state->tried_hashes[1]) {
       /* multiple hashes were tried, create a CSV */
-      struct rc_client_game_hash_t* game_hash = load_state->game->media_hash->game_hash;
-      int count = 1;
+      size_t i;
+      size_t count = 0;
       char* ptr;
-      size_t size;
+      size_t size = 0;
 
-      size = strlen(game_hash->hash) + 1;
-      while (game_hash->next) {
-        game_hash = game_hash->next;
-        size += strlen(game_hash->hash) + 1;
+      for (i = 0; i < sizeof(load_state->tried_hashes) / sizeof(load_state->tried_hashes[0]); ++i) {
+        if (!load_state->tried_hashes[i])
+          break;
+
+        size += strlen(load_state->tried_hashes[i]->hash) + 1;
         count++;
       }
 
       ptr = (char*)rc_buffer_alloc(&load_state->game->buffer, size);
-      ptr += size - 1;
-      *ptr = '\0';
-      game_hash = load_state->game->media_hash->game_hash;
-      do {
-        const size_t hash_len = strlen(game_hash->hash);
-        ptr -= hash_len;
-        memcpy(ptr, game_hash->hash, hash_len);
-
-        game_hash = game_hash->next;
-        if (!game_hash)
-          break;
-
-        ptr--;
-        *ptr = ',';
-      } while (1);
-
       load_state->game->public_.hash = ptr;
+      for (i = 0; i < count; i++) {
+        const size_t hash_len = strlen(load_state->tried_hashes[i]->hash);
+        memcpy(ptr, load_state->tried_hashes[i]->hash, hash_len);
+        ptr += hash_len;
+        *ptr++ = ',';
+      }
+      *(ptr - 1) = '\0';
+
       load_state->game->public_.console_id = RC_CONSOLE_UNKNOWN;
     } else {
       /* only a single hash was tried, capture it */
@@ -2293,6 +2405,12 @@ static void rc_client_process_resolved_hash(rc_client_load_state_t* load_state)
 
     if (load_state->hash->game_id == 0) {
 #ifdef RC_CLIENT_SUPPORTS_EXTERNAL
+ #ifdef RC_CLIENT_SUPPORTS_RAINTEGRATION
+      if (client->state.raintegration && client->state.raintegration->set_console_id) {
+        if (load_state->game->public_.console_id != RC_CONSOLE_UNKNOWN)
+          client->state.raintegration->set_console_id(load_state->game->public_.console_id);
+      }
+ #endif
       if (client->state.external_client) {
         if (client->state.external_client->load_unknown_game) {
           client->state.external_client->load_unknown_game(load_state->game->public_.hash);
@@ -2504,6 +2622,9 @@ static rc_client_async_handle_t* rc_client_load_game(rc_client_load_state_t* loa
 {
   rc_client_t* client = load_state->client;
   rc_client_game_hash_t* old_hash;
+#ifdef RC_CLIENT_SUPPORTS_HASH
+  size_t i;
+#endif
 
   if (!rc_client_attach_load_state(client, load_state)) {
     rc_client_free_load_state(load_state);
@@ -2512,6 +2633,24 @@ static rc_client_async_handle_t* rc_client_load_game(rc_client_load_state_t* loa
 
   old_hash = load_state->hash;
   load_state->hash = rc_client_find_game_hash(client, hash);
+
+#ifdef RC_CLIENT_SUPPORTS_HASH
+  i = 0;
+  do {
+    if (!load_state->tried_hashes[i]) {
+      load_state->tried_hashes[i] = load_state->hash;
+      break;
+    }
+
+    if (load_state->tried_hashes[i] == load_state->hash)
+      break;
+
+    if (++i == sizeof(load_state->tried_hashes) / sizeof(load_state->tried_hashes[0])) {
+      RC_CLIENT_LOG_VERBOSE(client, "tried_hashes buffer is full");
+      break;
+    }
+  } while (1);
+#endif
 
   if (file_path) {
     rc_client_media_hash_t* media_hash =
@@ -2553,12 +2692,37 @@ static rc_client_async_handle_t* rc_client_load_game(rc_client_load_state_t* loa
 
     rc_api_destroy_request(&request);
   }
+  else if (load_state->hash->game_id != RC_CLIENT_UNKNOWN_GAME_ID &&
+           client->state.external_client && client->state.external_client->begin_load_game) {
+    rc_client_begin_async(client, &load_state->async_handle);
+    client->state.external_client->begin_load_game(client, load_state->hash->hash, rc_client_external_load_state_callback, load_state);
+  }
 #endif
   else {
     rc_client_begin_fetch_game_data(load_state);
   }
 
   return (client->state.load == load_state) ? &load_state->async_handle : NULL;
+}
+
+static void rc_client_abort_load_in_progress(rc_client_t* client)
+{
+  rc_client_load_state_t* load_state;
+
+  rc_mutex_lock(&client->state.mutex);
+
+  load_state = client->state.load;
+  if (load_state) {
+    /* this mimics rc_client_abort_async without nesting the lock */
+    load_state->async_handle.aborted = RC_CLIENT_ASYNC_ABORTED;
+
+    client->state.load = NULL;
+  }
+
+  rc_mutex_unlock(&client->state.mutex);
+
+  if (load_state && load_state->callback)
+    load_state->callback(RC_ABORTED, "The requested game is no longer active", load_state->client, load_state->callback_userdata);
 }
 
 rc_client_async_handle_t* rc_client_begin_load_game(rc_client_t* client, const char* hash, rc_client_callback_t callback, void* callback_userdata)
@@ -2574,6 +2738,8 @@ rc_client_async_handle_t* rc_client_begin_load_game(rc_client_t* client, const c
     callback(RC_INVALID_STATE, "hash is required", client, callback_userdata);
     return NULL;
   }
+
+  rc_client_abort_load_in_progress(client);
 
 #ifdef RC_CLIENT_SUPPORTS_EXTERNAL
   if (client->state.external_client && client->state.external_client->begin_load_game)
@@ -2615,6 +2781,8 @@ rc_client_async_handle_t* rc_client_begin_identify_and_load_game(rc_client_t* cl
     callback(RC_INVALID_STATE, "client is required", client, callback_userdata);
     return NULL;
   }
+
+  rc_client_abort_load_in_progress(client);
 
 #ifdef RC_CLIENT_SUPPORTS_EXTERNAL
   /* if a add_game_hash handler exists, do the identification locally, then pass the
@@ -3205,10 +3373,9 @@ const rc_client_subset_t* rc_client_get_subset_info(rc_client_t* client, uint32_
   return NULL;
 }
 
-/* ===== Game Info ===== */
+/* ===== Fetch Game Hashes ===== */
 
-typedef struct rc_client_fetch_hash_library_callback_data_t
-{
+typedef struct rc_client_fetch_hash_library_callback_data_t {
   rc_client_t* client;
   rc_client_fetch_hash_library_callback_t callback;
   void* callback_userdata;
@@ -3226,8 +3393,7 @@ static void rc_client_fetch_hash_library_callback(const rc_api_server_response_t
   int result;
 
   result = rc_client_end_async(client, &hashlib_callback_data->async_handle);
-  if (result)
-  {
+  if (result) {
     if (result != RC_CLIENT_ASYNC_DESTROYED)
       RC_CLIENT_LOG_VERBOSE(client, "Fetch hash library aborted");
 
@@ -3238,43 +3404,26 @@ static void rc_client_fetch_hash_library_callback(const rc_api_server_response_t
   result = rc_api_process_fetch_hash_library_server_response(&hashlib_response, server_response);
   error_message =
     rc_client_server_error_message(&result, server_response->http_status_code, &hashlib_response.response);
-  if (error_message)
-  {
+  if (error_message) {
     RC_CLIENT_LOG_ERR_FORMATTED(client, "Fetch hash library for console %u failed: %s",
                                 hashlib_callback_data->console_id, error_message);
     hashlib_callback_data->callback(result, error_message, NULL, client, hashlib_callback_data->callback_userdata);
-  }
-  else
-  {
+  } else {
     rc_client_hash_library_t* list;
-    const size_t list_size = sizeof(*list) + sizeof(rc_client_leaderboard_entry_t) * hashlib_response.num_entries;
-    size_t needed_size = list_size;
-    uint32_t i;
-
-    for (i = 0; i < hashlib_response.num_entries; i++)
-      needed_size += strlen(hashlib_response.entries[i].hash) + 1;
-
-    list = (rc_client_hash_library_t*)malloc(needed_size);
-    if (!list)
-    {
+    const size_t list_size = sizeof(*list) + sizeof(rc_client_hash_library_entry_t) * hashlib_response.num_entries;
+    list = (rc_client_hash_library_t*)malloc(list_size);
+    if (!list) {
       hashlib_callback_data->callback(RC_OUT_OF_MEMORY, rc_error_str(RC_OUT_OF_MEMORY), NULL, client,
                                       hashlib_callback_data->callback_userdata);
-    }
-    else
-    {
+    } else {
       rc_client_hash_library_entry_t* entry = list->entries =
         (rc_client_hash_library_entry_t*)((uint8_t*)list + sizeof(*list));
-      char* hash = (char*)((uint8_t*)list + list_size);
       const rc_api_hash_library_entry_t* hlentry = hashlib_response.entries;
       const rc_api_hash_library_entry_t* stop = hlentry + hashlib_response.num_entries;
 
-      for (; hlentry < stop; ++hlentry, ++entry)
-      {
-        const size_t len = strlen(hlentry->hash) + 1;
-        entry->hash = hash;
+      for (; hlentry < stop; ++hlentry, ++entry) {
+        snprintf(entry->hash, sizeof(entry->hash), "%s", hlentry->hash);
         entry->game_id = hlentry->game_id;
-        memcpy(hash, hlentry->hash, len);
-        hash += len;
       }
 
       list->num_entries = hashlib_response.num_entries;
@@ -3298,8 +3447,7 @@ rc_client_async_handle_t* rc_client_begin_fetch_hash_library(rc_client_t* client
   int result;
   const char* error_message;
 
-  if (!client)
-  {
+  if (!client) {
     callback(RC_INVALID_STATE, "client is required", NULL, client, callback_userdata);
     return NULL;
   }
@@ -3307,16 +3455,14 @@ rc_client_async_handle_t* rc_client_begin_fetch_hash_library(rc_client_t* client
   api_params.console_id = console_id;
   result = rc_api_init_fetch_hash_library_request_hosted(&request, &api_params, &client->state.host);
 
-  if (result != RC_OK)
-  {
+  if (result != RC_OK) {
     error_message = rc_error_str(result);
     callback(result, error_message, NULL, client, callback_userdata);
     return NULL;
   }
 
   callback_data = (rc_client_fetch_hash_library_callback_data_t*)calloc(1, sizeof(*callback_data));
-  if (!callback_data)
-  {
+  if (!callback_data) {
     callback(RC_OUT_OF_MEMORY, rc_error_str(RC_OUT_OF_MEMORY), NULL, client, callback_userdata);
     return NULL;
   }
@@ -3335,138 +3481,6 @@ rc_client_async_handle_t* rc_client_begin_fetch_hash_library(rc_client_t* client
 }
 
 void rc_client_destroy_hash_library(rc_client_hash_library_t* list)
-{
-  free(list);
-}
-
-typedef struct rc_client_fetch_all_progress_callback_data_t
-{
-  rc_client_t* client;
-  rc_client_fetch_all_progress_list_callback_t callback;
-  void* callback_userdata;
-  uint32_t console_id;
-  rc_client_async_handle_t async_handle;
-} rc_client_fetch_all_progress_callback_data_t;
-
-static void rc_client_fetch_all_progress_callback(const rc_api_server_response_t* server_response, void* callback_data)
-{
-  rc_client_fetch_all_progress_callback_data_t* ap_callback_data =
-    (rc_client_fetch_all_progress_callback_data_t*)callback_data;
-  rc_client_t* client = ap_callback_data->client;
-  rc_api_fetch_all_progress_response_t ap_response;
-  const char* error_message;
-  int result;
-
-  result = rc_client_end_async(client, &ap_callback_data->async_handle);
-  if (result)
-  {
-    if (result != RC_CLIENT_ASYNC_DESTROYED)
-      RC_CLIENT_LOG_VERBOSE(client, "Fetch all progress aborted");
-
-    free(ap_callback_data);
-    return;
-  }
-
-  result = rc_api_process_fetch_all_progress_server_response(&ap_response, server_response);
-  error_message = rc_client_server_error_message(&result, server_response->http_status_code, &ap_response.response);
-  if (error_message)
-  {
-    RC_CLIENT_LOG_ERR_FORMATTED(client, "Fetch all progress for console %u failed: %s", ap_callback_data->console_id,
-                                error_message);
-    ap_callback_data->callback(result, error_message, NULL, client, ap_callback_data->callback_userdata);
-  }
-  else
-  {
-    rc_client_all_progress_list_t* list;
-    const size_t list_size = sizeof(*list) + sizeof(rc_client_all_progress_list_entry_t) * ap_response.num_entries;
-
-    list = (rc_client_all_progress_list_t*)malloc(list_size);
-    if (!list)
-    {
-      ap_callback_data->callback(RC_OUT_OF_MEMORY, rc_error_str(RC_OUT_OF_MEMORY), NULL, client,
-                                 ap_callback_data->callback_userdata);
-    }
-    else
-    {
-      rc_client_all_progress_list_entry_t* entry = list->entries =
-        (rc_client_all_progress_list_entry_t*)((uint8_t*)list + sizeof(*list));
-      const rc_api_all_progress_entry_t* hlentry = ap_response.entries;
-      const rc_api_all_progress_entry_t* stop = hlentry + ap_response.num_entries;
-
-      for (; hlentry < stop; ++hlentry, ++entry)
-      {
-        entry->game_id = hlentry->game_id;
-        entry->num_achievements = hlentry->num_achievements;
-        entry->num_unlocked_achievements = hlentry->num_unlocked_achievements;
-        entry->num_unlocked_achievements_hardcore = hlentry->num_unlocked_achievements_hardcore;
-      }
-
-      list->num_entries = ap_response.num_entries;
-
-      ap_callback_data->callback(RC_OK, NULL, list, client, ap_callback_data->callback_userdata);
-    }
-  }
-
-  rc_api_destroy_fetch_all_progress_response(&ap_response);
-  free(ap_callback_data);
-}
-
-rc_client_async_handle_t* rc_client_begin_fetch_all_progress_list(rc_client_t* client, uint32_t console_id,
-                                                                  rc_client_fetch_all_progress_list_callback_t callback,
-                                                                  void* callback_userdata)
-{
-  rc_api_fetch_all_progress_request_t api_params;
-  rc_client_fetch_all_progress_callback_data_t* callback_data;
-  rc_client_async_handle_t* async_handle;
-  rc_api_request_t request;
-  int result;
-  const char* error_message;
-
-  if (!client)
-  {
-    callback(RC_INVALID_STATE, "client is required", NULL, client, callback_userdata);
-    return NULL;
-  }
-  else if (client->state.user != RC_CLIENT_USER_STATE_LOGGED_IN)
-  {
-    callback(RC_INVALID_STATE, "client must be logged in", NULL, client, callback_userdata);
-    return NULL;
-  }
-
-  api_params.username = client->user.username;
-  api_params.api_token = client->user.token;
-  api_params.console_id = console_id;
-
-  result = rc_api_init_fetch_all_progress_request_hosted(&request, &api_params, &client->state.host);
-
-  if (result != RC_OK)
-  {
-    error_message = rc_error_str(result);
-    callback(result, error_message, NULL, client, callback_userdata);
-    return NULL;
-  }
-
-  callback_data = (rc_client_fetch_all_progress_callback_data_t*)calloc(1, sizeof(*callback_data));
-  if (!callback_data)
-  {
-    callback(RC_OUT_OF_MEMORY, rc_error_str(RC_OUT_OF_MEMORY), NULL, client, callback_userdata);
-    return NULL;
-  }
-
-  callback_data->client = client;
-  callback_data->callback = callback;
-  callback_data->callback_userdata = callback_userdata;
-  callback_data->console_id = console_id;
-
-  async_handle = &callback_data->async_handle;
-  rc_client_begin_async(client, async_handle);
-  client->callbacks.server_call(&request, rc_client_fetch_all_progress_callback, callback_data, client);
-  rc_api_destroy_request(&request);
-
-  return rc_client_async_handle_valid(client, async_handle) ? async_handle : NULL;
-}
-
-void rc_client_destroy_all_progress_list(rc_client_all_progress_list_t* list)
 {
   free(list);
 }
@@ -5988,6 +6002,9 @@ void rc_client_reset(rc_client_t* client)
 
 int rc_client_can_pause(rc_client_t* client, uint32_t* frames_remaining)
 {
+  if (!client)
+    return 1;
+
 #ifdef RC_CLIENT_SUPPORTS_EXTERNAL
   if (client->state.external_client && client->state.external_client->can_pause)
     return client->state.external_client->can_pause(frames_remaining);

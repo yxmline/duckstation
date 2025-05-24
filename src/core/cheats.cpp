@@ -946,14 +946,18 @@ void Cheats::UnloadAll()
 
 bool Cheats::HasAnySettingOverrides()
 {
+  const bool hc_mode_active = Achievements::IsHardcoreModeActive();
   for (const std::string& name : s_enabled_patches)
   {
     for (std::unique_ptr<CheatCode>& code : s_patch_codes)
     {
       if (name == code->GetName())
       {
-        if (code->HasAnySettingOverrides())
-          return true;
+        if (!code->GetMetadata().disallow_for_achievements || !hc_mode_active)
+        {
+          if (code->HasAnySettingOverrides())
+            return true;
+        }
 
         break;
       }
@@ -966,13 +970,16 @@ bool Cheats::HasAnySettingOverrides()
 void Cheats::ApplySettingOverrides()
 {
   // only need to check patches for this
+  const bool hc_mode_active = Achievements::IsHardcoreModeActive();
   for (const std::string& name : s_enabled_patches)
   {
     for (std::unique_ptr<CheatCode>& code : s_patch_codes)
     {
       if (name == code->GetName())
       {
-        code->ApplySettingOverrides();
+        if (!code->GetMetadata().disallow_for_achievements || !hc_mode_active)
+          code->ApplySettingOverrides();
+
         break;
       }
     }
@@ -1312,6 +1319,10 @@ bool Cheats::ExtractCodeInfo(CodeInfoList* dst, std::string_view file_data, bool
             return false;
           }
         }
+      }
+      else if (key == "DisallowForAchievements")
+      {
+        current_code.disallow_for_achievements = StringUtil::FromChars<bool>(value).value_or(false);
       }
       else if (key == "Ignore")
       {

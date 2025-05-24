@@ -42,7 +42,7 @@ struct SettingInfo
   const char* max_value;
   const char* step_value;
   const char* format;
-  const char** options;
+  const char* const* options;
   float multiplier;
 
   const char* StringDefaultValue() const;
@@ -130,10 +130,10 @@ struct GPUSettings
   bool display_pre_frame_sleep : 1 = false;
   bool display_skip_presenting_duplicate_frames : 1 = false;
   bool display_vsync : 1 = false;
-  bool display_disable_mailbox_presentation : 1 = true;
+  bool display_disable_mailbox_presentation : 1 = false;
   bool display_force_4_3_for_24bit : 1 = false;
   bool display_24bit_chroma_smoothing : 1 = false;
-  bool display_show_messages : 1 = false;
+  bool display_show_messages : 1 = true;
   bool display_show_fps : 1 = false;
   bool display_show_speed : 1 = false;
   bool display_show_gpu_stats : 1 = false;

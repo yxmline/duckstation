@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2019-2024 Connor McLaughlin <stenzek@gmail.com>
+// SPDX-FileCopyrightText: 2019-2025 Connor McLaughlin <stenzek@gmail.com>
 // SPDX-License-Identifier: CC-BY-NC-ND-4.0
 
 #include "justifier.h"
@@ -89,6 +89,7 @@ bool Justifier::DoState(StateWrapper& sw, bool apply_input_state)
     m_position_valid = position_valid;
   }
 
+  sw.DoEx(&m_irq_enabled, 82, true);
   sw.Do(&m_transfer_state);
 
   if (sw.IsReading())
@@ -178,6 +179,13 @@ bool Justifier::Transfer(const u8 data_in, u8* data_out)
 
     case TransferState::ButtonsLSB:
     {
+      const bool new_irq_enabled = ((data_in & 0x10) == 0x10);
+      if (new_irq_enabled != m_irq_enabled)
+      {
+        m_irq_enabled = new_irq_enabled;
+        UpdateIRQEvent();
+      }
+
       *data_out = Truncate8(m_button_state);
       m_transfer_state = TransferState::ButtonsMSB;
       return true;
@@ -251,7 +259,7 @@ void Justifier::UpdateIRQEvent()
   // TODO: Avoid deactivate and event sort.
   m_irq_event.Deactivate();
 
-  if (!m_position_valid)
+  if (!m_position_valid || !m_irq_enabled)
     return;
 
   u32 current_tick, current_line;
@@ -358,16 +366,16 @@ static const SettingInfo s_settings[] = {
    TRANSLATE_NOOP("Justifier", "Path to an image to use as a crosshair/cursor."), DEFAULT_CROSSHAIR_PATH, nullptr,
    nullptr, nullptr, nullptr, nullptr, 0.0f},
   {SettingInfo::Type::Float, "CrosshairScale", TRANSLATE_NOOP("Justifier", "Crosshair Image Scale"),
-   TRANSLATE_NOOP("Justifier", "Scale of crosshair image on screen."), "1.0", "0.0001", "100.0", "0.10", "%.0f%%",
-   nullptr, 100.0f},
+   TRANSLATE_NOOP("Justifier", "Scale of crosshair image on screen."), "1", "0.0001", "100", "0.1", "%.0f%%", nullptr,
+   100.0f},
   {SettingInfo::Type::String, "CrosshairColor", TRANSLATE_NOOP("Justifier", "Cursor Color"),
    TRANSLATE_NOOP("Justifier",
                   "Applies a color to the chosen crosshair images, can be used for multiple players. Specify "
                   "in HTML/CSS format (e.g. #aabbcc)"),
    "#ffffff", nullptr, nullptr, nullptr, nullptr, nullptr, 0.0f},
   {SettingInfo::Type::Float, "XScale", TRANSLATE_NOOP("Justifier", "X Scale"),
-   TRANSLATE_NOOP("Justifier", "Scales X coordinates relative to the center of the screen."), "1.0", "0.01", "2.0",
-   "0.01", "%.0f%%", nullptr, 100.0f},
+   TRANSLATE_NOOP("Justifier", "Scales X coordinates relative to the center of the screen."), "1", "0.01", "2", "0.01",
+   "%.0f%%", nullptr, 100.0f},
   {SettingInfo::Type::Integer, "FirstLineOffset", TRANSLATE_NOOP("Justifier", "Line Start Offset"),
    TRANSLATE_NOOP("Justifier",
                   "Offset applied to lightgun vertical position that the Justifier will first trigger on."),
@@ -410,7 +418,10 @@ void Justifier::LoadSettings(const SettingsInterface& si, const char* section, b
       cursor_color_str[0] == '#' ? std::string_view(cursor_color_str).substr(1) : std::string_view(cursor_color_str),
       16));
     if (cursor_color_opt.has_value())
+    {
       cursor_color = cursor_color_opt.value();
+      cursor_color = (cursor_color & 0x00FF00u) | ((cursor_color >> 16) & 0xFFu) | ((cursor_color & 0xFFu) << 16);
+    }
   }
 
   const s32 prev_pointer_index = GetSoftwarePointerIndex();

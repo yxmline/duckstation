@@ -130,7 +130,7 @@ ALWAYS_INLINE static bool IsBlendedTextureFiltering(GPUTextureFilter filter)
                 ((static_cast<u8>(GPUTextureFilter::JINC2BinAlpha) & 1u) == 0u) &&
                 ((static_cast<u8>(GPUTextureFilter::xBR) & 1u) == 1u) &&
                 ((static_cast<u8>(GPUTextureFilter::xBRBinAlpha) & 1u) == 0u));
-  return ((static_cast<u8>(filter) & 1u) == 1u);
+  return (filter < GPUTextureFilter::Scale2x && ((static_cast<u8>(filter) & 1u) == 1u));
 }
 
 /// Computes the area affected by a VRAM transfer, including wrap-around of X.
@@ -167,6 +167,16 @@ ALWAYS_INLINE static u32 Truncate32To16(u32 color)
   return GSVector4i((GSVector4(GSVector4i::zext32(color).u8to32().srl32<3>()) / GSVector4::cxpr(31.0f)) *
                     GSVector4::cxpr(255.0f))
     .rgba32();
+}
+
+/// Computes the clamped average Z for the given polygon Z values.
+template<typename... Args>
+ALWAYS_INLINE static float ComputePolygonAverageZ(Args... args)
+{
+  static_assert(sizeof...(args) >= 2, "At least two arguments are required");
+  const float sum = (args + ...);
+  constexpr s32 count = static_cast<s32>(sizeof...(args));
+  return std::min(sum / static_cast<float>(count), 1.0f);
 }
 
 namespace {
@@ -299,7 +309,7 @@ bool GPU_HW::Initialize(bool upload_vram, Error* error)
   else
   {
     // Still potentially have VRAM texture replacements.
-    GPUTextureCache::ReloadTextureReplacements(false);
+    GPUTextureCache::ReloadTextureReplacements(System::GetState() == System::State::Starting, false);
   }
 
   UpdateDownsamplingLevels();
@@ -1151,7 +1161,7 @@ bool GPU_HW::CompilePipelines(Error* error)
   m_clear_depth_pipeline.reset();
   m_copy_depth_pipeline.reset();
 
-  ShaderCompileProgressTracker progress("Compiling Pipelines", total_items);
+  ShaderCompileProgressTracker progress(TRANSLATE_STR("GPU_HW", "Compiling Pipelines..."), total_items);
 
   // vertex shaders - [textured/palette/sprite]
   // fragment shaders - [depth_test][render_mode][transparency_mode][texture_mode][check_mask][dithering][interlacing]
@@ -1677,21 +1687,19 @@ bool GPU_HW::CompilePipelines(Error* error)
       return false;
   }
 
-  plconfig.SetTargetFormats(VRAM_RT_FORMAT);
-  plconfig.render_pass_flags = GPUPipeline::NoRenderPassFlags;
-  plconfig.depth = GPUPipeline::DepthState::GetNoTestsState();
-  plconfig.blend = GPUPipeline::BlendState::GetNoBlendingState();
-  plconfig.samples = 1;
-  plconfig.per_sample_shading = false;
-
   if (m_pgxp_depth_buffer)
   {
-    std::unique_ptr<GPUShader> fs = g_gpu_device->CreateShader(GPUShaderStage::Fragment, shadergen.GetLanguage(),
-                                                               shadergen.GenerateCopyFragmentShader(), error);
+    std::unique_ptr<GPUShader> fs = g_gpu_device->CreateShader(
+      GPUShaderStage::Fragment, shadergen.GetLanguage(), shadergen.GenerateVRAMCopyDepthFragmentShader(msaa), error);
     if (!fs)
       return false;
 
     plconfig.fragment_shader = fs.get();
+    plconfig.render_pass_flags = GPUPipeline::NoRenderPassFlags;
+    plconfig.depth = GPUPipeline::DepthState::GetNoTestsState();
+    plconfig.blend = GPUPipeline::BlendState::GetNoBlendingState();
+    plconfig.samples = m_multisamples;
+    plconfig.per_sample_shading = true;
     plconfig.SetTargetFormats(VRAM_DS_COLOR_FORMAT);
     if (!(m_copy_depth_pipeline = g_gpu_device->CreatePipeline(plconfig, error)))
       return false;
@@ -1704,6 +1712,7 @@ bool GPU_HW::CompilePipelines(Error* error)
     SetScreenQuadInputLayout(plconfig);
     plconfig.vertex_shader = m_screen_quad_vertex_shader.get();
     plconfig.fragment_shader = fs.get();
+    plconfig.per_sample_shading = false;
     if (!m_use_rov_for_shader_blend)
     {
       plconfig.SetTargetFormats(VRAM_RT_FORMAT, depth_buffer_format);
@@ -2471,15 +2480,8 @@ void GPU_HW::SetBatchDepthBuffer(const GPUBackendDrawCommand* cmd, bool enabled)
   m_batch.use_depth_buffer = enabled;
 }
 
-void GPU_HW::CheckForDepthClear(const GPUBackendDrawCommand* cmd, const BatchVertex* vertices, u32 num_vertices)
+void GPU_HW::CheckForDepthClear(const GPUBackendDrawCommand* cmd, float average_z)
 {
-  DebugAssert(num_vertices == 3 || num_vertices == 4);
-  float average_z;
-  if (num_vertices == 3)
-    average_z = std::min((vertices[0].w + vertices[1].w + vertices[2].w) / 3.0f, 1.0f);
-  else
-    average_z = std::min((vertices[0].w + vertices[1].w + vertices[2].w + vertices[3].w) / 4.0f, 1.0f);
-
   if ((average_z - m_last_depth_z) >= g_gpu_settings.gpu_pgxp_depth_clear_threshold)
   {
     GL_INS_FMT("Clear depth buffer avg={} last={} threshold={}", average_z * static_cast<float>(GTE::MAX_Z),
@@ -2518,8 +2520,6 @@ void GPU_HW::DrawLine(const GPUBackendDrawLineCommand* cmd)
   const u32 num_vertices = cmd->num_vertices;
   DebugAssert(m_batch_vertex_space >= (num_vertices * 4) && m_batch_index_space >= (num_vertices * 6));
 
-  const float depth = GetCurrentNormalizedVertexDepth();
-
   for (u32 i = 0; i < num_vertices; i += 2)
   {
     const GSVector2i start_pos = GSVector2i::load<true>(&cmd->vertices[i].x);
@@ -2539,7 +2539,7 @@ void GPU_HW::DrawLine(const GPUBackendDrawLineCommand* cmd)
     }
 
     AddDrawnRectangle(clamped_rect);
-    DrawLine(cmd, GSVector4(bounds), start_color, end_color, depth);
+    DrawLine(cmd, GSVector4(bounds), start_color, end_color, 1.0f, 1.0f);
   }
 
   if (ShouldDrawWithSoftwareRenderer())
@@ -2562,10 +2562,23 @@ void GPU_HW::DrawPreciseLine(const GPUBackendDrawPreciseLineCommand* cmd)
   const u32 num_vertices = cmd->num_vertices;
   DebugAssert(m_batch_vertex_space >= (num_vertices * 4) && m_batch_index_space >= (num_vertices * 6));
 
-  const float depth = GetCurrentNormalizedVertexDepth();
-
   for (u32 i = 0; i < num_vertices; i += 2)
   {
+    float start_depth, end_depth;
+    if (use_depth)
+    {
+      start_depth = cmd->vertices[i].w;
+      end_depth = cmd->vertices[i + 1].w;
+
+      const float average_z = ComputePolygonAverageZ(start_depth, end_depth);
+      CheckForDepthClear(cmd, average_z);
+    }
+    else
+    {
+      start_depth = 1.0f;
+      end_depth = 1.0f;
+    }
+
     const GSVector2 start_pos = GSVector2::load<true>(&cmd->vertices[i].x);
     const u32 start_color = cmd->vertices[i].color;
     const GSVector2 end_pos = GSVector2::load<true>(&cmd->vertices[i + 1].x);
@@ -2582,7 +2595,7 @@ void GPU_HW::DrawPreciseLine(const GPUBackendDrawPreciseLineCommand* cmd)
     }
 
     AddDrawnRectangle(clamped_rect);
-    DrawLine(cmd, bounds, start_color, end_color, depth);
+    DrawLine(cmd, bounds, start_color, end_color, start_depth, end_depth);
   }
 
   if (ShouldDrawWithSoftwareRenderer())
@@ -2604,7 +2617,8 @@ void GPU_HW::DrawPreciseLine(const GPUBackendDrawPreciseLineCommand* cmd)
   }
 }
 
-void GPU_HW::DrawLine(const GPUBackendDrawCommand* cmd, const GSVector4 bounds, u32 col0, u32 col1, float depth)
+void GPU_HW::DrawLine(const GPUBackendDrawCommand* cmd, const GSVector4 bounds, u32 col0, u32 col1, float depth0,
+                      float depth1)
 {
   DebugAssert(m_batch_vertex_space >= 4 && m_batch_index_space >= 6);
 
@@ -2621,13 +2635,14 @@ void GPU_HW::DrawLine(const GPUBackendDrawCommand* cmd, const GSVector4 bounds, 
 
   const float dx = x1 - x0;
   const float dy = y1 - y0;
+  const float mask_depth = GetCurrentNormalizedVertexDepth();
   if (dx == 0.0f && dy == 0.0f)
   {
     // Degenerate, render a point.
-    (m_batch_vertex_ptr++)->Set(x0, y0, depth, 1.0f, col0, 0, 0, 0);
-    (m_batch_vertex_ptr++)->Set(x0 + 1.0f, y0, depth, 1.0f, col0, 0, 0, 0);
-    (m_batch_vertex_ptr++)->Set(x1, y1 + 1.0f, depth, 1.0f, col0, 0, 0, 0);
-    (m_batch_vertex_ptr++)->Set(x1 + 1.0f, y1 + 1.0f, depth, 1.0f, col0, 0, 0, 0);
+    (m_batch_vertex_ptr++)->Set(x0, y0, mask_depth, depth0, col0, 0, 0, 0);
+    (m_batch_vertex_ptr++)->Set(x0 + 1.0f, y0, mask_depth, depth0, col0, 0, 0, 0);
+    (m_batch_vertex_ptr++)->Set(x1, y1 + 1.0f, mask_depth, depth1, col0, 0, 0, 0);
+    (m_batch_vertex_ptr++)->Set(x1 + 1.0f, y1 + 1.0f, mask_depth, depth1, col0, 0, 0, 0);
   }
   else
   {
@@ -2688,10 +2703,10 @@ void GPU_HW::DrawLine(const GPUBackendDrawCommand* cmd, const GSVector4 bounds, 
     const float ox1 = x1 + pad_x1;
     const float oy1 = y1 + pad_y1;
 
-    (m_batch_vertex_ptr++)->Set(ox0, oy0, depth, 1.0f, col0, 0, 0, 0);
-    (m_batch_vertex_ptr++)->Set(ox0 + fill_dx, oy0 + fill_dy, depth, 1.0f, col0, 0, 0, 0);
-    (m_batch_vertex_ptr++)->Set(ox1, oy1, depth, 1.0f, col1, 0, 0, 0);
-    (m_batch_vertex_ptr++)->Set(ox1 + fill_dx, oy1 + fill_dy, depth, 1.0f, col1, 0, 0, 0);
+    (m_batch_vertex_ptr++)->Set(ox0, oy0, mask_depth, depth0, col0, 0, 0, 0);
+    (m_batch_vertex_ptr++)->Set(ox0 + fill_dx, oy0 + fill_dy, mask_depth, depth0, col0, 0, 0, 0);
+    (m_batch_vertex_ptr++)->Set(ox1, oy1, mask_depth, depth1, col1, 0, 0, 0);
+    (m_batch_vertex_ptr++)->Set(ox1 + fill_dx, oy1 + fill_dy, mask_depth, depth1, col1, 0, 0, 0);
   }
 
   const u32 start_index = m_batch_vertex_count;
@@ -2870,7 +2885,12 @@ void GPU_HW::DrawPrecisePolygon(const GPUBackendDrawPrecisePolygonCommand* cmd)
       m_pgxp_depth_buffer && is_3d && (!cmd->transparency_enable || g_gpu_settings.gpu_pgxp_transparent_depth);
     SetBatchDepthBuffer(cmd, use_depth);
     if (use_depth)
-      CheckForDepthClear(cmd, vertices.data(), num_vertices);
+    {
+      const float average_z = (num_vertices == 4) ?
+                                ComputePolygonAverageZ(vertices[0].w, vertices[1].w, vertices[2].w, vertices[3].w) :
+                                ComputePolygonAverageZ(vertices[0].w, vertices[1].w, vertices[2].w);
+      CheckForDepthClear(cmd, average_z);
+    }
 
     FinishPolygonDraw(cmd, vertices, num_vertices, true, is_3d, clamped_draw_rect_012, clamped_draw_rect_123);
   }

@@ -207,8 +207,8 @@ ALWAYS_INLINE_RELEASE void Log::FormatLogMessageForDisplay(fmt::memory_buffer& b
   static constexpr const std::array s_ansi_color_codes = {
     "\033[0m"sv,         // default
     "\033[30m\033[1m"sv, // black
-    "\033[32m"sv,        // green
     "\033[31m"sv,        // red
+    "\033[32m"sv,        // green
     "\033[34m"sv,        // blue
     "\033[35m"sv,        // magenta
     "\033[38;5;217m"sv,  // orange
@@ -505,7 +505,7 @@ void Log::SetFileOutputParams(bool enabled, const char* filename, bool timestamp
 
   if (enabled)
   {
-    s_state.file_handle = FileSystem::OpenManagedCFile(filename, "wb");
+    s_state.file_handle = FileSystem::OpenManagedSharedCFile(filename, "wb", FileSystem::FileShareMode::DenyWrite);
     if (!s_state.file_handle) [[unlikely]]
     {
       ExecuteCallbacks(PackCategory(Channel::Log, Level::Error, Color::Default), nullptr,

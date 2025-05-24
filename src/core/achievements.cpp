@@ -71,8 +71,6 @@ static constexpr const char* ACHEIVEMENT_DETAILS_URL_TEMPLATE = "https://retroac
 static constexpr const char* PROFILE_DETAILS_URL_TEMPLATE = "https://retroachievements.org/user/{}";
 static constexpr const char* CACHE_SUBDIRECTORY_NAME = "achievement_images";
 
-static constexpr size_t URL_BUFFER_SIZE = 256;
-
 static constexpr u32 LEADERBOARD_NEARBY_ENTRIES_TO_FETCH = 10;
 static constexpr u32 LEADERBOARD_ALL_FETCH_SIZE = 20;
 
@@ -141,14 +139,17 @@ static bool HasSavedCredentials();
 static bool TryLoggingInWithToken();
 static void EnableHardcodeMode(bool display_message, bool display_game_summary);
 static void OnHardcoreModeChanged(bool enabled, bool display_message, bool display_game_summary);
+static bool IsRAIntegrationInitializing();
 static bool IsLoggedInOrLoggingIn();
+static void FinishInitialize();
 static void FinishLogin(const rc_client_t* client);
 static void ShowLoginNotification();
 static bool IdentifyGame(CDImage* image);
 static bool IdentifyCurrentGame();
 static void BeginLoadGame();
 static void UpdateGameSummary(bool update_progress_database, bool force_update_progress_database);
-static std::string GetLocalImagePath(const std::string_view image_name, int type);
+static std::string GetImageURL(const char* image_name, u32 type);
+static std::string GetLocalImagePath(const std::string_view image_name, u32 type);
 static void DownloadImage(std::string url, std::string cache_path);
 static const std::string& GetCachedAchievementBadgePath(const rc_client_achievement_t* achievement, bool locked);
 static void UpdateGlyphRanges();
@@ -217,14 +218,14 @@ static void CancelHashDatabaseRequests();
 
 static void FetchHashLibraryCallback(int result, const char* error_message, rc_client_hash_library_t* list,
                                      rc_client_t* client, void* callback_userdata);
-static void FetchAllProgressCallback(int result, const char* error_message, rc_client_all_progress_list_t* list,
+static void FetchAllProgressCallback(int result, const char* error_message, rc_client_all_user_progress_t* list,
                                      rc_client_t* client, void* callback_userdata);
 
-static void BuildHashDatabase(const rc_client_hash_library_t* hashlib, const rc_client_all_progress_list_t* allprog);
+static void BuildHashDatabase(const rc_client_hash_library_t* hashlib, const rc_client_all_user_progress_t* allprog);
 static bool SortAndSaveHashDatabase(Error* error);
 
 static FileSystem::ManagedCFilePtr OpenProgressDatabase(bool for_write, bool truncate, Error* error);
-static void BuildProgressDatabase(const rc_client_all_progress_list_t* allprog);
+static void BuildProgressDatabase(const rc_client_all_user_progress_t* allprog);
 static void UpdateProgressDatabase(bool force);
 static void ClearProgressDatabase();
 
@@ -294,11 +295,12 @@ struct State
   rc_client_async_handle_t* fetch_hash_library_request = nullptr;
   rc_client_hash_library_t* fetch_hash_library_result = nullptr;
   rc_client_async_handle_t* fetch_all_progress_request = nullptr;
-  rc_client_all_progress_list_t* fetch_all_progress_result = nullptr;
+  rc_client_all_user_progress_t* fetch_all_progress_result = nullptr;
 
 #ifdef RC_CLIENT_SUPPORTS_RAINTEGRATION
   rc_client_async_handle_t* load_raintegration_request = nullptr;
   bool using_raintegration = false;
+  bool raintegration_loading = false;
 #endif
 };
 
@@ -396,7 +398,21 @@ std::optional<Achievements::GameHash> Achievements::GetGameHash(const std::strin
   return ret;
 }
 
-std::string Achievements::GetLocalImagePath(const std::string_view image_name, int type)
+std::string Achievements::GetImageURL(const char* image_name, u32 type)
+{
+  std::string ret;
+
+  const rc_api_fetch_image_request_t image_request = {.image_name = image_name, .image_type = type};
+  rc_api_request_t request;
+  int result = rc_api_init_fetch_image_request(&request, &image_request);
+  if (result == RC_OK)
+    ret = request.url;
+
+  rc_api_destroy_request(&request);
+  return ret;
+}
+
+std::string Achievements::GetLocalImagePath(const std::string_view image_name, u32 type)
 {
   std::string_view prefix;
   std::string_view suffix;
@@ -658,6 +674,15 @@ bool Achievements::Initialize()
   rc_client_set_unofficial_enabled(s_state.client, g_settings.achievements_unofficial_test_mode);
   rc_client_set_spectator_mode_enabled(s_state.client, g_settings.achievements_spectator_mode);
 
+  // We can't do an internal client login while using RAIntegration, since the two will conflict.
+  if (!IsRAIntegrationInitializing())
+    FinishInitialize();
+
+  return true;
+}
+
+void Achievements::FinishInitialize()
+{
   // Start logging in. This can take a while.
   TryLoggingInWithToken();
 
@@ -671,8 +696,6 @@ bool Achievements::Initialize()
     if (IsLoggedInOrLoggingIn() && g_settings.achievements_hardcore_mode)
       DisplayHardcoreDeferredMessage();
   }
-
-  return true;
 }
 
 bool Achievements::CreateClient(rc_client_t** client, std::unique_ptr<HTTPDownloader>* http)
@@ -835,7 +858,10 @@ void Achievements::Shutdown()
 
 #ifdef RC_CLIENT_SUPPORTS_RAINTEGRATION
   if (s_state.using_raintegration)
+  {
     UnloadRAIntegration();
+    return;
+  }
 #endif
 
   DestroyClient(&s_state.client, &s_state.http_downloader);
@@ -1138,7 +1164,7 @@ void Achievements::OnSystemStarting(CDImage* image, bool disable_hardcore_mode)
 {
   std::unique_lock lock(s_state.mutex);
 
-  if (!IsActive())
+  if (!IsActive() || IsRAIntegrationInitializing())
     return;
 
   // if we're not logged in, and there's no login request, retry logging in
@@ -1179,7 +1205,7 @@ void Achievements::OnSystemDestroyed()
 void Achievements::OnSystemReset()
 {
   const auto lock = GetLock();
-  if (!IsActive())
+  if (!IsActive() || IsRAIntegrationInitializing())
     return;
 
   // Do we need to enable hardcore mode?
@@ -1198,7 +1224,7 @@ void Achievements::GameChanged(CDImage* image)
 {
   std::unique_lock lock(s_state.mutex);
 
-  if (!IsActive())
+  if (!IsActive() || IsRAIntegrationInitializing())
     return;
 
   // disc changed?
@@ -1383,12 +1409,8 @@ void Achievements::ClientLoadGameCallback(int result, const char* error_message,
   if (display_summary)
     GPUThread::RunOnThread(&FullscreenUI::Initialize);
 
-  char url_buf[URL_BUFFER_SIZE];
-  if (int err = rc_client_game_get_image_url(info, url_buf, std::size(url_buf)); err == RC_OK)
-    s_state.game_icon_url = url_buf;
-  else
-    ReportRCError(err, "rc_client_game_get_image_url() failed: ");
-
+  s_state.game_icon_url =
+    info->badge_url ? std::string(info->badge_url) : GetImageURL(info->badge_name, RC_IMAGE_TYPE_GAME);
   s_state.game_icon = GetLocalImagePath(info->badge_name, RC_IMAGE_TYPE_GAME);
   if (!s_state.game_icon.empty() && !s_state.game_icon_url.empty() &&
       !FileSystem::FileExists(s_state.game_icon.c_str()))
@@ -1566,15 +1588,18 @@ void Achievements::HandleSubsetCompleteEvent(const rc_client_event_t* event)
   INFO_LOG("Subset {} ({}) complete", event->subset->title, event->subset->id);
   UpdateGameSummary(false, false);
 
-  if (g_settings.achievements_notifications)
+  if (g_settings.achievements_notifications && event->subset->badge_name[0] != '\0')
   {
     // Need to grab the icon for the subset.
-    std::string badge_path;
-    if (const std::string_view badge_url = event->subset->badge_url; !badge_url.empty())
+    std::string badge_path = GetLocalImagePath(event->subset->badge_name, RC_IMAGE_TYPE_GAME);
+    if (!FileSystem::FileExists(badge_path.c_str()))
     {
-      badge_path = GetLocalImagePath(event->subset->badge_name, RC_IMAGE_TYPE_GAME);
-      if (!badge_path.empty() && !FileSystem::FileExists(badge_path.c_str()))
-        DownloadImage(std::string(badge_url), badge_path);
+      std::string url;
+      if (IsUsingRAIntegration() || !event->subset->badge_url)
+        url = GetImageURL(event->subset->badge_name, RC_IMAGE_TYPE_GAME);
+      else
+        url = event->subset->badge_url;
+      DownloadImage(std::move(url), badge_path);
     }
 
     std::string title = event->subset->title;
@@ -2008,12 +2033,20 @@ bool Achievements::DoState(StateWrapper& sw)
 std::string Achievements::GetAchievementBadgePath(const rc_client_achievement_t* achievement, bool locked,
                                                   bool download_if_missing)
 {
-  const std::string path =
-    GetLocalImagePath(achievement->badge_name, locked ? RC_IMAGE_TYPE_ACHIEVEMENT_LOCKED : RC_IMAGE_TYPE_ACHIEVEMENT);
+  const u32 image_type = locked ? RC_IMAGE_TYPE_ACHIEVEMENT_LOCKED : RC_IMAGE_TYPE_ACHIEVEMENT;
+  const std::string path = GetLocalImagePath(achievement->badge_name, image_type);
   if (download_if_missing && !path.empty() && !FileSystem::FileExists(path.c_str()))
   {
-    const std::string_view url = locked ? achievement->badge_locked_url : achievement->badge_url;
-    if (url.empty())
+    std::string url;
+    const char* url_ptr;
+
+    // RAIntegration doesn't set the URL fields.
+    if (IsUsingRAIntegration() || !(url_ptr = locked ? achievement->badge_locked_url : achievement->badge_url))
+      url = GetImageURL(achievement->badge_name, image_type);
+    else
+      url = std::string(url_ptr);
+
+    if (url.empty()) [[unlikely]]
       ReportFmtError("Acheivement {} with badge name {} has no badge URL", achievement->id, achievement->badge_name);
     else
       DownloadImage(std::string(url), path);
@@ -2036,17 +2069,12 @@ const std::string& Achievements::GetCachedAchievementBadgePath(const rc_client_a
 
 std::string Achievements::GetLeaderboardUserBadgePath(const rc_client_leaderboard_entry_t* entry)
 {
-  // TODO: maybe we should just cache these in memory...
   const std::string path = GetLocalImagePath(entry->user, RC_IMAGE_TYPE_USER);
-
   if (!FileSystem::FileExists(path.c_str()))
   {
-    char buf[URL_BUFFER_SIZE];
-    const int res = rc_client_leaderboard_entry_get_user_image_url(entry, buf, std::size(buf));
-    if (res == RC_OK)
-      DownloadImage(buf, path);
-    else
-      ReportRCError(res, "rc_client_leaderboard_entry_get_user_image_url() for {} failed", entry->user);
+    std::string url = GetImageURL(entry->user, RC_IMAGE_TYPE_USER);
+    if (!url.empty())
+      DownloadImage(std::move(url), path);
   }
 
   return path;
@@ -2247,12 +2275,13 @@ std::string Achievements::GetLoggedInUserBadgePath()
   badge_path = GetLocalImagePath(user->username, RC_IMAGE_TYPE_USER);
   if (!badge_path.empty() && !FileSystem::FileExists(badge_path.c_str())) [[unlikely]]
   {
-    char url[URL_BUFFER_SIZE];
-    const int res = rc_client_user_get_image_url(user, url, std::size(url));
-    if (res == RC_OK)
-      DownloadImage(url, badge_path);
+    std::string url;
+    if (IsUsingRAIntegration() || !user->avatar_url)
+      url = GetImageURL(user->username, RC_IMAGE_TYPE_USER);
     else
-      ReportRCError(res, "rc_client_user_get_image_url() failed: ");
+      url = user->avatar_url;
+
+    DownloadImage(std::move(url), badge_path);
   }
 
   return badge_path;
@@ -2625,7 +2654,7 @@ void Achievements::DrawPauseMenuOverlays(float start_pos_y)
                 TRANSLATE_DISAMBIG("Achievements", "Achievements Unlocked", "Pause Menu"));
     const float unlocked_fraction = static_cast<float>(s_state.game_summary.num_unlocked_achievements) /
                                     static_cast<float>(s_state.game_summary.num_core_achievements);
-    buffer.format("{}%", static_cast<u32>(std::ceil(unlocked_fraction * 100.0f)));
+    buffer.format("{}%", static_cast<u32>(std::round(unlocked_fraction * 100.0f)));
     text_size = UIStyle.MediumFont->CalcTextSizeA(UIStyle.MediumFont->FontSize, FLT_MAX, 0.0f, IMSTR_START_END(buffer));
     dl->AddText(UIStyle.MediumFont, UIStyle.MediumFont->FontSize,
                 ImVec2(text_pos.x + (box_content_width - text_size.x), text_pos.y), text_color,
@@ -2858,7 +2887,7 @@ void Achievements::DrawAchievementsWindow()
                             ImGui::GetColorU32(UIStyle.SecondaryColor), progress_rounding);
         }
 
-        text.format("{}%", static_cast<int>(std::round(fraction * 100.0f)));
+        text.format("{}%", static_cast<u32>(std::round(fraction * 100.0f)));
         text_size =
           UIStyle.MediumFont->CalcTextSizeA(UIStyle.MediumFont->FontSize, FLT_MAX, 0.0f, IMSTR_START_END(text));
         const ImVec2 text_pos(
@@ -2881,7 +2910,8 @@ void Achievements::DrawAchievementsWindow()
   if (ImGuiFullscreen::BeginFullscreenWindow(
         ImVec2(0.0f, heading_height),
         ImVec2(display_size.x, display_size.y - heading_height - LayoutScale(ImGuiFullscreen::LAYOUT_FOOTER_HEIGHT)),
-        "achievements", background, 0.0f, ImVec2(ImGuiFullscreen::LAYOUT_MENU_WINDOW_X_PADDING, 0.0f), 0))
+        "achievements", background, 0.0f,
+        ImVec2(ImGuiFullscreen::LAYOUT_MENU_WINDOW_X_PADDING, ImGuiFullscreen::LAYOUT_MENU_WINDOW_Y_PADDING), 0))
   {
     static bool buckets_collapsed[NUM_RC_CLIENT_ACHIEVEMENT_BUCKETS] = {};
     static constexpr std::pair<const char*, const char*> bucket_names[NUM_RC_CLIENT_ACHIEVEMENT_BUCKETS] = {
@@ -3396,7 +3426,8 @@ void Achievements::DrawLeaderboardsWindow()
     if (ImGuiFullscreen::BeginFullscreenWindow(
           ImVec2(0.0f, heading_height),
           ImVec2(display_size.x, display_size.y - heading_height - LayoutScale(ImGuiFullscreen::LAYOUT_FOOTER_HEIGHT)),
-          "leaderboards", background, 0.0f, ImVec2(ImGuiFullscreen::LAYOUT_MENU_WINDOW_X_PADDING, 0.0f), 0))
+          "leaderboards", background, 0.0f,
+          ImVec2(ImGuiFullscreen::LAYOUT_MENU_WINDOW_X_PADDING, ImGuiFullscreen::LAYOUT_MENU_WINDOW_Y_PADDING), 0))
     {
       ImGuiFullscreen::ResetFocusHere();
       ImGuiFullscreen::BeginMenuButtons();
@@ -3427,7 +3458,8 @@ void Achievements::DrawLeaderboardsWindow()
     if (ImGuiFullscreen::BeginFullscreenWindow(
           ImVec2(0.0f, heading_height),
           ImVec2(display_size.x, display_size.y - heading_height - LayoutScale(ImGuiFullscreen::LAYOUT_FOOTER_HEIGHT)),
-          "leaderboard", background, 0.0f, ImVec2(ImGuiFullscreen::LAYOUT_MENU_WINDOW_X_PADDING, 0.0f), 0))
+          "leaderboard", background, 0.0f,
+          ImVec2(ImGuiFullscreen::LAYOUT_MENU_WINDOW_X_PADDING, ImGuiFullscreen::LAYOUT_MENU_WINDOW_Y_PADDING), 0))
     {
       // Defer focus reset until loading finishes.
       if (!s_state.is_showing_all_leaderboard_entries ||
@@ -3928,7 +3960,7 @@ void Achievements::BeginRefreshHashDatabase()
   s_state.fetch_hash_library_request =
     rc_client_begin_fetch_hash_library(s_state.client, RC_CONSOLE_PLAYSTATION, FetchHashLibraryCallback, nullptr);
   s_state.fetch_all_progress_request =
-    rc_client_begin_fetch_all_progress_list(s_state.client, RC_CONSOLE_PLAYSTATION, FetchAllProgressCallback, nullptr);
+    rc_client_begin_fetch_all_user_progress(s_state.client, RC_CONSOLE_PLAYSTATION, FetchAllProgressCallback, nullptr);
   if (!s_state.fetch_hash_library_request || !s_state.fetch_hash_library_request)
   {
     ERROR_LOG("Failed to create hash database refresh requests.");
@@ -3952,7 +3984,7 @@ void Achievements::FetchHashLibraryCallback(int result, const char* error_messag
   FinishRefreshHashDatabase();
 }
 
-void Achievements::FetchAllProgressCallback(int result, const char* error_message, rc_client_all_progress_list_t* list,
+void Achievements::FetchAllProgressCallback(int result, const char* error_message, rc_client_all_user_progress_t* list,
                                             rc_client_t* client, void* callback_userdata)
 {
   s_state.fetch_all_progress_request = nullptr;
@@ -3972,7 +4004,7 @@ void Achievements::CancelHashDatabaseRequests()
 {
   if (s_state.fetch_all_progress_result)
   {
-    rc_client_destroy_all_progress_list(s_state.fetch_all_progress_result);
+    rc_client_destroy_all_user_progress(s_state.fetch_all_progress_result);
     s_state.fetch_all_progress_result = nullptr;
   }
   if (s_state.fetch_all_progress_request)
@@ -4008,7 +4040,7 @@ void Achievements::FinishRefreshHashDatabase()
   BuildProgressDatabase(s_state.fetch_all_progress_result);
 
   // tidy up
-  rc_client_destroy_all_progress_list(s_state.fetch_all_progress_result);
+  rc_client_destroy_all_user_progress(s_state.fetch_all_progress_result);
   s_state.fetch_all_progress_result = nullptr;
   rc_client_destroy_hash_library(s_state.fetch_hash_library_result);
   s_state.fetch_hash_library_result = nullptr;
@@ -4018,7 +4050,7 @@ void Achievements::FinishRefreshHashDatabase()
 }
 
 void Achievements::BuildHashDatabase(const rc_client_hash_library_t* hashlib,
-                                     const rc_client_all_progress_list_t* allprog)
+                                     const rc_client_all_user_progress_t* allprog)
 {
   std::vector<HashDatabaseEntry> dbentries;
   dbentries.reserve(hashlib->num_entries);
@@ -4047,8 +4079,8 @@ void Achievements::BuildHashDatabase(const rc_client_hash_library_t* hashlib,
   }
 
   // fill in achievement counts
-  for (const rc_client_all_progress_list_entry_t& entry :
-       std::span<const rc_client_all_progress_list_entry_t>(allprog->entries, allprog->num_entries))
+  for (const rc_client_all_user_progress_entry_t& entry :
+       std::span<const rc_client_all_user_progress_entry_t>(allprog->entries, allprog->num_entries))
   {
     // can have multiple hashes with the same game id, update count on all of them
     bool found_one = false;
@@ -4076,6 +4108,11 @@ void Achievements::BuildHashDatabase(const rc_client_hash_library_t* hashlib,
 bool Achievements::CreateHashDatabaseFromSeedDatabase(const std::string& path, Error* error)
 {
   std::optional<std::string> yaml_data = Host::ReadResourceFileToString("achievement_hashlib.yaml", false, error);
+  if (!yaml_data.has_value())
+  {
+    Error::SetStringView(error, "Seed database is missing.");
+    return false;
+  }
 
   const ryml::Tree yaml =
     ryml::parse_in_place(to_csubstr(path), c4::substr(reinterpret_cast<char*>(yaml_data->data()), yaml_data->size()));
@@ -4342,7 +4379,7 @@ FileSystem::ManagedCFilePtr Achievements::OpenProgressDatabase(bool for_write, b
   return nullptr;
 }
 
-void Achievements::BuildProgressDatabase(const rc_client_all_progress_list_t* allprog)
+void Achievements::BuildProgressDatabase(const rc_client_all_user_progress_t* allprog)
 {
   // no point storing it in memory, just write directly to the file
   Error error;
@@ -4369,8 +4406,8 @@ void Achievements::BuildProgressDatabase(const rc_client_all_progress_list_t* al
   writer.WriteU32(games_with_unlocks);
   if (games_with_unlocks > 0)
   {
-    for (const rc_client_all_progress_list_entry_t& entry :
-         std::span<const rc_client_all_progress_list_entry_t>(allprog->entries, allprog->num_entries))
+    for (const rc_client_all_user_progress_entry_t& entry :
+         std::span<const rc_client_all_user_progress_entry_t>(allprog->entries, allprog->num_entries))
     {
       if ((entry.num_unlocked_achievements + entry.num_unlocked_achievements_hardcore) == 0)
         continue;
@@ -4616,6 +4653,7 @@ const Achievements::ProgressDatabase::Entry* Achievements::ProgressDatabase::Loo
 namespace Achievements {
 
 static void FinishLoadRAIntegration();
+static void FinishLoadRAIntegrationOnCPUThread();
 
 static void RAIntegrationBeginLoadCallback(int result, const char* error_message, rc_client_t* client, void* userdata);
 static void RAIntegrationEventHandler(const rc_client_raintegration_event_t* event, rc_client_t* client);
@@ -4636,8 +4674,17 @@ bool Achievements::IsRAIntegrationAvailable()
           FileSystem::FileExists(Path::Combine(EmuFolders::AppRoot, "RA_Integration.dll").c_str()));
 }
 
+bool Achievements::IsRAIntegrationInitializing()
+{
+  return (s_state.using_raintegration && (s_state.load_raintegration_request || s_state.raintegration_loading));
+}
+
 void Achievements::BeginLoadRAIntegration()
 {
+  // set the flag so we don't try to log in immediately, need to wait for RAIntegration to load first
+  s_state.using_raintegration = true;
+  s_state.raintegration_loading = true;
+
   const std::wstring wapproot = StringUtil::UTF8StringToWideString(EmuFolders::AppRoot);
   s_state.load_raintegration_request = rc_client_begin_load_raintegration_deferred(
     s_state.client, wapproot.c_str(), RAIntegrationBeginLoadCallback, nullptr);
@@ -4646,15 +4693,16 @@ void Achievements::BeginLoadRAIntegration()
 void Achievements::RAIntegrationBeginLoadCallback(int result, const char* error_message, rc_client_t* client,
                                                   void* userdata)
 {
+  s_state.load_raintegration_request = nullptr;
+
   if (result != RC_OK)
   {
+    s_state.raintegration_loading = false;
+
     std::string message = fmt::format("Failed to load RAIntegration:\n{}", error_message ? error_message : "");
     Host::ReportErrorAsync("RAIntegration Error", message);
     return;
   }
-
-  // set this so we can unload it if the request changes
-  s_state.using_raintegration = true;
 
   INFO_COLOR_LOG(StrongGreen, "RAIntegration DLL loaded, initializing.");
   Host::RunOnUIThread(&Achievements::FinishLoadRAIntegration);
@@ -4679,6 +4727,7 @@ void Achievements::FinishLoadRAIntegration()
     std::string message = fmt::format("Failed to initialize RAIntegration:\n{}", error_message ? error_message : "");
     Host::ReportErrorAsync("RAIntegration Error", message);
     s_state.using_raintegration = false;
+    Host::RunOnCPUThread(&Achievements::FinishLoadRAIntegrationOnCPUThread);
     return;
   }
 
@@ -4688,15 +4737,39 @@ void Achievements::FinishLoadRAIntegration()
   rc_client_raintegration_set_event_handler(s_state.client, RAIntegrationEventHandler);
 
   Host::OnRAIntegrationMenuChanged();
+
+  Host::RunOnCPUThread(&Achievements::FinishLoadRAIntegrationOnCPUThread);
+}
+
+void Achievements::FinishLoadRAIntegrationOnCPUThread()
+{
+  // note: this is executed even for the failure case.
+  // we want to finish initializing with internal client if RAIntegration didn't load.
+  const auto lock = GetLock();
+  s_state.raintegration_loading = false;
+  FinishInitialize();
 }
 
 void Achievements::UnloadRAIntegration()
 {
-  if (!s_state.using_raintegration)
-    return;
+  DebugAssert(s_state.using_raintegration && s_state.client);
 
-  rc_client_unload_raintegration(s_state.client);
+  if (s_state.load_raintegration_request)
+  {
+    rc_client_abort_async(s_state.client, s_state.load_raintegration_request);
+    s_state.load_raintegration_request = nullptr;
+  }
+
+  // Have to unload it on the UI thread, otherwise the DLL unload races the UI thread message processing.
+  s_state.http_downloader->WaitForAllRequests();
+  s_state.http_downloader.reset();
+  s_state.raintegration_loading = false;
   s_state.using_raintegration = false;
+  Host::RunOnUIThread([client = std::exchange(s_state.client, nullptr)]() {
+    rc_client_unload_raintegration(client);
+    rc_client_destroy(client);
+  });
+
   Host::OnRAIntegrationMenuChanged();
 }
 
@@ -4736,9 +4809,31 @@ void Achievements::RAIntegrationEventHandler(const rc_client_raintegration_event
 void Achievements::RAIntegrationWriteMemoryCallback(uint32_t address, uint8_t* buffer, uint32_t num_bytes,
                                                     rc_client_t* client)
 {
+  if ((address + num_bytes) > 0x200400U) [[unlikely]]
+    return;
+
   // This can be called on the UI thread, so always queue it.
   llvm::SmallVector<u8, 16> data(buffer, buffer + num_bytes);
-  Host::RunOnCPUThread([address, data = std::move(data)]() { CPU::SafeWriteMemoryBytes(address, data); });
+  Host::RunOnCPUThread([address, data = std::move(data)]() {
+    u8* src = (address >= 0x200000U) ? CPU::g_state.scratchpad.data() : Bus::g_ram;
+    const u32 offset = (address & Bus::RAM_2MB_MASK); // size guarded by check above
+
+    switch (data.size())
+    {
+      case 1:
+        std::memcpy(&src[offset], data.data(), 1);
+        break;
+      case 2:
+        std::memcpy(&src[offset], data.data(), 2);
+        break;
+      case 4:
+        std::memcpy(&src[offset], data.data(), 4);
+        break;
+      default:
+        [[unlikely]] std::memcpy(&src[offset], data.data(), data.size());
+        break;
+    }
+  });
 }
 
 void Achievements::RAIntegrationGetGameNameCallback(char* buffer, uint32_t buffer_size, rc_client_t* client)
@@ -4754,6 +4849,11 @@ bool Achievements::IsUsingRAIntegration()
 }
 
 bool Achievements::IsRAIntegrationAvailable()
+{
+  return false;
+}
+
+bool Achievements::IsRAIntegrationInitializing()
 {
   return false;
 }

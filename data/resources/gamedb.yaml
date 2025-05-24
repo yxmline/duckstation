@@ -29775,6 +29775,8 @@ SCES-00568:
   controllers:
     - DigitalController
     - NeGcon
+  traits:
+    - DisablePGXPCulling # Stops crashes.
   metadata:
     publisher: "Sony"
     developer: "UEP Systems"
@@ -29794,6 +29796,8 @@ SLPS-00456:
   controllers:
     - DigitalController
     - NeGcon
+  traits:
+    - DisablePGXPCulling # Stops crashes.
   codes:
     - SLPS-00456
     - SLPS-91031
@@ -29819,6 +29823,8 @@ SCUS-94356:
   controllers:
     - DigitalController
     - NeGcon
+  traits:
+    - DisablePGXPCulling # Stops crashes.
   metadata:
     publisher: "Sony"
     developer: "UEP Systems"
@@ -32026,6 +32032,8 @@ SLES-00292:
   controllers:
     - DigitalController
     - Justifier
+  traits:
+    - ForceRecompilerICache # Justifier handlers are timing sensitive.
   metadata:
     publisher: "Konami"
     developer: "Konami"
@@ -32045,6 +32053,8 @@ SLUS-00335:
   controllers:
     - DigitalController
     - Justifier
+  traits:
+    - ForceRecompilerICache # Justifier handlers are timing sensitive.
   metadata:
     publisher: "Konami"
     developer: "Konami"
@@ -66151,6 +66161,8 @@ SLES-01299:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - DisableAutoAnalogMode # Language selector doesn't support analog.
   metadata:
     publisher: "Eidos Interactive"
     developer: "Crystal Dynamics, Inc"
@@ -66172,6 +66184,8 @@ SLES-01908:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - DisableAutoAnalogMode # Language selector doesn't support analog.
   metadata:
     publisher: "Eidos Interactive"
     developer: "Crystal Dynamics, Inc"
@@ -122640,6 +122654,7 @@ SLPS-91479:
     - AnalogController
     - DigitalController
   traits:
+    - DisableCDROMReadSpeedup
     - DisableWidescreen
   codes:
     - SLPS-91479
@@ -122664,6 +122679,7 @@ SLPS-02779:
     - AnalogController
     - DigitalController
   traits:
+    - DisableCDROMReadSpeedup
     - DisableWidescreen
   codes:
     - SLPS-02779
@@ -122693,6 +122709,7 @@ SLES-02558:
     - AnalogController
     - DigitalController
   traits:
+    - DisableCDROMReadSpeedup
     - DisableWidescreen
   libcrypt: true
   metadata:
@@ -122720,6 +122737,7 @@ SLES-12558:
     - AnalogController
     - DigitalController
   traits:
+    - DisableCDROMReadSpeedup
     - DisableWidescreen
   libcrypt: true
   metadata:
@@ -122747,6 +122765,7 @@ SLES-02559:
     - AnalogController
     - DigitalController
   traits:
+    - DisableCDROMReadSpeedup
     - DisableWidescreen
   libcrypt: true
   metadata:
@@ -122774,6 +122793,7 @@ SLES-12559:
     - AnalogController
     - DigitalController
   traits:
+    - DisableCDROMReadSpeedup
     - DisableWidescreen
   libcrypt: true
   metadata:
@@ -122801,6 +122821,7 @@ SLES-02560:
     - AnalogController
     - DigitalController
   traits:
+    - DisableCDROMReadSpeedup
     - DisableWidescreen
   libcrypt: true
   metadata:
@@ -122828,6 +122849,7 @@ SLES-12560:
     - AnalogController
     - DigitalController
   traits:
+    - DisableCDROMReadSpeedup
     - DisableWidescreen
   libcrypt: true
   metadata:
@@ -122855,6 +122877,7 @@ SLES-02562:
     - AnalogController
     - DigitalController
   traits:
+    - DisableCDROMReadSpeedup
     - DisableWidescreen
   libcrypt: true
   metadata:
@@ -122882,6 +122905,7 @@ SLES-12562:
     - AnalogController
     - DigitalController
   traits:
+    - DisableCDROMReadSpeedup
     - DisableWidescreen
   libcrypt: true
   metadata:
@@ -122909,6 +122933,7 @@ SCPS-45467:
     - AnalogController
     - DigitalController
   traits:
+    - DisableCDROMReadSpeedup
     - DisableWidescreen
   codes:
     - SCPS-45467
@@ -122938,6 +122963,7 @@ SCPS-45468:
     - AnalogController
     - DigitalController
   traits:
+    - DisableCDROMReadSpeedup
     - DisableWidescreen
   codes:
     - SCPS-45468
@@ -122970,6 +122996,7 @@ SLES-02561:
     - AnalogController
     - DigitalController
   traits:
+    - DisableCDROMReadSpeedup
     - DisableWidescreen
   libcrypt: true
   metadata:
@@ -123000,6 +123027,7 @@ SLES-12561:
     - AnalogController
     - DigitalController
   traits:
+    - DisableCDROMReadSpeedup
     - DisableWidescreen
   libcrypt: true
   metadata:
@@ -123030,6 +123058,7 @@ SLUS-01042:
     - AnalogController
     - DigitalController
   traits:
+    - DisableCDROMReadSpeedup
     - DisableWidescreen
   metadata:
     publisher: "Squaresoft"
@@ -123058,6 +123087,7 @@ SLUS-01055:
     - AnalogController
     - DigitalController
   traits:
+    - DisableCDROMReadSpeedup
     - DisableWidescreen
   metadata:
     publisher: "Squaresoft"
@@ -127748,7 +127778,6 @@ SLPM-86146:
     rating: NoIssues
     versionTested: "0.1-774-g5a1b008"
   controllers:
-    - AnalogController
     - DigitalController
     - PopnController
   metadata:
@@ -184438,6 +184467,8 @@ SLPS-00190:
   name: "Welcome House (Japan)"
   controllers:
     - DigitalController
+  codes:
+    - HASH-2B7BBF1266453C1A
   metadata:
     publisher: "Gust"
     developer: "Gust"

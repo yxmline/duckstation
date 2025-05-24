@@ -29,6 +29,16 @@
 
 namespace StringUtil {
 
+/// Returns the given character in uppercase.
+ALWAYS_INLINE static char ToLower(char ch)
+{
+  return ch + ((static_cast<u8>(ch) >= 'A' && static_cast<u8>(ch) <= 'Z') ? ('a' - 'A') : 0);
+}
+ALWAYS_INLINE static char ToUpper(char ch)
+{
+  return ch - ((static_cast<u8>(ch) >= 'a' && static_cast<u8>(ch) <= 'z') ? ('a' - 'A') : 0);
+}
+
 /// Checks if a wildcard matches a search string.
 bool WildcardMatch(const char* subject, const char* mask, bool case_sensitive = true);
 
@@ -80,6 +90,11 @@ static inline int CompareNoCase(std::string_view s1, std::string_view s2)
   const size_t compare_len = std::min(s1_len, s2_len);
   const int compare_res = (compare_len > 0) ? Strncasecmp(s1.data(), s2.data(), compare_len) : 0;
   return (compare_len != 0) ? compare_res : ((s1_len < s2_len) ? -1 : ((s1_len > s2_len) ? 1 : 0));
+}
+static inline bool ContainsNoCase(std::string_view s1, std::string_view s2)
+{
+  return (std::search(s1.begin(), s1.end(), s2.begin(), s2.end(),
+                      [](char lhs, char rhs) { return (ToLower(lhs) == ToLower(rhs)); }) != s1.end());
 }
 
 /// Wrapper around std::from_chars
@@ -234,7 +249,7 @@ inline std::string ToChars(bool value, int base)
 }
 
 /// Returns true if the given character is whitespace.
-static inline bool IsWhitespace(char ch)
+ALWAYS_INLINE static bool IsWhitespace(char ch)
 {
   return ((ch >= 0x09 && ch <= 0x0D) || // horizontal tab, line feed, vertical tab, form feed, carriage return
           ch == 0x20);                  // space
@@ -446,8 +461,13 @@ size_t DecodeUTF8(const std::string& str, size_t offset, char32_t* ch);
 size_t EncodeAndAppendUTF16(void* utf16, size_t pos, size_t size, char32_t codepoint);
 
 /// Decodes UTF-16 to a single unicode codepoint.
-/// Returns the number of bytes the codepoint took in the original string.
+/// Returns the number of 16-bit units the codepoint took in the original string.
 size_t DecodeUTF16(const void* bytes, size_t pos, size_t size, char32_t* codepoint);
+size_t DecodeUTF16BE(const void* bytes, size_t pos, size_t size, char32_t* codepoint);
+
+/// Decodes a UTF-16 string to a UTF-8 string.
+std::string DecodeUTF16String(const void* bytes, size_t size);
+std::string DecodeUTF16BEString(const void* bytes, size_t size);
 
 // Replaces the end of a string with ellipsis if it exceeds the specified length.
 std::string Ellipsise(const std::string_view str, u32 max_length, const char* ellipsis = "...");

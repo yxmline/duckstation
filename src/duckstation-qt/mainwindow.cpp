@@ -737,8 +737,13 @@ void MainWindow::recreate()
   destroySubWindows();
 
   const bool was_display_created = m_display_created;
+  const bool was_fullscreen = (was_display_created && g_emu_thread->isFullscreen());
   if (was_display_created)
   {
+    // Ensure the main window is visible, otherwise last-window-closed terminates the application.
+    if (!isVisible())
+      show();
+
     g_emu_thread->setSurfaceless(true);
     QtUtils::ProcessEventsWithSleep(QEventLoop::ExcludeUserInputEvents,
                                     [this]() { return (m_display_widget || !g_emu_thread->isSurfaceless()); });
@@ -770,6 +775,8 @@ void MainWindow::recreate()
   if (was_display_created)
   {
     g_emu_thread->setSurfaceless(false);
+    if (was_fullscreen)
+      g_emu_thread->setFullscreen(true, true);
     g_main_window->updateEmulationActions(false, s_system_valid, s_achievements_hardcore_mode);
     g_main_window->onFullscreenUIStartedOrStopped(s_fullscreen_ui_started);
   }
@@ -976,39 +983,6 @@ void MainWindow::populateSaveStateMenu(std::string_view game_serial, QMenu* menu
     add_slot(tr("Global Save %1 (%2)"), tr("Global Save %1 (Empty)"), empty_serial, static_cast<s32>(slot));
 }
 
-void MainWindow::populateChangeDiscSubImageMenu(QMenu* menu, QActionGroup* action_group)
-{
-  if (!s_system_valid)
-    return;
-
-  if (System::HasMediaSubImages())
-  {
-    const u32 count = System::GetMediaSubImageCount();
-    const u32 current = System::GetMediaSubImageIndex();
-    for (u32 i = 0; i < count; i++)
-    {
-      QAction* action = action_group->addAction(QString::fromStdString(System::GetMediaSubImageTitle(i)));
-      action->setCheckable(true);
-      action->setChecked(i == current);
-      connect(action, &QAction::triggered, [i]() { g_emu_thread->changeDiscFromPlaylist(i); });
-      menu->addAction(action);
-    }
-  }
-  else if (const GameDatabase::Entry* entry = System::GetGameDatabaseEntry(); entry && !entry->disc_set_serials.empty())
-  {
-    auto lock = GameList::GetLock();
-    for (const auto& [title, glentry] : GameList::GetMatchingEntriesForSerial(entry->disc_set_serials))
-    {
-      QAction* action = action_group->addAction(QString::fromStdString(title));
-      QString path = QString::fromStdString(glentry->path);
-      action->setCheckable(true);
-      action->setChecked(path == s_current_game_path);
-      connect(action, &QAction::triggered, [path = std::move(path)]() { g_emu_thread->changeDisc(path, false, true); });
-      menu->addAction(action);
-    }
-  }
-}
-
 void MainWindow::onCheatsActionTriggered()
 {
   m_ui.menuCheats->exec(QCursor::pos());
@@ -1020,12 +994,8 @@ void MainWindow::onCheatsMenuAboutToShow()
   connect(m_ui.menuCheats->addAction(tr("Select Cheats...")), &QAction::triggered, this,
           [this]() { openGamePropertiesForCurrentGame("Cheats"); });
   m_ui.menuCheats->addSeparator();
-  populateCheatsMenu(m_ui.menuCheats);
-}
 
-void MainWindow::populateCheatsMenu(QMenu* menu)
-{
-  Host::RunOnCPUThread([menu]() {
+  Host::RunOnCPUThread([menu = m_ui.menuCheats]() {
     if (!System::IsValid())
       return;
 
@@ -1237,16 +1207,41 @@ void MainWindow::onChangeDiscFromDeviceActionTriggered()
 
 void MainWindow::onChangeDiscMenuAboutToShow()
 {
-  populateChangeDiscSubImageMenu(m_ui.menuChangeDisc, m_ui.actionGroupChangeDiscSubImages);
-}
+  // clean up temporary menu items, they're owned by the QMenu so they get deleted here. the main QActions do not
+  m_ui.menuChangeDisc->clear();
 
-void MainWindow::onChangeDiscMenuAboutToHide()
-{
-  for (QAction* action : m_ui.actionGroupChangeDiscSubImages->actions())
+  m_ui.menuChangeDisc->addAction(m_ui.actionChangeDiscFromFile);
+  m_ui.menuChangeDisc->addAction(m_ui.actionChangeDiscFromDevice);
+  m_ui.menuChangeDisc->addAction(m_ui.actionChangeDiscFromGameList);
+  m_ui.menuChangeDisc->addAction(m_ui.actionRemoveDisc);
+  m_ui.menuChangeDisc->addSeparator();
+
+  if (!s_system_valid)
+    return;
+
+  if (System::HasMediaSubImages())
   {
-    m_ui.actionGroupChangeDiscSubImages->removeAction(action);
-    m_ui.menuChangeDisc->removeAction(action);
-    action->deleteLater();
+    const u32 count = System::GetMediaSubImageCount();
+    const u32 current = System::GetMediaSubImageIndex();
+    for (u32 i = 0; i < count; i++)
+    {
+      QAction* action = m_ui.menuChangeDisc->addAction(QString::fromStdString(System::GetMediaSubImageTitle(i)));
+      action->setCheckable(true);
+      action->setChecked(i == current);
+      connect(action, &QAction::triggered, [i]() { g_emu_thread->changeDiscFromPlaylist(i); });
+    }
+  }
+  else if (const GameDatabase::Entry* entry = System::GetGameDatabaseEntry(); entry && !entry->disc_set_serials.empty())
+  {
+    auto lock = GameList::GetLock();
+    for (const auto& [title, glentry] : GameList::GetMatchingEntriesForSerial(entry->disc_set_serials))
+    {
+      QAction* action = m_ui.menuChangeDisc->addAction(QString::fromStdString(title));
+      QString path = QString::fromStdString(glentry->path);
+      action->setCheckable(true);
+      action->setChecked(path == s_current_game_path);
+      connect(action, &QAction::triggered, [path = std::move(path)]() { g_emu_thread->changeDisc(path, false, true); });
+    }
   }
 }
 
@@ -2029,7 +2024,6 @@ void MainWindow::connectSignals()
   connect(m_ui.actionChangeDiscFromGameList, &QAction::triggered, this,
           &MainWindow::onChangeDiscFromGameListActionTriggered);
   connect(m_ui.menuChangeDisc, &QMenu::aboutToShow, this, &MainWindow::onChangeDiscMenuAboutToShow);
-  connect(m_ui.menuChangeDisc, &QMenu::aboutToHide, this, &MainWindow::onChangeDiscMenuAboutToHide);
   connect(m_ui.menuLoadState, &QMenu::aboutToShow, this, &MainWindow::onLoadStateMenuAboutToShow);
   connect(m_ui.menuSaveState, &QMenu::aboutToShow, this, &MainWindow::onSaveStateMenuAboutToShow);
   connect(m_ui.menuCheats, &QMenu::aboutToShow, this, &MainWindow::onCheatsMenuAboutToShow);
@@ -3014,7 +3008,7 @@ MainWindow::SystemLock MainWindow::pauseAndLockSystem()
   }
 
   // Now we'll either have a borderless window, or a regular window (if we were exclusive fullscreen).
-  QWidget* dialog_parent = s_system_valid ? getDisplayContainer() : this;
+  QWidget* dialog_parent = (s_system_valid && was_fullscreen) ? getDisplayContainer() : this;
 
   return SystemLock(dialog_parent, was_paused, was_fullscreen);
 }

@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2019-2024 Connor McLaughlin <stenzek@gmail.com>
+// SPDX-FileCopyrightText: 2019-2025 Connor McLaughlin <stenzek@gmail.com>
 // SPDX-License-Identifier: CC-BY-NC-ND-4.0
 
 #include "guncon.h"
@@ -293,7 +293,7 @@ static const SettingInfo s_settings[] = {
    TRANSLATE_NOOP("GunCon", "Path to an image to use as a crosshair/cursor."), DEFAULT_CROSSHAIR_PATH, nullptr, nullptr,
    nullptr, nullptr, nullptr, 0.0f},
   {SettingInfo::Type::Float, "CrosshairScale", TRANSLATE_NOOP("GunCon", "Crosshair Image Scale"),
-   TRANSLATE_NOOP("GunCon", "Scale of crosshair image on screen."), "1.0", "0.0001", "100.0", "0.10", "%.0f%%", nullptr,
+   TRANSLATE_NOOP("GunCon", "Scale of crosshair image on screen."), "1", "0.0001", "100", "0.1", "%.0f%%", nullptr,
    100.0f},
   {SettingInfo::Type::String, "CrosshairColor", TRANSLATE_NOOP("GunCon", "Cursor Color"),
    TRANSLATE_NOOP("GunCon", "Applies a color to the chosen crosshair images, can be used for multiple players. Specify "
@@ -323,7 +323,10 @@ void GunCon::LoadSettings(const SettingsInterface& si, const char* section, bool
       cursor_color_str[0] == '#' ? std::string_view(cursor_color_str).substr(1) : std::string_view(cursor_color_str),
       16));
     if (cursor_color_opt.has_value())
+    {
       cursor_color = cursor_color_opt.value();
+      cursor_color = (cursor_color & 0x00FF00u) | ((cursor_color >> 16) & 0xFFu) | ((cursor_color & 0xFFu) << 16);
+    }
   }
 
   const s32 prev_pointer_index = GetSoftwarePointerIndex();

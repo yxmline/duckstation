@@ -15,16 +15,22 @@
 #include <algorithm>
 
 GamePatchDetailsWidget::GamePatchDetailsWidget(std::string name, const std::string& author,
-                                               const std::string& description, bool enabled, SettingsWindow* dialog,
-                                               QWidget* parent)
+                                               const std::string& description, bool disallowed_for_achievements,
+                                               bool enabled, SettingsWindow* dialog, QWidget* parent)
   : QWidget(parent), m_dialog(dialog), m_name(name)
 {
   m_ui.setupUi(this);
 
+  QFont title_font(m_ui.name->font());
+  title_font.setPointSizeF(title_font.pointSizeF() + 4.0f);
+  title_font.setBold(true);
   m_ui.name->setText(QString::fromStdString(name));
+  m_ui.name->setFont(title_font);
   m_ui.description->setText(
-    tr("<strong>Author: </strong>%1<br>%2")
+    tr("<strong>Author: </strong>%1%2<br>%3")
       .arg(author.empty() ? tr("Unknown") : QString::fromStdString(author))
+      .arg(disallowed_for_achievements ? tr("<br><strong>Not permitted in RetroAchievements hardcore mode.</strong>") :
+                                         QString())
       .arg(description.empty() ? tr("No description provided.") : QString::fromStdString(description)));
 
   DebugAssert(dialog->getSettingsInterface());
@@ -79,18 +85,21 @@ void GamePatchSettingsWidget::disableAllPatches()
 void GamePatchSettingsWidget::reloadList()
 {
   std::vector<Cheats::CodeInfo> patches =
-    Cheats::GetCodeInfoList(m_dialog->getGameSerial(), std::nullopt, false, true, true);
+    Cheats::GetCodeInfoList(m_dialog->getGameSerial(), m_dialog->getGameHash(), false, true, true);
   std::vector<std::string> enabled_list =
     m_dialog->getSettingsInterface()->GetStringList(Cheats::PATCHES_CONFIG_SECTION, Cheats::PATCH_ENABLE_CONFIG_KEY);
 
   delete m_ui.scrollArea->takeWidget();
 
   QWidget* container = new QWidget(m_ui.scrollArea);
+  m_ui.scrollArea->setWidget(container);
+
   QVBoxLayout* layout = new QVBoxLayout(container);
-  layout->setContentsMargins(0, 0, 0, 0);
 
   if (!patches.empty())
   {
+    layout->setContentsMargins(0, 0, 0, 0);
+
     bool first = true;
 
     for (Cheats::CodeInfo& pi : patches)
@@ -108,18 +117,20 @@ void GamePatchSettingsWidget::reloadList()
       }
 
       const bool enabled = (std::find(enabled_list.begin(), enabled_list.end(), pi.name) != enabled_list.end());
-      GamePatchDetailsWidget* it =
-        new GamePatchDetailsWidget(std::move(pi.name), pi.author, pi.description, enabled, m_dialog, container);
+      GamePatchDetailsWidget* it = new GamePatchDetailsWidget(
+        std::move(pi.name), pi.author, pi.description, pi.disallow_for_achievements, enabled, m_dialog, container);
       layout->addWidget(it);
     }
   }
   else
   {
-    QLabel* label = new QLabel(tr("There are no patches available for this game."), container);
+    QLabel* label = new QLabel(tr("No patches are available for this game."), container);
+    QFont font(label->font());
+    font.setPointSizeF(font.pointSizeF() + 2.0f);
+    font.setBold(true);
+    label->setFont(font);
     layout->addWidget(label);
   }
 
-  layout->addStretch(1);
-
-  m_ui.scrollArea->setWidget(container);
+  layout->addSpacerItem(new QSpacerItem(0, 0, QSizePolicy::Minimum, QSizePolicy::Expanding));
 }
