@@ -1,4 +1,5 @@
 # DuckStation - PlayStation 1, aka. PSX Emulator
+
 [Features](#features) | [Downloading and Running](#downloading-and-running) | [Building](#building) | [Disclaimers](#disclaimers)
 
 **Latest Builds for Windows 10/11 (x64/ARM64), Linux (AppImage/Flatpak x64/ARM32/ARM64), and macOS (11.0+ Universal):** https://github.com/stenzek/duckstation/releases/tag/latest
@@ -93,7 +94,7 @@ Once downloaded and extracted, you can launch the emulator with `duckstation-qt-
 
 ### Linux
 
-DuckStation is provided for x86_64/ARM32/ARM64 Linux in AppImage and Flatpak formats. The release on [Flathub](https://flathub.org/apps/org.duckstation.DuckStation) is official, and synchronized with the latest rolling/stable release on GitHub.
+DuckStation is provided for x86_64/ARM32/ARM64 Linux in AppImage (recommended) and Flatpak (not recommended) formats.
 
 #### AppImage
 
@@ -104,6 +105,10 @@ The AppImages require a distribution equivalent to Ubuntu 22.04 or newer to run.
 
 #### Flatpak
 
+Due to various Flatpak limitations and Flathub randomly breaking regularly, **the Flatpak package is not recommended**. We recommend that you use the AppImage instead.
+
+There appears to be little interest from users in keeping the Flatpak maintained. If you are a user and using the Flatpak, please let us know, since we are considering dropping it.
+
  - Go to https://github.com/stenzek/duckstation/releases/tag/latest, and download `duckstation-x64.flatpak`.
  - Run `flatpak install ./duckstation-x64.flatpak`.
 
@@ -111,19 +116,19 @@ or, if you have FlatHub set up:
  - Run `flatpak install org.duckstation.DuckStation`.
 
 Use `flatpak run org.duckstation.DuckStation` to start, or select `DuckStation` in the launcher of your desktop environment. Follow the Setup Wizard to get started.
- 
+
 ### macOS
 
-Universal MacOS builds are provided for both x64 and ARM64 (Apple Silicon).
+Universal macOS builds are provided for both x86_64 (Intel) and ARM64 (Apple Silicon).
 
-MacOS Big Sir (11.0) is required, as this is also the minimum requirement for Qt.
+macOS Big Sur (11.0) is required, as this is also the minimum requirement for Qt.
 
 To download:
  - Go to https://github.com/stenzek/duckstation/releases/tag/latest, and download `duckstation-mac-release.zip`.
  - Extract the zip by double-clicking it.
- - Open DuckStation.app, optionally moving it to your desired location first.
+ - Open `DuckStation.app`, optionally moving it to your desired location first.
  - Depending on GateKeeper configuration, you may need to right click -> Open the first time you run it, as code signing certificates are out of the question for a project which brings in zero revenue.
- 
+
 ### Android
 
 You will need a device with armv7 (32-bit ARM), AArch64 (64-bit ARM), or x86_64 (64-bit x86). 64-bit is preferred, the requirements are higher for 32-bit, you'll probably want at least a 1.5GHz CPU.
@@ -227,7 +232,7 @@ If you wish to use a "portable" build, where the user directory is the same as w
 ## Bindings for Qt frontend
 Your keyboard or game controller can be used to simulate a variety of PlayStation controllers. Controller input is supported through DInput, XInput, and SDL backends and can be changed through `Settings -> Controllers`.
 
-To bind your input device, go to `Settings -> Controllers`, and select the virtual controller you want to map. Automatic mapping handles the majority of ocntrollers. However, if you need to manually bind a controller, click the box below the button/axis name, and press the key or button on your input device that you wish to bind to.
+To bind your input device, go to `Settings -> Controllers`, and select the virtual controller you want to map. Automatic mapping handles the majority of controllers. However, if you need to manually bind a controller, click the box below the button/axis name, and press the key or button on your input device that you wish to bind to.
 
 ## SDL Game Controller Database
 DuckStation releases ship with a database of game controller mappings for the SDL controller backend, courtesy of https://github.com/mdqinc/SDL_GameControllerDB. The included `gamecontrollerdb.txt` file can be found in the `resources` subdirectory of the DuckStation program directory.

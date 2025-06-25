@@ -25,12 +25,12 @@ InputBindingDialog::InputBindingDialog(SettingsInterface* sif, InputBindingInfo:
   m_ui.setupUi(this);
   m_ui.title->setText(
     tr("Bindings for %1 %2").arg(QString::fromStdString(m_section_name)).arg(QString::fromStdString(m_key_name)));
-  m_ui.buttonBox->button(QDialogButtonBox::Close)->setText(tr("Close"));
+  m_ui.buttonBox->button(QDialogButtonBox::Close)->setDefault(true);
 
   connect(m_ui.addBinding, &QPushButton::clicked, this, &InputBindingDialog::onAddBindingButtonClicked);
   connect(m_ui.removeBinding, &QPushButton::clicked, this, &InputBindingDialog::onRemoveBindingButtonClicked);
   connect(m_ui.clearBindings, &QPushButton::clicked, this, &InputBindingDialog::onClearBindingsButtonClicked);
-  connect(m_ui.buttonBox, &QDialogButtonBox::rejected, [this]() { done(0); });
+  connect(m_ui.buttonBox, &QDialogButtonBox::rejected, this, &QDialog::accept);
   updateList();
 
   // Only show the sensitivity controls for binds where it's applicable.
@@ -97,7 +97,8 @@ bool InputBindingDialog::eventFilter(QObject* watched, QEvent* event)
   else if (event_type == QEvent::Wheel)
   {
     const QPoint delta_angle(static_cast<QWheelEvent*>(event)->angleDelta());
-    const float dx = std::clamp(static_cast<float>(delta_angle.x()) / QtUtils::MOUSE_WHEEL_DELTA, -1.0f, 1.0f);
+    const float dx = std::clamp(
+      static_cast<float>(delta_angle.x()) / static_cast<float>(QWheelEvent::DefaultDeltasPerStep), -1.0f, 1.0f);
     if (dx != 0.0f)
     {
       InputBindingKey key(InputManager::MakePointerAxisKey(0, InputPointerAxis::WheelX));
@@ -105,7 +106,8 @@ bool InputBindingDialog::eventFilter(QObject* watched, QEvent* event)
       m_new_bindings.push_back(key);
     }
 
-    const float dy = std::clamp(static_cast<float>(delta_angle.y()) / QtUtils::MOUSE_WHEEL_DELTA, -1.0f, 1.0f);
+    const float dy = std::clamp(
+      static_cast<float>(delta_angle.y()) / static_cast<float>(QWheelEvent::DefaultDeltasPerStep), -1.0f, 1.0f);
     if (dy != 0.0f)
     {
       InputBindingKey key(InputManager::MakePointerAxisKey(0, InputPointerAxis::WheelY));

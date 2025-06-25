@@ -30,7 +30,7 @@
 #include <type_traits>
 
 #include "IconsEmoji.h"
-#include "IconsFontAwesome5.h"
+#include "IconsFontAwesome6.h"
 #include "fmt/format.h"
 
 LOG_CHANNEL(GameDatabase);
@@ -424,13 +424,13 @@ void GameDatabase::Entry::ApplySettings(Settings& settings, bool display_osd_mes
   {
     settings.gpu_pgxp_tolerance = gpu_pgxp_tolerance.value();
     if (display_osd_messages)
-      INFO_LOG("GameDB: GPU PGXP tolerance set to {}.", settings.gpu_pgxp_tolerance);
+      INFO_LOG("GameDB: PGXP tolerance set to {}.", settings.gpu_pgxp_tolerance);
   }
   if (gpu_pgxp_depth_threshold.has_value())
   {
     settings.SetPGXPDepthClearThreshold(gpu_pgxp_depth_threshold.value());
     if (display_osd_messages)
-      INFO_LOG("GameDB: GPU depth clear threshold set to {}.", settings.GetPGXPDepthClearThreshold());
+      INFO_LOG("GameDB: PGXP depth clear threshold set to {}.", settings.GetPGXPDepthClearThreshold());
   }
   if (gpu_line_detect_mode.has_value())
   {
@@ -597,10 +597,17 @@ void GameDatabase::Entry::ApplySettings(Settings& settings, bool display_osd_mes
 
   if (HasTrait(Trait::DisableUpscaling))
   {
-    if (display_osd_messages && settings.gpu_resolution_scale > 1)
-      APPEND_MESSAGE(TRANSLATE_SV("GameDatabase", "Upscaling disabled."));
+    if (display_osd_messages)
+    {
+      if (settings.gpu_resolution_scale != 1)
+        APPEND_MESSAGE(TRANSLATE_SV("GameDatabase", "Upscaling disabled."));
+      if (settings.gpu_multisamples != 1)
+        APPEND_MESSAGE(TRANSLATE_SV("GameDatabase", "MSAA disabled."));
+    }
 
     settings.gpu_resolution_scale = 1;
+    settings.gpu_automatic_resolution_scale = false;
+    settings.gpu_multisamples = 1;
   }
 
   if (HasTrait(Trait::DisableTextureFiltering))
@@ -834,6 +841,25 @@ void GameDatabase::Entry::ApplySettings(Settings& settings, bool display_osd_mes
 #undef BIT_FOR
 }
 
+static inline void AppendSettingsHeading(SmallStringBase& str, bool& heading)
+{
+  if (!heading)
+  {
+    heading = true;
+    str.append_format("**{}**\n\n", TRANSLATE_SV("GameDatabase", "Settings"));
+  }
+}
+
+static inline void AppendBoolSetting(SmallStringBase& str, bool& heading, std::string_view title,
+                                     const std::optional<bool>& value)
+{
+  if (!value.has_value())
+    return;
+
+  AppendSettingsHeading(str, heading);
+  str.append_format(" - {}: {}\n", title, value.value() ? "Enabled" : "Disabled");
+}
+
 template<typename T>
 static inline void AppendIntegerSetting(SmallStringBase& str, bool& heading, std::string_view title,
                                         const std::optional<T>& value)
@@ -841,12 +867,7 @@ static inline void AppendIntegerSetting(SmallStringBase& str, bool& heading, std
   if (!value.has_value())
     return;
 
-  if (!heading)
-  {
-    heading = true;
-    str.append_format("**{}**\n\n", TRANSLATE_SV("GameDatabase", "Settings"));
-  }
-
+  AppendSettingsHeading(str, heading);
   str.append_format(" - {}: {}\n", title, value.value());
 }
 
@@ -856,12 +877,7 @@ static inline void AppendFloatSetting(SmallStringBase& str, bool& heading, std::
   if (!value.has_value())
     return;
 
-  if (!heading)
-  {
-    heading = true;
-    str.append_format("**{}**\n\n", TRANSLATE_SV("GameDatabase", "Settings"));
-  }
-
+  AppendSettingsHeading(str, heading);
   str.append_format(" - {}: {:.2f}\n", title, value.value());
 }
 
@@ -872,12 +888,7 @@ static inline void AppendEnumSetting(SmallStringBase& str, bool& heading, std::s
   if (!value.has_value())
     return;
 
-  if (!heading)
-  {
-    heading = true;
-    str.append_format("**{}**\n\n", TRANSLATE_SV("GameDatabase", "Settings"));
-  }
-
+  AppendSettingsHeading(str, heading);
   str.append_format(" - {}: {}\n", title, get_display_name_func(value.value()));
 }
 
@@ -943,13 +954,22 @@ std::string GameDatabase::Entry::GenerateCompatibilityReport() const
                     &Settings::GetDisplayDeinterlacingModeDisplayName, display_deinterlacing_mode);
   AppendIntegerSetting(ret, settings_heading, TRANSLATE_SV("GameDatabase", "DMA Max Slice Ticks"), dma_max_slice_ticks);
   AppendIntegerSetting(ret, settings_heading, TRANSLATE_SV("GameDatabase", "DMA Halt Ticks"), dma_halt_ticks);
+  AppendIntegerSetting(ret, settings_heading, TRANSLATE_SV("GameDatabase", "CD-ROM Max Seek Speedup Cycles"),
+                       cdrom_max_seek_speedup_cycles);
+  AppendIntegerSetting(ret, settings_heading, TRANSLATE_SV("GameDatabase", "CD-ROM Max Read Speedup Cycles"),
+                       cdrom_max_read_speedup_cycles);
   AppendIntegerSetting(ret, settings_heading, TRANSLATE_SV("GameDatabase", "GPU FIFO Size"), gpu_fifo_size);
   AppendIntegerSetting(ret, settings_heading, TRANSLATE_SV("GameDatabase", "GPU Max Runahead"), gpu_max_run_ahead);
-  AppendFloatSetting(ret, settings_heading, TRANSLATE_SV("GameDatabase", "GPU PGXP Tolerance"), gpu_pgxp_tolerance);
-  AppendFloatSetting(ret, settings_heading, TRANSLATE_SV("GameDatabase", "GPU PGXP Depth Threshold"),
-                     gpu_pgxp_depth_threshold);
   AppendEnumSetting(ret, settings_heading, TRANSLATE_SV("GameDatabase", "GPU Line Detect Mode"),
                     &Settings::GetLineDetectModeDisplayName, gpu_line_detect_mode);
+  AppendFloatSetting(ret, settings_heading, TRANSLATE_SV("GameDatabase", "PGXP Tolerance"), gpu_pgxp_tolerance);
+  AppendFloatSetting(ret, settings_heading, TRANSLATE_SV("GameDatabase", "PGXP Depth Clear Threshold"),
+                     gpu_pgxp_depth_threshold);
+  AppendBoolSetting(ret, settings_heading, TRANSLATE_SV("GameDatabase", "PGXP Preserve Projection Precision"),
+                    gpu_pgxp_preserve_proj_fp);
+
+  if (settings_heading)
+    ret.append("\n");
 
   if (!disc_set_name.empty())
   {

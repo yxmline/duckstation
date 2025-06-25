@@ -29,7 +29,7 @@
 #include "common/timer.h"
 
 #include "IconsEmoji.h"
-#include "IconsFontAwesome5.h"
+#include "IconsFontAwesome6.h"
 #include "fmt/format.h"
 #include "imgui.h"
 
@@ -506,7 +506,7 @@ bool GPU_HW::UpdateSettings(const GPUSettings& old_settings, Error* error)
 
   if (m_resolution_scale != resolution_scale)
   {
-    Host::AddIconOSDMessage("ResolutionScaleChanged", ICON_FA_PAINT_BRUSH,
+    Host::AddIconOSDMessage("ResolutionScaleChanged", ICON_FA_PAINTBRUSH,
                             fmt::format(TRANSLATE_FS("GPU_HW", "Internal resolution set to {0}x ({1}x{2})."),
                                         resolution_scale, m_presenter.GetDisplayWidth() * resolution_scale,
                                         m_presenter.GetDisplayHeight() * resolution_scale),
@@ -518,14 +518,14 @@ bool GPU_HW::UpdateSettings(const GPUSettings& old_settings, Error* error)
     if (g_gpu_settings.gpu_per_sample_shading && features.per_sample_shading)
     {
       Host::AddIconOSDMessage(
-        "MultisamplingChanged", ICON_FA_PAINT_BRUSH,
+        "MultisamplingChanged", ICON_FA_PAINTBRUSH,
         fmt::format(TRANSLATE_FS("GPU_HW", "Multisample anti-aliasing set to {}x (SSAA)."), multisamples),
         Host::OSD_INFO_DURATION);
     }
     else
     {
       Host::AddIconOSDMessage(
-        "MultisamplingChanged", ICON_FA_PAINT_BRUSH,
+        "MultisamplingChanged", ICON_FA_PAINTBRUSH,
         fmt::format(TRANSLATE_FS("GPU_HW", "Multisample anti-aliasing set to {}x."), multisamples),
         Host::OSD_INFO_DURATION);
     }
@@ -736,7 +736,7 @@ void GPU_HW::CheckSettings()
       m_downsample_mode = GPUDownsampleMode::Disabled;
 
       Host::AddIconOSDMessage(
-        "BoxDownsampleUnsupported", ICON_FA_PAINT_BRUSH,
+        "BoxDownsampleUnsupported", ICON_FA_PAINTBRUSH,
         fmt::format(
           TRANSLATE_FS("GPU_HW",
                        "Resolution scale {0}x is not divisible by downsample scale {1}x, downsampling disabled."),
@@ -746,7 +746,7 @@ void GPU_HW::CheckSettings()
     else if (box_downscale != g_gpu_settings.gpu_downsample_scale)
     {
       Host::AddIconOSDMessage(
-        "BoxDownsampleUnsupported", ICON_FA_PAINT_BRUSH,
+        "BoxDownsampleUnsupported", ICON_FA_PAINTBRUSH,
         fmt::format(TRANSLATE_FS(
                       "GPU_HW", "Resolution scale {0}x is not divisible by downsample scale {1}x, using {2}x instead."),
                     resolution_scale, g_gpu_settings.gpu_downsample_scale, box_downscale),
@@ -771,7 +771,7 @@ u32 GPU_HW::CalculateResolutionScale() const
     if (g_gpu_settings.gpu_resolution_scale != 0)
     {
       Host::AddIconOSDMessage(
-        "ResolutionNotPow2", ICON_FA_PAINT_BRUSH,
+        "ResolutionNotPow2", ICON_FA_PAINTBRUSH,
         fmt::format(
           TRANSLATE_FS("GPU_HW", "Resolution scale {0}x not supported for adaptive downsampling, using {1}x."), scale,
           new_scale),
@@ -1275,6 +1275,9 @@ bool GPU_HW::CompilePipelines(Error* error)
                 const bool uv_limits = ShouldClampUVs(sprite ? m_sprite_texture_filtering : m_texture_filtering);
                 const BatchTextureMode shader_texmode = static_cast<BatchTextureMode>(
                   texture_mode - (sprite ? static_cast<u8>(BatchTextureMode::SpriteStart) : 0));
+                const GPUTextureFilter texture_filter = sprite ? m_sprite_texture_filtering : m_texture_filtering;
+                const bool texture_filter_is_blended =
+                  (shader_texmode != BatchTextureMode::Disabled && IsBlendedTextureFiltering(texture_filter));
                 const bool use_rov =
                   (render_mode == static_cast<u8>(BatchRenderMode::ShaderBlend) && m_use_rov_for_shader_blend);
                 const bool rov_depth_test = (use_rov && depth_test != 0);
@@ -1282,11 +1285,11 @@ bool GPU_HW::CompilePipelines(Error* error)
                                                                   GPUTransparencyMode::Disabled);
                 const std::string fs = shadergen.GenerateBatchFragmentShader(
                   static_cast<BatchRenderMode>(render_mode), static_cast<GPUTransparencyMode>(transparency_mode),
-                  shader_texmode, sprite ? m_sprite_texture_filtering : m_texture_filtering, upscaled, msaa,
-                  per_sample_shading, uv_limits, !sprite && force_round_texcoords, true_color,
-                  ConvertToBoolUnchecked(dithering), scaled_dithering, disable_color_perspective,
-                  ConvertToBoolUnchecked(interlacing), scaled_interlacing, ConvertToBoolUnchecked(check_mask),
-                  m_write_mask_as_depth, use_rov, needs_rov_depth, rov_depth_test, rov_depth_write);
+                  shader_texmode, texture_filter, texture_filter_is_blended, upscaled, msaa, per_sample_shading,
+                  uv_limits, !sprite && force_round_texcoords, true_color, ConvertToBoolUnchecked(dithering),
+                  scaled_dithering, disable_color_perspective, ConvertToBoolUnchecked(interlacing), scaled_interlacing,
+                  ConvertToBoolUnchecked(check_mask), m_write_mask_as_depth, use_rov, needs_rov_depth, rov_depth_test,
+                  rov_depth_write);
 
                 if (!(batch_fragment_shaders[depth_test][render_mode][transparency_mode][texture_mode][check_mask]
                                             [dithering][interlacing] = g_gpu_device->CreateShader(
@@ -2782,7 +2785,7 @@ void GPU_HW::DrawSprite(const GPUBackendDrawRectangleCommand* cmd)
       if (cmd->texture_enable && ShouldCheckForTexPageOverlap())
       {
         CheckForTexPageOverlap(cmd, GSVector4i(static_cast<s32>(tex_left), static_cast<s32>(tex_top),
-                                               static_cast<s32>(tex_right), static_cast<s32>(tex_bottom)));
+                                               static_cast<s32>(tex_right) - 1, static_cast<s32>(tex_bottom) - 1));
       }
 
       const u32 base_vertex = m_batch_vertex_count;

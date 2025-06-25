@@ -672,6 +672,31 @@ Olästa meddelanden: {}</translation>
         <translation>Delmängd färdigställt.
 {0}, {1}.</translation>
     </message>
+    <message>
+        <source>User is not logged in.</source>
+        <translation>Användaren är inte inloggad.</translation>
+    </message>
+    <message>
+        <source>Progress is already being updated.</source>
+        <translation>Förloppet är redan uppdaterat.</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>Fel</translation>
+    </message>
+    <message>
+        <source>Refresh all progress failed</source>
+        <translation>Uppdatering av alla förlopp misslyckades</translation>
+    </message>
+    <message>
+        <source>Updated achievement progress database.</source>
+        <translation>Uppdaterade förloppsdatasbasen för prestationer.</translation>
+    </message>
+    <message>
+        <source>Score: {} ({} softcore)</source>
+        <extracomment>Score summary, shown in Big Picture mode.</extracomment>
+        <translation>Poäng: {} ({} softcore)</translation>
+    </message>
 </context>
 <context>
     <name>AdvancedSettingsWidget</name>
@@ -821,7 +846,7 @@ Olästa meddelanden: {}</translation>
     </message>
     <message>
         <source>GPU Max Run-Ahead</source>
-        <translation>GPU Max Run-Ahead</translation>
+        <translation type="vanished">GPU Max Run-Ahead</translation>
     </message>
     <message>
         <source>Enable Recompiler Memory Exceptions</source>
@@ -902,6 +927,10 @@ Olästa meddelanden: {}</translation>
     <message>
         <source>CD-ROM Max Read Speedup Cycles</source>
         <translation>CD-ROM Max cykler för läshastighet</translation>
+    </message>
+    <message>
+        <source>GPU Max Runahead</source>
+        <translation>GPU Max Runahead</translation>
     </message>
 </context>
 <context>
@@ -1056,11 +1085,11 @@ Olästa meddelanden: {}</translation>
     </message>
     <message>
         <source>Use Analog Sticks for D-Pad in Digital Mode</source>
-        <translation>Använd analoga spakar för riktningsknappar i digitalt läge</translation>
+        <translation type="vanished">Använd analoga spakar för riktningsknappar i digitalt läge</translation>
     </message>
     <message>
         <source>Allows you to use the analog sticks to control the d-pad in digital mode, as well as the buttons.</source>
-        <translation>Tillåter dig att använda de analoga spakarna för att styra riktningsknappar i digitalt läge, såväl som knapparna.</translation>
+        <translation type="vanished">Tillåter dig att använda de analoga spakarna för att styra riktningsknappar i digitalt läge, såväl som knapparna.</translation>
     </message>
     <message>
         <source>Analog Deadzone</source>
@@ -1117,6 +1146,34 @@ Olästa meddelanden: {}</translation>
     <message>
         <source>Inverts the direction of the right analog stick.</source>
         <translation>Inverterar riktningen för den högra analoga spaken.</translation>
+    </message>
+    <message>
+        <source>Never</source>
+        <translation>Aldrig</translation>
+    </message>
+    <message>
+        <source>Digital Mode Only</source>
+        <translation>Endast digitalt läge</translation>
+    </message>
+    <message>
+        <source>Analog and Digital Modes</source>
+        <translation>Analoga och digitala lägen</translation>
+    </message>
+    <message>
+        <source>Use Left Analog for D-Pad in Digital Mode</source>
+        <translation>Använd vänster analog som riktningsknappar i digitalt läge</translation>
+    </message>
+    <message>
+        <source>Allows you to use the left analog stick to control the d-pad in digital mode, as well as the buttons.</source>
+        <translation>Gör att du kan använda den vänstra analoga spaken för att styra riktningsknapparna i digitalt läge, samt knapparna.</translation>
+    </message>
+    <message>
+        <source>Use Right Analog for Shoulder Buttons</source>
+        <translation>Använd höger analog för axelknapparna</translation>
+    </message>
+    <message>
+        <source>Allows you to use the right analog stick to control the shoulder buttons, as well as the buttons.</source>
+        <translation>Låter dig använda den högra analoga spaken för att styra axelknapparna, samt knapparna.</translation>
     </message>
 </context>
 <context>
@@ -1274,63 +1331,63 @@ Olästa meddelanden: {}</translation>
     <name>AudioExpansionSettingsDialog</name>
     <message>
         <source>Audio Expansion Settings</source>
-        <translation>Inställningar för ljudexpansion</translation>
+        <translation type="vanished">Inställningar för ljudexpansion</translation>
     </message>
     <message>
         <source>Circular Wrap:</source>
-        <translation>Cirkulär omslutning:</translation>
+        <translation type="vanished">Cirkulär omslutning:</translation>
     </message>
     <message>
         <source>30</source>
-        <translation>30</translation>
+        <translation type="vanished">30</translation>
     </message>
     <message>
         <source>Shift:</source>
-        <translation>Skift:</translation>
+        <translation type="vanished">Skift:</translation>
     </message>
     <message>
         <source>20</source>
-        <translation>20</translation>
+        <translation type="vanished">20</translation>
     </message>
     <message>
         <source>Depth:</source>
-        <translation>Djup:</translation>
+        <translation type="vanished">Djup:</translation>
     </message>
     <message>
         <source>10</source>
-        <translation>10</translation>
+        <translation type="vanished">10</translation>
     </message>
     <message>
         <source>Focus:</source>
-        <translation>Fokus:</translation>
+        <translation type="vanished">Fokus:</translation>
     </message>
     <message>
         <source>Center Image:</source>
-        <translation>Centerbild:</translation>
+        <translation type="vanished">Centerbild:</translation>
     </message>
     <message>
         <source>Front Separation:</source>
-        <translation>Främre separation:</translation>
+        <translation type="vanished">Främre separation:</translation>
     </message>
     <message>
         <source>Rear Separation:</source>
-        <translation>Bakre separation:</translation>
+        <translation type="vanished">Bakre separation:</translation>
     </message>
     <message>
         <source>Low Cutoff:</source>
-        <translation>Låg cutoff:</translation>
+        <translation type="vanished">Låg cutoff:</translation>
     </message>
     <message>
         <source>High Cutoff:</source>
-        <translation>Hög cutoff:</translation>
+        <translation type="vanished">Hög cutoff:</translation>
     </message>
     <message>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;Audio Expansion Settings&lt;/span&gt;&lt;br/&gt;These settings fine-tune the behavior of the FreeSurround-based channel expander.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;Inställningar för ljudexpandering&lt;/span&gt;&lt;br/&gt;Dessa inställningar finjusterar beteendet för FreeSurround-baserade kanalexpanderare.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
+        <translation type="vanished">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;Inställningar för ljudexpandering&lt;/span&gt;&lt;br/&gt;Dessa inställningar finjusterar beteendet för FreeSurround-baserade kanalexpanderare.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
         <source>Block Size:</source>
-        <translation>Blockstorlek:</translation>
+        <translation type="vanished">Blockstorlek:</translation>
     </message>
 </context>
 <context>
@@ -1512,6 +1569,10 @@ Olästa meddelanden: {}</translation>
         <source>Maximum Latency: %1 ms (minimum output latency unknown)</source>
         <translation>Maximal latens: %1 ms (minimum utdatalatens okänd)</translation>
     </message>
+    <message>
+        <source>Reset Output Volume</source>
+        <translation>Återställ utmatningsvolym</translation>
+    </message>
 </context>
 <context>
     <name>AudioStream</name>
@@ -1564,7 +1625,7 @@ Olästa meddelanden: {}</translation>
     </message>
 </context>
 <context>
-    <name>AutoUpdaterDialog</name>
+    <name>AutoUpdaterWindow</name>
     <message>
         <source>Automatic Updater</source>
         <translation>Automatisk uppdatering</translation>
@@ -2233,15 +2294,27 @@ Den här varningen visas bara en gång.</translation>
     </message>
     <message>
         <source>Force Video Timing</source>
-        <translation>Tvinga videotiming</translation>
+        <translation type="vanished">Tvinga videotiming</translation>
     </message>
     <message>
         <source>Disabled</source>
-        <translation>Inaktiverad</translation>
+        <translation type="vanished">Inaktiverad</translation>
     </message>
     <message>
         <source>Utilizes the chosen frame timing regardless of the active region. This feature can be used to force PAL games to run at 60Hz and NTSC games to run at 50Hz. For most games which have a speed tied to the framerate, this will result in the game running approximately 17% faster or slower. For variable frame rate games, it may not affect the speed.</source>
         <translation>Använder den valda bildtimingen oavsett vilken region som är aktiv. Denna funktion kan användas för att tvinga PAL-spel att köras med 60 Hz och NTSC-spel att köras med 50 Hz. För de flesta spel som har en hastighet som är knuten till bildfrekvensen kommer detta att resultera i att spelet körs ungefär 17% snabbare eller långsammare. För spel med variabel bildfrekvens kanske det inte påverkar hastigheten.</translation>
+    </message>
+    <message>
+        <source>Switch to Next Disc on Stop</source>
+        <translation>Växla till nästa skiva vid stopp</translation>
+    </message>
+    <message>
+        <source>Automatically switches to the next disc in the game when the game stops the CD-ROM motor. No switch will occur if the last disc in the game is already selected. &lt;strong&gt;Does not work for all games.&lt;/strong&gt;</source>
+        <translation>Växlar automatiskt till nästa skiva i spelet när spelet stoppar CD-ROM-motorn. Ingen växling sker om den sista skivan i spelet redan är vald. &lt;strong&gt;Fungerar inte för alla spel.&lt;/strong&gt;</translation>
+    </message>
+    <message>
+        <source>Frame Rate</source>
+        <translation>Bildfrekvens</translation>
     </message>
 </context>
 <context>
@@ -4536,19 +4609,19 @@ Denna fil är ungefär 206 KB. Vill du hämta den nu?</translation>
     </message>
     <message>
         <source>Account</source>
-        <translation>Konto</translation>
+        <translation type="vanished">Konto</translation>
     </message>
     <message>
         <source>Logs out of RetroAchievements.</source>
-        <translation>Loggar ut från RetroAchievements.</translation>
+        <translation type="vanished">Loggar ut från RetroAchievements.</translation>
     </message>
     <message>
         <source>Logs in to RetroAchievements.</source>
-        <translation>Loggar in i RetroAchievements.</translation>
+        <translation type="vanished">Loggar in i RetroAchievements.</translation>
     </message>
     <message>
         <source>Current Game</source>
-        <translation>Aktuellt spel</translation>
+        <translation type="vanished">Aktuellt spel</translation>
     </message>
     <message>
         <source>{} is not a valid disc image.</source>
@@ -4872,7 +4945,7 @@ Denna fil är ungefär 206 KB. Vill du hämta den nu?</translation>
     </message>
     <message>
         <source>Username: {}</source>
-        <translation>Användarnamn: {}</translation>
+        <translation type="vanished">Användarnamn: {}</translation>
     </message>
     <message>
         <source>Logout</source>
@@ -5082,7 +5155,7 @@ Denna fil är ungefär 206 KB. Vill du hämta den nu?</translation>
         <source>A resume save state created at %s was found.
 
 Do you want to load this save and continue?</source>
-        <translation>Ett återskapat sparat tillstånd som skapades %s har hittats.
+        <translation type="vanished">Ett återskapat sparat tillstånd som skapades %s har hittats.
 
 Vill du läsa in detta tillstånd och fortsätta?</translation>
     </message>
@@ -5946,7 +6019,7 @@ Felet var:</translation>
     </message>
     <message>
         <source>Game not loaded or no RetroAchievements available.</source>
-        <translation>Inget spel är inläst eller så är inte RetroAchievements tillgängligt.</translation>
+        <translation type="vanished">Inget spel är inläst eller så är inte RetroAchievements tillgängligt.</translation>
     </message>
     <message>
         <source>Game path copied to clipboard.</source>
@@ -5978,7 +6051,7 @@ Felet var:</translation>
     </message>
     <message>
         <source>Game: {} ({})</source>
-        <translation>Spel: {} ({})</translation>
+        <translation type="vanished">Spel: {} ({})</translation>
     </message>
     <message>
         <source>Genre: %.*s</source>
@@ -6262,7 +6335,7 @@ Kontrollera ditt användarnamn och lösenord. Försök igen.</translation>
     </message>
     <message>
         <source>No Binding</source>
-        <translation>Ingen bindning</translation>
+        <translation type="vanished">Ingen bindning</translation>
     </message>
     <message>
         <source>No Game Selected</source>
@@ -6642,7 +6715,7 @@ Kontrollera ditt användarnamn och lösenord. Försök igen.</translation>
     </message>
     <message>
         <source>Rich presence inactive or unsupported.</source>
-        <translation>Rich presence inaktivt eller stöds inte.</translation>
+        <translation type="vanished">Rich presence inaktivt eller stöds inte.</translation>
     </message>
     <message>
         <source>Round Upscaled Texture Coordinates</source>
@@ -7580,6 +7653,51 @@ Du kan inte ångra den här åtgärden.</translation>
         <source>Support for controllers that use the XInput protocol. XInput should only be used if you are using a XInput wrapper library.</source>
         <translation>Stöd för styrenheter som använder XInput-protokollet. XInput bör endast användas om du använder ett XInput-wrapper-bibliotek.</translation>
     </message>
+    <message>
+        <source>Automatically switches to the next disc in the game when the game stops the CD-ROM motor. Does not work for all games.</source>
+        <translation>Växlar automatiskt till nästa skiva i spelet när spelet stoppar CD-ROM-motorn. Fungerar inte för alla spel.</translation>
+    </message>
+    <message>
+        <source>Failed to update progress database</source>
+        <translation>Misslyckades med att uppdatera förloppsdatabasen</translation>
+    </message>
+    <message>
+        <source>Switch to Next Disc on Stop</source>
+        <translation>Växla till nästa skiva vid stopp</translation>
+    </message>
+    <message>
+        <source>Update Progress</source>
+        <translation>Uppdatera förlopp</translation>
+    </message>
+    <message>
+        <source>Updates the progress database for achievements shown in the game list.</source>
+        <translation>Uppdaterar förloppsdatabasen för prestationer som visas i spellistan.</translation>
+    </message>
+    <message>
+        <source>Default Value</source>
+        <translation>Standardvärde</translation>
+    </message>
+    <message>
+        <source>Do you want to continue from the automatic save created at {:%c}?</source>
+        <translation>Vill du fortsätta från den automatiska sparning som skapades vid {:%c}?</translation>
+    </message>
+    <message>
+        <source>Enable Achievements to see your user summary.</source>
+        <translatorcomment>Aktivera prestationer för att se din användarsammanfattning.</translatorcomment>
+        <translation></translation>
+    </message>
+    <message>
+        <source>Logging In...</source>
+        <translation>Loggar in...</translation>
+    </message>
+    <message>
+        <source>To use achievements, please log in with your retroachievements.org account.</source>
+        <translation>För att använda prestationer, logga in med ditt retroachievements.org-konto.</translation>
+    </message>
+    <message>
+        <source>Value Range</source>
+        <translation>Värdesintervall</translation>
+    </message>
 </context>
 <context>
     <name>GPU</name>
@@ -7722,6 +7840,10 @@ Det kräver framebuffer fetch, feedback loopar eller rasterizer order views.</tr
 {}</source>
         <translation>Det gick inte att allokera {}x{}-textur för cache:
 {}</translation>
+    </message>
+    <message>
+        <source>Compiling Pipelines...</source>
+        <translation>Kompilerar rörledningar...</translation>
     </message>
 </context>
 <context>
@@ -8342,11 +8464,11 @@ Konfigurera en handkontroller som stöds från listan ovan.</translation>
     </message>
     <message>
         <source>GPU PGXP Tolerance</source>
-        <translation>GPU PGXP-tolerans</translation>
+        <translation type="vanished">GPU PGXP-tolerans</translation>
     </message>
     <message>
         <source>GPU PGXP Depth Threshold</source>
-        <translation>Tröskelvärde för GPU PGXP-djup</translation>
+        <translation type="vanished">Tröskelvärde för GPU PGXP-djup</translation>
     </message>
     <message>
         <source>GPU Line Detect Mode</source>
@@ -8383,6 +8505,48 @@ Konfigurera en handkontroller som stöds från listan ovan.</translation>
     <message>
         <source>Scaled interlacing disabled.</source>
         <translation>Skalad interlacing inaktiverad.</translation>
+    </message>
+    <message>
+        <source>Disable CD-ROM Read Speedup</source>
+        <comment>GameDatabase::Trait</comment>
+        <translation>Inaktivera hastighetsökning för CD-ROM-läsning</translation>
+    </message>
+    <message>
+        <source>Disable CD-ROM Seek Speedup</source>
+        <comment>GameDatabase::Trait</comment>
+        <translation>Inaktivera hastighetsökning för CD-ROM-sökning</translation>
+    </message>
+    <message>
+        <source>CD-ROM read speedup disabled.</source>
+        <translation>Ökad läshastighet för CD-ROM inaktiverad.</translation>
+    </message>
+    <message>
+        <source>CD-ROM seek speedup disabled.</source>
+        <translation>Ökad sökhastighet för CD-ROM inaktiverad.</translation>
+    </message>
+    <message>
+        <source>MSAA disabled.</source>
+        <translation>MSAA inaktiverad.</translation>
+    </message>
+    <message>
+        <source>CD-ROM Max Seek Speedup Cycles</source>
+        <translation>CD-ROM Max cykler för ökad sökhastighet</translation>
+    </message>
+    <message>
+        <source>CD-ROM Max Read Speedup Cycles</source>
+        <translation>CD-ROM Max cykler för ökad läshastighet</translation>
+    </message>
+    <message>
+        <source>PGXP Tolerance</source>
+        <translation>PGXP-tolerans</translation>
+    </message>
+    <message>
+        <source>PGXP Depth Clear Threshold</source>
+        <translation>Tröskelvärde för PGXP Depth Clear</translation>
+    </message>
+    <message>
+        <source>PGXP Preserve Projection Precision</source>
+        <translation>PGXP Bevara projektionsprecision</translation>
     </message>
 </context>
 <context>
@@ -8469,6 +8633,13 @@ Konfigurera en handkontroller som stöds från listan ovan.</translation>
     <message>
         <source>Scanning &apos;{}&apos;...</source>
         <translation>Söker igenom &apos;{}&apos;...</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n seconds</source>
+        <translation>
+            <numerusform>%n sekund</numerusform>
+            <numerusform>%n sekunder</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -8660,7 +8831,7 @@ Söka igenom den rekursivt tar längre tid men identifierar filer i underkatalog
     </message>
     <message>
         <source>&lt;strong&gt;Author: &lt;/strong&gt;%1&lt;br&gt;%2</source>
-        <translation>&lt;strong&gt;Upphovsperson: &lt;/strong&gt;%1&lt;br&gt;%2</translation>
+        <translation type="vanished">&lt;strong&gt;Upphovsperson: &lt;/strong&gt;%1&lt;br&gt;%2</translation>
     </message>
     <message>
         <source>Unknown</source>
@@ -8669,6 +8840,14 @@ Söka igenom den rekursivt tar längre tid men identifierar filer i underkatalog
     <message>
         <source>No description provided.</source>
         <translation>Ingen beskrivning angavs.</translation>
+    </message>
+    <message>
+        <source>&lt;strong&gt;Author: &lt;/strong&gt;%1%2&lt;br&gt;%3</source>
+        <translation>&lt;strong&gt;Upphovsperson:  &lt;/strong&gt;%1%2&lt;br&gt;%3</translation>
+    </message>
+    <message>
+        <source>&lt;br&gt;&lt;strong&gt;Not permitted in RetroAchievements hardcore mode.&lt;/strong&gt;</source>
+        <translation>&lt;br&gt;&lt;strong&gt;Inte tillåtet i RetroAchievements hardcore-läge.&lt;/strong&gt;</translation>
     </message>
 </context>
 <context>
@@ -8679,11 +8858,15 @@ Söka igenom den rekursivt tar längre tid men identifierar filer i underkatalog
     </message>
     <message>
         <source>There are no patches available for this game.</source>
-        <translation>Det finns inga patchar tillgängliga för detta spel.</translation>
+        <translation type="vanished">Det finns inga patchar tillgängliga för detta spel.</translation>
     </message>
     <message>
         <source>Disable All Patches</source>
         <translation>Inaktivera alla patchar</translation>
+    </message>
+    <message>
+        <source>No patches are available for this game.</source>
+        <translation>Det finns inga patchar tillgängliga för detta spel.</translation>
     </message>
 </context>
 <context>
@@ -8698,7 +8881,7 @@ Söka igenom den rekursivt tar längre tid men identifierar filer i underkatalog
     </message>
     <message>
         <source>Restore</source>
-        <translation>Återställ</translation>
+        <translation type="vanished">Återställ</translation>
     </message>
     <message>
         <source>Image Path:</source>
@@ -8750,7 +8933,7 @@ Söka igenom den rekursivt tar längre tid men identifierar filer i underkatalog
     </message>
     <message>
         <source>Comments</source>
-        <translation>Kommentarer</translation>
+        <translation type="vanished">Kommentarer</translation>
     </message>
     <message>
         <source>Edit...</source>
@@ -8887,6 +9070,18 @@ Söka igenom den rekursivt tar längre tid men identifierar filer i underkatalog
     <message>
         <source>Search on Redump.org</source>
         <translation>Sök på Redump.org</translation>
+    </message>
+    <message>
+        <source>No known dump found that matches this hash.</source>
+        <translation>Ingen känd dump som matchar denna kontrollsumma hittades.</translation>
+    </message>
+    <message>
+        <source>Restore Title</source>
+        <translation>Återställ titel</translation>
+    </message>
+    <message>
+        <source>Restore Region</source>
+        <translation>Återställ region</translation>
     </message>
 </context>
 <context>
@@ -9374,7 +9569,7 @@ Söka igenom den rekursivt tar längre tid men identifierar filer i underkatalog
     </message>
     <message>
         <source>Selects which Video Codec to be used for Video Capture. &lt;b&gt;If unsure, leave it on default.&lt;b&gt;</source>
-        <translation>Väljer vilken videokodek som ska användas för videoinspelning. &lt;b&gt;Om du är osäker, låt den vara kvar som standard.&lt;b&gt;</translation>
+        <translation type="vanished">Väljer vilken videokodek som ska användas för videoinspelning. &lt;b&gt;Om du är osäker, låt den vara kvar som standard.&lt;b&gt;</translation>
     </message>
     <message>
         <source>Video Bitrate</source>
@@ -9410,7 +9605,7 @@ Söka igenom den rekursivt tar längre tid men identifierar filer i underkatalog
     </message>
     <message>
         <source>Selects which Audio Codec to be used for Video Capture. &lt;b&gt;If unsure, leave it on default.&lt;b&gt;</source>
-        <translation>Väljer vilken ljudkodek som ska användas för videoinspelning. &lt;b&gt;Om du är osäker, låt den vara kvar som standard.&lt;b&gt;</translation>
+        <translation type="vanished">Väljer vilken ljudkodek som ska användas för videoinspelning. &lt;b&gt;Om du är osäker, låt den vara kvar som standard.&lt;b&gt;</translation>
     </message>
     <message>
         <source>Audio Bitrate</source>
@@ -9530,7 +9725,7 @@ Söka igenom den rekursivt tar längre tid men identifierar filer i underkatalog
     </message>
     <message>
         <source>160 kbps</source>
-        <translation>160 kbps</translation>
+        <translation type="vanished">160 kbps</translation>
     </message>
     <message>
         <source>Parameters passed to the selected audio codec.&lt;br&gt;&lt;b&gt;You must use &apos;=&apos; to separate key from value and &apos;:&apos; to separate two pairs from each other.&lt;/b&gt;&lt;br&gt;For example: &quot;compression_level = 4 : joint_stereo = 1&quot;</source>
@@ -9782,7 +9977,7 @@ Söka igenom den rekursivt tar längre tid men identifierar filer i underkatalog
     </message>
     <message>
         <source>Enables depth testing for semi-transparent polygons. Usually these include shadows, and tend to clip through the ground when depth testing is enabled. Depth writes for semi-transparent polygons are disabled regardless of this setting..</source>
-        <translation>Aktiverar djuptestning för halvgenomskinliga polygoner. Vanligtvis innehåller dessa skuggor och tenderar att klippa genom marken när djuptestning är aktiverat. Djuptest för halvgenomskinliga polygoner är inaktiverade oavsett denna inställning..</translation>
+        <translation type="vanished">Aktiverar djuptestning för halvgenomskinliga polygoner. Vanligtvis innehåller dessa skuggor och tenderar att klippa genom marken när djuptestning är aktiverat. Djuptest för halvgenomskinliga polygoner är inaktiverade oavsett denna inställning..</translation>
     </message>
     <message>
         <source>Changes the size at which on-screen elements, including status and messages are displayed.</source>
@@ -9834,7 +10029,7 @@ Söka igenom den rekursivt tar längre tid men identifierar filer i underkatalog
     </message>
     <message>
         <source>Determines the file format used to contain the captured audio/video</source>
-        <translation>Bestämmer det filformat som används för att innehålla det inspelade ljudet/videon</translation>
+        <translation type="vanished">Bestämmer det filformat som används för att innehålla det inspelade ljudet/videon</translation>
     </message>
     <message>
         <source>Captures video to the chosen file when media capture is started. If unchecked, the file will only contain audio.</source>
@@ -10039,6 +10234,26 @@ Söka igenom den rekursivt tar längre tid men identifierar filer i underkatalog
     <message>
         <source>Enable GPU-based validation when supported by the renderer API. &lt;strong&gt;Only for developer use.&lt;/strong&gt;</source>
         <translation>Aktivera GPU-baserad validering när detta stöds av renderarens API. &lt;strong&gt;Endast för användning av utvecklare.&lt;/strong&gt;</translation>
+    </message>
+    <message>
+        <source>Enables depth testing for semi-transparent polygons. Usually these include shadows, and tend to clip through the ground when depth testing is enabled. Depth writes for semi-transparent polygons are disabled regardless of this setting.</source>
+        <translation>Aktiverar djupkontroll för halvtransparenta polygoner. Dessa inkluderar vanligtvis skuggor och tenderar att klippa igenom marken när djupkontroll är aktiverat. Djupskrivningar för halvtransparenta polygoner är inaktiverade oavsett denna inställning.</translation>
+    </message>
+    <message>
+        <source>Determines the file format used to contain the captured audio/video.</source>
+        <translation>Bestämmer filformatet som används för att lagra fångad ljud/video.</translation>
+    </message>
+    <message>
+        <source>Selects which Video Codec to be used for media capture. &lt;b&gt;If unsure, leave it on default.&lt;b&gt;</source>
+        <translation>Välj vilken videokodek som ska användas för medieinspelning. &lt;b&gt;Om du är osäker, behåll standardinställningen.&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <source>Selects which Audio Codec to be used for media capture. &lt;b&gt;If unsure, leave it on default.&lt;b&gt;</source>
+        <translation>Välj vilken ljudkodek som ska användas för medieinspelning. &lt;b&gt;Om du är osäker, behåll standardinställningen.&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <source>128 kbps</source>
+        <translation>128 kbps</translation>
     </message>
 </context>
 <context>
@@ -10581,6 +10796,14 @@ Söka igenom den rekursivt tar längre tid men identifierar filer i underkatalog
         <source>Toggle VRAM View</source>
         <translation>Växla VRAM-vy</translation>
     </message>
+    <message>
+        <source>Switch to Previous Disc</source>
+        <translation>Växla till föregående skiva</translation>
+    </message>
+    <message>
+        <source>Switch to Next Disc</source>
+        <translation>Växla till nästa skiva</translation>
+    </message>
 </context>
 <context>
     <name>ISOBrowserWindow</name>
@@ -10705,7 +10928,7 @@ Söka igenom den rekursivt tar längre tid men identifierar filer i underkatalog
     </message>
     <message>
         <source>Reset</source>
-        <translation>Nollställ</translation>
+        <translation type="vanished">Nollställ</translation>
     </message>
     <message>
         <source>Add Binding</source>
@@ -10725,7 +10948,7 @@ Söka igenom den rekursivt tar längre tid men identifierar filer i underkatalog
     </message>
     <message>
         <source>Close</source>
-        <translation>Stäng</translation>
+        <translation type="vanished">Stäng</translation>
     </message>
     <message>
         <source>Push Button/Axis... [%1]</source>
@@ -10734,6 +10957,14 @@ Söka igenom den rekursivt tar längre tid men identifierar filer i underkatalog
     <message>
         <source>%1%</source>
         <translation>%1%</translation>
+    </message>
+    <message>
+        <source>Reset Sensitivity</source>
+        <translation>Nollställ känslighet</translation>
+    </message>
+    <message>
+        <source>Reset Deadzone</source>
+        <translation>Nollställ dödzon</translation>
     </message>
 </context>
 <context>
@@ -11483,7 +11714,7 @@ Skift-klicka för att ställa in flera bindningar.</translation>
     </message>
     <message>
         <source>Resumes the last save state created.</source>
-        <translation>Återupptar senaste sparade tillståndet som skapats.</translation>
+        <translation type="vanished">Återupptar senaste sparade tillståndet som skapats.</translation>
     </message>
     <message>
         <source>Memory &amp;Card Editor</source>
@@ -11859,7 +12090,7 @@ Skift-klicka för att ställa in flera bindningar.</translation>
     </message>
     <message>
         <source>Select Disc</source>
-        <translation>Välj skiva</translation>
+        <translation type="vanished">Välj skiva</translation>
     </message>
     <message>
         <source>Destination File</source>
@@ -12039,7 +12270,7 @@ Vill du läsa in detta tillstånd eller starta från en fräsch uppstart?</trans
     </message>
     <message>
         <source>Delete Save States...</source>
-        <translation>Ta bort sparade tillstånd...</translation>
+        <translation type="vanished">Ta bort sparade tillstånd...</translation>
     </message>
     <message>
         <source>Undo Load State</source>
@@ -12148,6 +12379,54 @@ Detta går inte att ångra.</translation>
     <message>
         <source>Select Background Image</source>
         <translation>Välj bakgrundsbild</translation>
+    </message>
+    <message>
+        <source>Refresh Achievement &amp;Progress</source>
+        <translation>Uppdatera prestationsförl&amp;opp</translation>
+    </message>
+    <message>
+        <source>RA: Updated achievement progress database.</source>
+        <translation>RA: Förloppsdatabasen för prestationer uppdaterades.</translation>
+    </message>
+    <message>
+        <source>Resumes the last save state created</source>
+        <translation>Återupptar det senast sparade tillståndet</translation>
+    </message>
+    <message>
+        <source>Small Toolbar Icons</source>
+        <translation>Små ikoner på verktygsraden</translation>
+    </message>
+    <message>
+        <source>Toolbar Labels</source>
+        <translation>Etiketter för verktygsrad</translation>
+    </message>
+    <message>
+        <source>Toolbar Labels Beside Icons</source>
+        <translation>Verktygsradsetiketter bredvid ikoner</translation>
+    </message>
+    <message>
+        <source>Delete Save States</source>
+        <translation>Ta bort sparade tillstånd</translation>
+    </message>
+    <message>
+        <source>Undo Load State (%1)</source>
+        <translation>Ångra inläsning av tillstånd (%1)</translation>
+    </message>
+    <message>
+        <source>Select Disc...</source>
+        <translation>Välj skiva...</translation>
+    </message>
+    <message>
+        <source>Small Icons</source>
+        <translation>Små ikoner</translation>
+    </message>
+    <message>
+        <source>Show Labels</source>
+        <translation>Visa etiketter</translation>
+    </message>
+    <message>
+        <source>Labels Beside Icons</source>
+        <translation>Etiketter bredvid ikoner</translation>
     </message>
 </context>
 <context>
@@ -13360,6 +13639,12 @@ Använder befintlig avbild &apos;{}&apos;, detta kan resultera i instabilitet.</
         <source>Widescreen rendering is now disabled, and aspect ratio is set to {}.</source>
         <translation>Bredbildsrendering är nu inaktiverad och bildförhållandet är inställt på {}.</translation>
     </message>
+    <message>
+        <source>Failed to read sector from disc image. The game will probably crash now.
+Your dump may be corrupted, or the physical disc is scratched.</source>
+        <translation>Det gick inte att läsa sektorn från skivavbildningen. Spelet kommer troligen att krascha nu.
+Din dump kan vara skadad eller så är den fysiska skivan repig.</translation>
+    </message>
 </context>
 <context>
     <name>PlayStationMouse</name>
@@ -13741,23 +14026,23 @@ URLen var: %1</translation>
     </message>
     <message>
         <source>Failed to open downloaded zip file.</source>
-        <translation>Misslyckades med att öppna hämtad zip-fil.</translation>
+        <translation type="vanished">Misslyckades med att öppna hämtad zip-fil.</translation>
     </message>
     <message>
         <source>Failed to locate &apos;%1&apos; in zip.</source>
-        <translation>Misslyckades med att hitta &apos;%1&apos; i zip.</translation>
+        <translation type="vanished">Misslyckades med att hitta &apos;%1&apos; i zip.</translation>
     </message>
     <message>
         <source>Failed to open &apos;%1&apos;: %2.</source>
-        <translation>Misslyckades att öppna &apos;%1&apos;: %2.</translation>
+        <translation type="vanished">Misslyckades att öppna &apos;%1&apos;: %2.</translation>
     </message>
     <message>
         <source>Failed to read &apos;%1&apos; from zip.</source>
-        <translation>Misslyckades med att läsa &apos;%1&apos; från zip.</translation>
+        <translation type="vanished">Misslyckades med att läsa &apos;%1&apos; från zip.</translation>
     </message>
     <message>
         <source>Failed to write to &apos;%1&apos;.</source>
-        <translation>Misslyckades med att skriva till  &apos;%1&apos;.</translation>
+        <translation type="vanished">Misslyckades med att skriva till  &apos;%1&apos;.</translation>
     </message>
     <message>
         <source>Yes</source>
@@ -13797,15 +14082,15 @@ URLen var: %1</translation>
     </message>
     <message>
         <source>Missing Font File</source>
-        <translation>Saknar typsnittsfil</translation>
+        <translation type="vanished">Saknar typsnittsfil</translation>
     </message>
     <message>
         <source>The font file &apos;%1&apos; is required for the On-Screen Display and Big Picture Mode to show messages in your language.&lt;br&gt;&lt;br&gt;Do you want to download this file now? These files are usually less than 10 megabytes in size.&lt;br&gt;&lt;br&gt;&lt;strong&gt;If you do not download this file, on-screen messages will not be readable.&lt;/strong&gt;</source>
-        <translation>Typsnittsfilen &apos;%1&apos; krävs för att On-Screen Display och Storbildsläget ska visa meddelanden på ditt språk.&lt;br&gt;&lt;br&gt;Vill du hämta denna fil nu? Dessa filer är oftast mindre än 10 megabytes i storlek.&lt;br&gt;&lt;br&gt;&lt;strong&gt;Om du inte hämtar denna fil så kommer inte OSD-meddelanden att kunna läsas.&lt;/strong&gt;</translation>
+        <translation type="vanished">Typsnittsfilen &apos;%1&apos; krävs för att On-Screen Display och Storbildsläget ska visa meddelanden på ditt språk.&lt;br&gt;&lt;br&gt;Vill du hämta denna fil nu? Dessa filer är oftast mindre än 10 megabytes i storlek.&lt;br&gt;&lt;br&gt;&lt;strong&gt;Om du inte hämtar denna fil så kommer inte OSD-meddelanden att kunna läsas.&lt;/strong&gt;</translation>
     </message>
     <message>
         <source>Downloading Files</source>
-        <translation>Hämtar filer</translation>
+        <translation type="vanished">Hämtar filer</translation>
     </message>
     <message>
         <source>Failed to write &apos;%1&apos;:
@@ -14638,6 +14923,11 @@ Vill du skapa denna katalog?</translation>
         <comment>GPUTextureFilter</comment>
         <translation>MMPX (Långsam)</translation>
     </message>
+    <message>
+        <source>MMPX Enhanced (Slow)</source>
+        <comment>GPUTextureFilter</comment>
+        <translation>MMPX förbättrad (Långsam)</translation>
+    </message>
 </context>
 <context>
     <name>SettingsDialog</name>
@@ -15235,6 +15525,11 @@ Inloggningstoken genererades %2.</translation>
         <source>Controls how dithering is applied in the emulated GPU. True Color disables dithering and produces the nicest looking gradients. Scaled options make the dither pattern less noticeable at higher resolutions. Shader Blending options perform blending in software, and are more accurate but have a &lt;strong&gt;significant&lt;/strong&gt; performance penalty.</source>
         <translation>Kontrollerar hur dithering tillämpas i den emulerade GPU:n. True Color inaktiverar dithering och ger de snyggaste gradienterna. Med skalade alternativ blir dithermönstret mindre märkbart i högre upplösningar. Alternativet Shader-blandning utför blandning i programvara och är mer exakt, men har en &lt;strong&gt;betydande&lt;/strong&gt; prestandaförlust.</translation>
     </message>
+    <message>
+        <source>RetroAchievements</source>
+        <comment>Header text</comment>
+        <translation>RetroAchievements</translation>
+    </message>
 </context>
 <context>
     <name>System</name>
@@ -15610,6 +15905,26 @@ Detta kan bero på att din GPU inte har stöd för vald renderare ({1}) eller p�
     <message>
         <source>Dithering set to unscaled.</source>
         <translation>Dithering inställd till oskalad.</translation>
+    </message>
+    <message>
+        <source>Current game does not have multiple discs.</source>
+        <translation>Det aktuella spelet har inte flera skivor.</translation>
+    </message>
+    <message>
+        <source>Could not determine current disc for switching.</source>
+        <translation>Det gick inte att fastställa vilken skiva som ska bytas.</translation>
+    </message>
+    <message>
+        <source>There is no previous disc to switch to.</source>
+        <translation>Det finns ingen föregående skiva att byta till.</translation>
+    </message>
+    <message>
+        <source>There is no next disc to switch to.</source>
+        <translation>Det finns ingen nästa skiva att byta till.</translation>
+    </message>
+    <message>
+        <source>No disc found for serial {}.</source>
+        <translation>Ingen skiva hittades för serienummer {}.</translation>
     </message>
 </context>
 <context>

@@ -23,7 +23,7 @@
 #include "common/zip_helpers.h"
 
 #include "IconsEmoji.h"
-#include "IconsFontAwesome5.h"
+#include "IconsFontAwesome6.h"
 #include "fmt/format.h"
 
 LOG_CHANNEL(Cheats);
@@ -1016,7 +1016,7 @@ void Cheats::UpdateActiveCodes(bool reload_enabled_list, bool verbose, bool verb
     {
       System::SetTaint(System::Taint::Patches);
       Host::AddIconOSDMessage(
-        "LoadPatches", ICON_FA_BAND_AID,
+        "LoadPatches", ICON_FA_BANDAGE,
         TRANSLATE_PLURAL_STR("Cheats", "%n game patches are active.", "OSD Message", s_active_patch_count),
         Host::OSD_INFO_DURATION);
     }
@@ -1031,7 +1031,7 @@ void Cheats::UpdateActiveCodes(bool reload_enabled_list, bool verbose, bool verb
     else if (s_active_patch_count == 0)
     {
       Host::RemoveKeyedOSDMessage("LoadPatches");
-      Host::AddIconOSDMessage("LoadCheats", ICON_FA_BAND_AID,
+      Host::AddIconOSDMessage("LoadCheats", ICON_FA_BANDAGE,
                               TRANSLATE_STR("Cheats", "No cheats/patches are found or enabled."),
                               Host::OSD_INFO_DURATION);
     }
@@ -1090,7 +1090,7 @@ bool Cheats::ApplyManualCode(const std::string_view name)
   {
     if (code->IsManuallyActivated() && code->GetName() == name)
     {
-      Host::AddIconOSDMessage(code->GetName(), ICON_FA_BAND_AID,
+      Host::AddIconOSDMessage(code->GetName(), ICON_FA_BANDAGE,
                               fmt::format(TRANSLATE_FS("Cheats", "Cheat '{}' applied."), code->GetName()),
                               Host::OSD_INFO_DURATION);
       code->Apply();
@@ -4035,6 +4035,15 @@ void Cheats::GamesharkCheatCode::Apply() const
             value += value_increment;
           }
         }
+        else if (write_type == InstructionCode::ExtConstantWrite32)
+        {
+          for (u32 i = 0; i < slide_count; i++)
+          {
+            DoMemoryWrite<u32>(address, value);
+            address += address_increment;
+            value += value_increment;
+          }
+        }
         else
         {
           ERROR_LOG("Invalid command in second slide parameter 0x{:02X}", static_cast<unsigned>(write_type));
@@ -4097,6 +4106,102 @@ void Cheats::GamesharkCheatCode::Apply() const
           for (u32 i = 0; i < slide_count; i++)
           {
             DoMemoryWrite<u32>(address, value);
+            if (address_change_negative)
+              address -= address_change;
+            else
+              address += address_change;
+            if (value_change_negative)
+              value -= value_change;
+            else
+              value += value_change;
+          }
+        }
+        else if (write_type == InstructionCode::ExtConstantBitClear8)
+        {
+          for (u32 i = 0; i < slide_count; i++)
+          {
+            const u8 new_value = DoMemoryRead<u8>(address) & ~Truncate8(value);
+            DoMemoryWrite<u8>(address, new_value);
+            if (address_change_negative)
+              address -= address_change;
+            else
+              address += address_change;
+            if (value_change_negative)
+              value -= value_change;
+            else
+              value += value_change;
+          }
+        }
+        else if (write_type == InstructionCode::ExtConstantBitSet8)
+        {
+          for (u32 i = 0; i < slide_count; i++)
+          {
+            const u8 new_value = DoMemoryRead<u8>(address) | Truncate8(value);
+            DoMemoryWrite<u8>(address, new_value);
+            if (address_change_negative)
+              address -= address_change;
+            else
+              address += address_change;
+            if (value_change_negative)
+              value -= value_change;
+            else
+              value += value_change;
+          }
+        }
+        else if (write_type == InstructionCode::ExtConstantBitClear16)
+        {
+          for (u32 i = 0; i < slide_count; i++)
+          {
+            const u16 new_value = DoMemoryRead<u16>(address) & ~Truncate16(value);
+            DoMemoryWrite<u16>(address, new_value);
+            if (address_change_negative)
+              address -= address_change;
+            else
+              address += address_change;
+            if (value_change_negative)
+              value -= value_change;
+            else
+              value += value_change;
+          }
+        }
+        else if (write_type == InstructionCode::ExtConstantBitSet16)
+        {
+          for (u32 i = 0; i < slide_count; i++)
+          {
+            const u16 new_value = DoMemoryRead<u16>(address) | Truncate16(value);
+            DoMemoryWrite<u16>(address, new_value);
+            if (address_change_negative)
+              address -= address_change;
+            else
+              address += address_change;
+            if (value_change_negative)
+              value -= value_change;
+            else
+              value += value_change;
+          }
+        }
+        else if (write_type == InstructionCode::ExtConstantBitClear32)
+        {
+          for (u32 i = 0; i < slide_count; i++)
+          {
+            const u32 newValue = DoMemoryRead<u32>(address) & ~value;
+            DoMemoryWrite<u32>(address, newValue);
+            if (address_change_negative)
+              address -= address_change;
+            else
+              address += address_change;
+            if (value_change_negative)
+              value -= value_change;
+            else
+              value += value_change;
+          }
+        }
+        else if (write_type == InstructionCode::ExtConstantBitSet32)
+        {
+          for (u32 i = 0; i < slide_count; i++)
+          {
+            const u32 newValue = DoMemoryRead<u32>(address) | value;
+            DoMemoryWrite<u32>(address, newValue);
             if (address_change_negative)
               address -= address_change;
             else

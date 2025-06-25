@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: CC-BY-NC-ND-4.0
 
 #include "negcon_rumble.h"
-#include "IconsFontAwesome5.h"
+#include "IconsFontAwesome6.h"
 #include "common/assert.h"
 #include "common/log.h"
 #include "host.h"
@@ -17,7 +17,7 @@
 #include "common/log.h"
 #include "common/string_util.h"
 
-#include "IconsFontAwesome5.h"
+#include "IconsFontAwesome6.h"
 #include "IconsPromptFont.h"
 #include "fmt/format.h"
 
@@ -770,12 +770,9 @@ static const SettingInfo s_settings[] = {
    "8", "-255", "255", "1", "%d", nullptr, 1.0f},
 };
 
-const Controller::ControllerInfo NeGconRumble::INFO = {ControllerType::NeGconRumble,
-                                                       "NeGconRumble",
-                                                       TRANSLATE_NOOP("ControllerType", "NeGcon (Rumble)"),
-                                                       ICON_PF_GAMEPAD,
-                                                       s_binding_info,
-                                                       s_settings};
+const Controller::ControllerInfo NeGconRumble::INFO = {
+  ControllerType::NeGconRumble, "NeGconRumble", TRANSLATE_NOOP("ControllerType", "NeGcon (Rumble)"),
+  ICON_PF_STEERING_WHEEL,       s_binding_info, s_settings};
 
 void NeGconRumble::LoadSettings(const SettingsInterface& si, const char* section, bool initial)
 {

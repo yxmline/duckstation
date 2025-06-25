@@ -140,6 +140,8 @@ Q_SIGNALS:
   void systemDestroyed();
   void systemPaused();
   void systemResumed();
+  void systemGameChanged(const QString& filename, const QString& game_serial, const QString& game_title);
+  void systemUndoStateAvailabilityChanged(bool available, quint64 timestamp);
   void gameListRefreshed();
   void gameListRowsChanged(const QList<int>& rows_changed);
   std::optional<WindowInfo> onAcquireRenderWindowRequested(RenderAPI render_api, bool fullscreen,
@@ -148,14 +150,15 @@ Q_SIGNALS:
   void onResizeRenderWindowRequested(qint32 width, qint32 height);
   void onReleaseRenderWindowRequested();
   void focusDisplayWidgetRequested();
-  void runningGameChanged(const QString& filename, const QString& game_serial, const QString& game_title);
   void inputProfileLoaded();
   void mouseModeRequested(bool relative, bool hide_cursor);
   void fullscreenUIStartedOrStopped(bool running);
   void achievementsLoginRequested(Achievements::LoginRequestReason reason);
   void achievementsLoginSuccess(const QString& username, quint32 points, quint32 sc_points, quint32 unread_messages);
   void achievementsRefreshed(quint32 id, const QString& game_info_string);
+  void achievementsActiveChanged(bool active);
   void achievementsHardcoreModeChanged(bool enabled);
+  void achievementsAllProgressRefreshed();
   void cheatEnabled(quint32 index, bool enabled);
   void mediaCaptureStarted();
   void mediaCaptureStopped();
@@ -183,6 +186,8 @@ public Q_SLOTS:
   void closeInputSources();
   void startFullscreenUI();
   void stopFullscreenUI();
+  void exitFullscreenUI();
+  void refreshAchievementsAllProgress();
   void bootSystem(std::shared_ptr<SystemBootParameters> params);
   void resumeSystemFromMostRecentState();
   void shutdownSystem(bool save_state, bool check_memcard_busy);
@@ -220,7 +225,7 @@ public Q_SLOTS:
 private Q_SLOTS:
   void stopInThread();
   void onDisplayWindowMouseButtonEvent(int button, bool pressed);
-  void onDisplayWindowMouseWheelEvent(const QPoint& delta_angle);
+  void onDisplayWindowMouseWheelEvent(float dx, float dy);
   void onDisplayWindowResized(int width, int height, float scale);
   void onDisplayWindowKeyEvent(int key, bool pressed);
   void onDisplayWindowTextEntered(const QString& text);
@@ -387,10 +392,6 @@ bool SaveGameSettings(SettingsInterface* sif, bool delete_if_empty);
 
 /// Downloads the specified URL to the provided path.
 bool DownloadFile(QWidget* parent, const QString& title, std::string url, const char* path);
-
-/// Downloads the specified URL, and extracts the specified file from a zip to a provided path.
-bool DownloadFileFromZip(QWidget* parent, const QString& title, std::string url, const char* zip_filename,
-                         const char* output_path);
 
 /// Thread-safe settings access.
 void QueueSettingsSave();

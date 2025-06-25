@@ -721,18 +721,15 @@ MemoryCardRenameFileDialog::~MemoryCardRenameFileDialog() = default;
 std::string MemoryCardRenameFileDialog::promptForNewName(QWidget* parent, std::string_view old_name)
 {
   MemoryCardRenameFileDialog dlg(parent, old_name);
+  if (dlg.exec() == QDialog::Rejected)
+    return {};
 
-  std::string ret;
-  if (dlg.exec() != 1)
-    return ret;
-
-  ret = dlg.m_ui.fullFilename->text().toStdString();
-  return ret;
+  return dlg.m_ui.fullFilename->text().toStdString();
 }
 
 void MemoryCardRenameFileDialog::setupAdditionalUi()
 {
-  m_ui.icon->setPixmap(QIcon::fromTheme(QStringLiteral("memcard-line")).pixmap(32, 32));
+  m_ui.icon->setPixmap(QIcon::fromTheme(QStringLiteral("memcard-line")).pixmap(32));
 
   for (const auto& [region, prefix] : MEMORY_CARD_FILE_REGION_PREFIXES)
   {

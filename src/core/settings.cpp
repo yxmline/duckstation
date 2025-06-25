@@ -362,6 +362,7 @@ void Settings::Load(const SettingsInterface& si, const SettingsInterface& contro
   cdrom_load_image_to_ram = si.GetBoolValue("CDROM", "LoadImageToRAM", false);
   cdrom_load_image_patches = si.GetBoolValue("CDROM", "LoadImagePatches", false);
   cdrom_mute_cd_audio = si.GetBoolValue("CDROM", "MuteCDAudio", false);
+  cdrom_auto_disc_change = si.GetBoolValue("CDROM", "AutoDiscChange", false);
   cdrom_read_speedup =
     Truncate8(std::min<u32>(si.GetUIntValue("CDROM", "ReadSpeedup", 1u), std::numeric_limits<u8>::max()));
   cdrom_seek_speedup =
@@ -679,6 +680,7 @@ void Settings::Save(SettingsInterface& si, bool ignore_base) const
   si.SetBoolValue("CDROM", "LoadImageToRAM", cdrom_load_image_to_ram);
   si.SetBoolValue("CDROM", "LoadImagePatches", cdrom_load_image_patches);
   si.SetBoolValue("CDROM", "MuteCDAudio", cdrom_mute_cd_audio);
+  si.SetBoolValue("CDROM", "AutoDiscChange", cdrom_auto_disc_change);
   si.SetUIntValue("CDROM", "ReadSpeedup", cdrom_read_speedup);
   si.SetUIntValue("CDROM", "SeekSpeedup", cdrom_seek_speedup);
   si.SetUIntValue("CDROM", "MaxReadSpeedupCycles", cdrom_max_seek_speedup_cycles);
@@ -1475,6 +1477,7 @@ RenderAPI Settings::GetRenderAPIForRenderer(GPURenderer renderer)
       return RenderAPI::D3D12;
 #endif
 #ifdef __APPLE__
+    case GPURenderer::HardwareMetal:
       return RenderAPI::Metal;
 #endif
 #ifdef ENABLE_VULKAN
@@ -1531,8 +1534,8 @@ GPURenderer Settings::GetAutomaticRenderer()
 }
 
 static constexpr const std::array s_texture_filter_names = {
-  "Nearest", "Bilinear",    "BilinearBinAlpha", "JINC2",   "JINC2BinAlpha",
-  "xBR",     "xBRBinAlpha", "Scale2x",          "Scale3x", "MMPX",
+  "Nearest",     "Bilinear", "BilinearBinAlpha", "JINC2", "JINC2BinAlpha", "xBR",
+  "xBRBinAlpha", "Scale2x",  "Scale3x",          "MMPX",  "MMPXEnhanced",
 };
 static constexpr const std::array s_texture_filter_display_names = {
   TRANSLATE_DISAMBIG_NOOP("Settings", "Nearest-Neighbor", "GPUTextureFilter"),
@@ -1545,6 +1548,7 @@ static constexpr const std::array s_texture_filter_display_names = {
   TRANSLATE_DISAMBIG_NOOP("Settings", "Scale2x (EPX)", "GPUTextureFilter"),
   TRANSLATE_DISAMBIG_NOOP("Settings", "Scale3x (Slow)", "GPUTextureFilter"),
   TRANSLATE_DISAMBIG_NOOP("Settings", "MMPX (Slow)", "GPUTextureFilter"),
+  TRANSLATE_DISAMBIG_NOOP("Settings", "MMPX Enhanced (Slow)", "GPUTextureFilter"),
 };
 static_assert(s_texture_filter_names.size() == static_cast<size_t>(GPUTextureFilter::Count));
 static_assert(s_texture_filter_display_names.size() == static_cast<size_t>(GPUTextureFilter::Count));

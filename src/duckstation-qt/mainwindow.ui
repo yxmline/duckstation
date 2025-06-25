@@ -30,7 +30,7 @@
      <x>0</x>
      <y>0</y>
      <width>800</width>
-     <height>33</height>
+     <height>22</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuSystem">
@@ -198,6 +198,9 @@
     </widget>
     <addaction name="actionViewToolbar"/>
     <addaction name="actionViewLockToolbar"/>
+    <addaction name="actionViewSmallToolbarIcons"/>
+    <addaction name="actionViewToolbarLabels"/>
+    <addaction name="actionViewToolbarLabelsBesideIcons"/>
     <addaction name="actionViewStatusBar"/>
     <addaction name="separator"/>
     <addaction name="actionViewGameList"/>
@@ -213,6 +216,7 @@
     <addaction name="actionGridViewZoomIn"/>
     <addaction name="actionGridViewZoomOut"/>
     <addaction name="actionGridViewRefreshCovers"/>
+    <addaction name="actionViewRefreshAchievementProgress"/>
     <addaction name="separator"/>
     <addaction name="actionChangeGameListBackground"/>
     <addaction name="actionClearGameListBackground"/>
@@ -369,7 +373,7 @@
   </action>
   <action name="actionConsoleSettings">
    <property name="icon">
-    <iconset theme="chip-2-line"/>
+    <iconset theme="emulation-line"/>
    </property>
    <property name="text">
     <string>C&amp;onsole</string>
@@ -377,7 +381,7 @@
   </action>
   <action name="actionEmulationSettings">
    <property name="icon">
-    <iconset theme="emulation-line"/>
+    <iconset theme="chip-2-line"/>
    </property>
    <property name="text">
     <string>E&amp;mulation</string>
@@ -720,7 +724,7 @@
     <string>Resume</string>
    </property>
    <property name="toolTip">
-    <string>Resumes the last save state created.</string>
+    <string>Resumes the last save state created</string>
    </property>
   </action>
   <action name="actionViewToolbar">
@@ -743,6 +747,30 @@
    </property>
    <property name="text">
     <string>Lock Toolbar</string>
+   </property>
+  </action>
+  <action name="actionViewSmallToolbarIcons">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Small Toolbar Icons</string>
+   </property>
+  </action>
+  <action name="actionViewToolbarLabels">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Toolbar Labels</string>
+   </property>
+  </action>
+  <action name="actionViewToolbarLabelsBesideIcons">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Toolbar Labels Beside Icons</string>
    </property>
   </action>
   <action name="actionViewStatusBar">
@@ -985,6 +1013,14 @@
   <action name="actionClearGameListBackground">
    <property name="text">
     <string>Clear List Background</string>
+   </property>
+  </action>
+  <action name="actionViewRefreshAchievementProgress">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>Refresh Achievement &amp;Progress</string>
    </property>
   </action>
  </widget>

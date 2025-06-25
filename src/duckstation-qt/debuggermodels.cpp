@@ -23,8 +23,8 @@ static constexpr u32 STACK_VALUE_SIZE = sizeof(u32);
 DebuggerCodeModel::DebuggerCodeModel(QObject* parent /*= nullptr*/) : QAbstractTableModel(parent)
 {
   resetCodeView(0);
-  m_pc_pixmap = QIcon(QStringLiteral(":/icons/debug-pc.png")).pixmap(QSize(12, 12));
-  m_breakpoint_pixmap = QIcon(QStringLiteral(":/icons/media-record.png")).pixmap(QSize(12, 12));
+  m_pc_pixmap = QIcon(QStringLiteral(":/icons/debug-pc.png")).pixmap(12);
+  m_breakpoint_pixmap = QIcon(QStringLiteral(":/icons/media-record.png")).pixmap(12);
 }
 
 DebuggerCodeModel::~DebuggerCodeModel()
@@ -455,8 +455,7 @@ void DebuggerStackModel::invalidateView()
 DebuggerAddBreakpointDialog::DebuggerAddBreakpointDialog(QWidget* parent /*= nullptr*/) : QDialog(parent)
 {
   m_ui.setupUi(this);
-  connect(m_ui.buttonBox->button(QDialogButtonBox::Ok), &QAbstractButton::clicked, this,
-          &DebuggerAddBreakpointDialog::okClicked);
+  connect(m_ui.buttonBox, &QDialogButtonBox::accepted, this, &DebuggerAddBreakpointDialog::okClicked);
 }
 
 DebuggerAddBreakpointDialog::~DebuggerAddBreakpointDialog() = default;

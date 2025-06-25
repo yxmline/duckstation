@@ -69,7 +69,7 @@
 #include "common/timer.h"
 
 #include "IconsEmoji.h"
-#include "IconsFontAwesome5.h"
+#include "IconsFontAwesome6.h"
 
 #include "cpuinfo.h"
 #include "fmt/chrono.h"
@@ -137,6 +137,11 @@ struct SaveStateBuffer
   size_t state_size;
 };
 
+struct UndoSaveStateBuffer : public SaveStateBuffer
+{
+  time_t timestamp;
+};
+
 } // namespace
 
 static void CheckCacheLineSize();
@@ -192,6 +197,7 @@ static bool UpdateGameSettingsLayer();
 static void UpdateInputSettingsLayer(std::string input_profile_name, std::unique_lock<std::mutex>& lock);
 static void UpdateRunningGame(const std::string& path, CDImage* image, bool booting);
 static bool CheckForRequiredSubQ(Error* error);
+static bool SwitchDiscFromSet(s32 direction, bool show_osd_message);
 
 static void UpdateControllers();
 static void ResetControllers();
@@ -317,7 +323,7 @@ struct ALIGN_TO_CACHE_LINE StateVars
   Threading::ThreadHandle cpu_thread_handle;
 
   // temporary save state, created when loading, used to undo load state
-  std::optional<System::SaveStateBuffer> undo_load_state;
+  std::optional<UndoSaveStateBuffer> undo_load_state;
 
   // Used to track play time. We use a monotonic timer here, in case of clock changes.
   u64 session_start_time = 0;
@@ -1201,7 +1207,7 @@ void System::RecreateGPU(GPURenderer renderer)
 
 void System::LoadSettings(bool display_osd_messages)
 {
-  std::unique_lock<std::mutex> lock = Host::GetSettingsLock();
+  auto lock = Host::GetSettingsLock();
   const SettingsInterface& si = *Host::GetSettingsInterface();
   const SettingsInterface& controller_si = GetControllerSettingsLayer(lock);
   const SettingsInterface& hotkey_si = GetHotkeySettingsLayer(lock);
@@ -1238,7 +1244,7 @@ void System::LoadSettings(bool display_osd_messages)
 
 void System::ReloadInputSources()
 {
-  std::unique_lock<std::mutex> lock = Host::GetSettingsLock();
+  auto lock = Host::GetSettingsLock();
   const SettingsInterface& controller_si = GetControllerSettingsLayer(lock);
   InputManager::ReloadSources(controller_si, lock);
 
@@ -1256,7 +1262,7 @@ void System::ReloadInputBindings()
   if (!IsValid())
     return;
 
-  std::unique_lock<std::mutex> lock = Host::GetSettingsLock();
+  auto lock = Host::GetSettingsLock();
   const SettingsInterface& controller_si = GetControllerSettingsLayer(lock);
   const SettingsInterface& hotkey_si = GetHotkeySettingsLayer(lock);
   InputManager::ReloadBindings(controller_si, hotkey_si);
@@ -1554,6 +1560,8 @@ void System::ResetSystem()
   if (!IsValid())
     return;
 
+  SaveUndoLoadState();
+
   InternalReset();
 
   // Reset boot mode/reload BIOS if needed. Preserve exe/psf boot.
@@ -1636,6 +1644,8 @@ bool System::SaveResumeState(Error* error)
 
 bool System::BootSystem(SystemBootParameters parameters, Error* error)
 {
+  Timer boot_timer;
+
   if (!parameters.save_state.empty())
   {
     // loading a state, so pull the media path from the save state to avoid a double change
@@ -1844,6 +1854,8 @@ bool System::BootSystem(SystemBootParameters parameters, Error* error)
     PauseSystem(true);
 
   UpdateSpeedLimiterState();
+
+  INFO_LOG("System booted in {:.2f}ms", boot_timer.GetTimeMilliseconds());
   PerformanceCounters::Reset();
   ResetThrottler();
   return true;
@@ -1959,6 +1971,8 @@ void System::DestroySystem()
 
   FreeMemoryStateStorage(true, true, false);
 
+  GPUThread::DestroyGPUBackend();
+
   Cheats::UnloadAll();
   PCDrv::Shutdown();
   SIO::Shutdown();
@@ -1977,7 +1991,6 @@ void System::DestroySystem()
   TimingEvents::Shutdown();
   Achievements::OnSystemDestroyed();
   ClearRunningGame();
-  GPUThread::DestroyGPUBackend();
 
   s_state.taints = 0;
   s_state.bios_hash = {};
@@ -2022,7 +2035,7 @@ void System::ClearRunningGame()
   s_state.running_game_entry = nullptr;
   s_state.running_game_hash = 0;
 
-  Host::OnGameChanged(s_state.running_game_path, s_state.running_game_serial, s_state.running_game_title,
+  Host::OnSystemGameChanged(s_state.running_game_path, s_state.running_game_serial, s_state.running_game_title,
                       s_state.running_game_hash);
 
   UpdateRichPresence(true);
@@ -2399,7 +2412,7 @@ bool System::DoState(StateWrapper& sw, bool update_display)
     WARNING_LOG("BIOS hash mismatch: System: {} | State: {}", BIOS::ImageInfo::GetHashString(s_state.bios_hash),
                 BIOS::ImageInfo::GetHashString(bios_hash));
     Host::AddIconOSDWarning(
-      "StateBIOSMismatch", ICON_FA_EXCLAMATION_TRIANGLE,
+      "StateBIOSMismatch", ICON_FA_TRIANGLE_EXCLAMATION,
       TRANSLATE_STR("System", "This save state was created with a different BIOS. This may cause stability issues."),
       Host::OSD_WARNING_DURATION);
   }
@@ -2468,7 +2481,7 @@ bool System::DoState(StateWrapper& sw, bool update_display)
                                                    g_settings.cpu_overclock_denominator != cpu_overclock_denominator))))
   {
     Host::AddIconOSDMessage(
-      "StateOverclockDifference", ICON_FA_EXCLAMATION_TRIANGLE,
+      "StateOverclockDifference", ICON_FA_TRIANGLE_EXCLAMATION,
       fmt::format(TRANSLATE_FS("System", "WARNING: CPU overclock ({}%) was different in save state ({}%)."),
                   g_settings.cpu_overclock_enable ? g_settings.GetCPUOverclockPercent() : 100u,
                   cpu_overclock_active ?
@@ -3510,7 +3523,7 @@ void System::FormatLatencyStats(SmallStringBase& str)
   const double pre_frame_time = std::ceil(Timer::ConvertValueToMilliseconds(s_state.pre_frame_sleep_time));
   const double input_latency = std::ceil(
     Timer::ConvertValueToMilliseconds((s_state.frame_period - s_state.pre_frame_sleep_time) *
-                                      static_cast<float>(std::max(queued_frame_count, 1u))) -
+                                      (std::max(queued_frame_count, 1u))) -
     Timer::ConvertValueToMilliseconds(static_cast<Timer::Value>(s_state.runahead_frames) * s_state.frame_period));
 
   str.format("AL: {}ms | AF: {:.0f}ms | PF: {:.0f}ms | IL: {:.0f}ms | QF: {}", audio_latency, active_frame_time,
@@ -4210,7 +4223,7 @@ void System::UpdateRunningGame(const std::string& path, CDImage* image, bool boo
   FullscreenUI::OnRunningGameChanged(s_state.running_game_path, s_state.running_game_serial, s_state.running_game_title,
                                      s_state.running_game_hash);
 
-  Host::OnGameChanged(s_state.running_game_path, s_state.running_game_serial, s_state.running_game_title,
+  Host::OnSystemGameChanged(s_state.running_game_path, s_state.running_game_serial, s_state.running_game_title,
                       s_state.running_game_hash);
 }
 
@@ -4335,6 +4348,84 @@ bool System::SwitchMediaSubImage(u32 index)
     fmt::format(TRANSLATE_FS("System", "Switched to sub-image {} ({}) in '{}'."), subimage_title, index + 1u, title),
     Host::OSD_INFO_DURATION);
   return true;
+}
+
+bool System::SwitchDiscFromSet(s32 direction, bool display_osd_message)
+{
+  if (!IsValid() || !s_state.running_game_entry || s_state.running_game_entry->disc_set_serials.empty())
+  {
+    if (display_osd_message)
+    {
+      Host::AddIconOSDWarning("SwitchDiscFromSet", ICON_EMOJI_WARNING,
+                              TRANSLATE_STR("System", "Current game does not have multiple discs."),
+                              Host::OSD_WARNING_DURATION);
+    }
+
+    return false;
+  }
+
+  s32 current_index = static_cast<s32>(s_state.running_game_entry->disc_set_serials.size());
+  for (size_t i = 0; i < s_state.running_game_entry->disc_set_serials.size(); i++)
+  {
+    if (s_state.running_game_entry->disc_set_serials[i] == s_state.running_game_serial)
+    {
+      current_index = static_cast<s32>(i);
+      break;
+    }
+  }
+
+  if (current_index == static_cast<s32>(s_state.running_game_entry->disc_set_serials.size()))
+  {
+    if (display_osd_message)
+    {
+      Host::AddIconOSDWarning("SwitchDiscFromSet", ICON_EMOJI_WARNING,
+                              TRANSLATE_STR("System", "Could not determine current disc for switching."),
+                              Host::OSD_WARNING_DURATION);
+    }
+
+    return false;
+  }
+
+  current_index += direction;
+  if (current_index < 0 || current_index >= static_cast<s32>(s_state.running_game_entry->disc_set_serials.size()))
+  {
+    if (display_osd_message)
+    {
+      Host::AddIconOSDWarning("SwitchDiscFromSet", ICON_EMOJI_WARNING,
+                              (direction < 0) ? TRANSLATE_STR("System", "There is no previous disc to switch to.") :
+                                                TRANSLATE_STR("System", "There is no next disc to switch to."),
+                              Host::OSD_WARNING_DURATION);
+    }
+
+    return false;
+  }
+
+  const std::string_view& next_serial = s_state.running_game_entry->disc_set_serials[current_index];
+  const auto lock = GameList::GetLock();
+  const GameList::Entry* entry = GameList::GetEntryBySerial(next_serial);
+  if (!entry)
+  {
+    if (display_osd_message)
+    {
+      Host::AddIconOSDWarning("SwitchDiscFromSet", ICON_EMOJI_WARNING,
+                              fmt::format(TRANSLATE_FS("System", "No disc found for serial {}."), next_serial),
+                              Host::OSD_WARNING_DURATION);
+    }
+
+    return false;
+  }
+
+  return InsertMedia(entry->path.c_str());
+}
+
+bool System::SwitchToPreviousDisc(bool display_osd_message)
+{
+  return SwitchDiscFromSet(-1, display_osd_message);
+}
+
+bool System::SwitchToNextDisc(bool display_osd_message)
+{
+  return SwitchDiscFromSet(1, display_osd_message);
 }
 
 bool System::ShouldStartFullscreen()
@@ -5202,12 +5293,14 @@ bool System::UndoLoadState()
     Host::ReportErrorAsync("Error",
                            fmt::format("Failed to load undo state, resetting system:\n", error.GetDescription()));
     s_state.undo_load_state.reset();
+    Host::OnSystemUndoStateAvailabilityChanged(false, 0);
     ResetSystem();
     return false;
   }
 
   INFO_LOG("Loaded undo save state.");
   s_state.undo_load_state.reset();
+  Host::OnSystemUndoStateAvailabilityChanged(false, 0);
   return true;
 }
 
@@ -5223,10 +5316,13 @@ bool System::SaveUndoLoadState()
       fmt::format(TRANSLATE_FS("OSDMessage", "Failed to save undo load state:\n{}"), error.GetDescription()),
       Host::OSD_CRITICAL_ERROR_DURATION);
     s_state.undo_load_state.reset();
+    Host::OnSystemUndoStateAvailabilityChanged(false, 0);
     return false;
   }
 
   INFO_LOG("Saved undo load state: {} bytes", s_state.undo_load_state->state_size);
+  s_state.undo_load_state->timestamp = std::time(nullptr);
+  Host::OnSystemUndoStateAvailabilityChanged(true, static_cast<u64>(s_state.undo_load_state->timestamp));
   return true;
 }
 
@@ -5436,7 +5532,7 @@ bool System::StartMediaCapture(std::string path, bool capture_video, bool captur
         &error))
   {
     Host::AddIconOSDWarning(
-      "MediaCapture", ICON_FA_EXCLAMATION_TRIANGLE,
+      "MediaCapture", ICON_FA_TRIANGLE_EXCLAMATION,
       fmt::format(TRANSLATE_FS("System", "Failed to create media capture: {0}"), error.GetDescription()),
       Host::OSD_ERROR_DURATION);
     s_state.media_capture.reset();
@@ -5493,7 +5589,7 @@ void System::StopMediaCapture(std::unique_ptr<MediaCapture> cap)
   }
   else
   {
-    Host::AddIconOSDWarning(std::move(osd_key), ICON_FA_EXCLAMATION_TRIANGLE,
+    Host::AddIconOSDWarning(std::move(osd_key), ICON_FA_TRIANGLE_EXCLAMATION,
                             fmt::format(TRANSLATE_FS("System", "Stopped {0}: {1}."),
                                         GetCaptureTypeForMessage(was_capturing_video, was_capturing_audio),
                                         error.GetDescription()),

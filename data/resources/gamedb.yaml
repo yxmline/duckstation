@@ -3603,6 +3603,8 @@ SCUS-94906:
     versionTested: "0.1-887-g1eecd50"
   controllers:
     - DigitalController
+  traits:
+    - ForceFullBoot # Stops crashing after FMV.
   metadata:
     publisher: "Psygnosis"
     developer: "Psygnosis"
@@ -3814,6 +3816,7 @@ SLPS-01409:
   controllers:
     - AnalogController
     - DigitalController
+    - PlayStationMouse
   metadata:
     publisher: "Sony"
     developer: "Sony"
@@ -5446,6 +5449,8 @@ SLES-02801:
   controllers:
     - AnalogController
     - DigitalController
+  settings:
+    cdromMaxReadSpeedupCycles: 150000
   metadata:
     publisher: "Infogrames"
     developer: "Darkworks"
@@ -5470,6 +5475,8 @@ SLES-12801:
   controllers:
     - AnalogController
     - DigitalController
+  settings:
+    cdromMaxReadSpeedupCycles: 150000
   metadata:
     publisher: "Infogrames"
     developer: "Darkworks"
@@ -5494,6 +5501,8 @@ SLES-02802:
   controllers:
     - AnalogController
     - DigitalController
+  settings:
+    cdromMaxReadSpeedupCycles: 150000
   metadata:
     publisher: "Infogrames"
     developer: "Darkworks"
@@ -5518,6 +5527,8 @@ SLES-12802:
   controllers:
     - AnalogController
     - DigitalController
+  settings:
+    cdromMaxReadSpeedupCycles: 150000
   metadata:
     publisher: "Infogrames"
     developer: "Darkworks"
@@ -5542,6 +5553,8 @@ SLES-02803:
   controllers:
     - AnalogController
     - DigitalController
+  settings:
+    cdromMaxReadSpeedupCycles: 150000
   metadata:
     publisher: "Infogrames"
     developer: "Darkworks"
@@ -5566,6 +5579,8 @@ SLES-12803:
   controllers:
     - AnalogController
     - DigitalController
+  settings:
+    cdromMaxReadSpeedupCycles: 150000
   metadata:
     publisher: "Infogrames"
     developer: "Darkworks"
@@ -5590,6 +5605,8 @@ SLES-02805:
   controllers:
     - AnalogController
     - DigitalController
+  settings:
+    cdromMaxReadSpeedupCycles: 150000
   metadata:
     publisher: "Infogrames"
     developer: "Darkworks"
@@ -5614,6 +5631,8 @@ SLES-12805:
   controllers:
     - AnalogController
     - DigitalController
+  settings:
+    cdromMaxReadSpeedupCycles: 150000
   metadata:
     publisher: "Infogrames"
     developer: "Darkworks"
@@ -5638,6 +5657,8 @@ SLES-02804:
   controllers:
     - AnalogController
     - DigitalController
+  settings:
+    cdromMaxReadSpeedupCycles: 150000
   metadata:
     publisher: "Infogrames"
     developer: "Darkworks"
@@ -5662,6 +5683,8 @@ SLES-12804:
   controllers:
     - AnalogController
     - DigitalController
+  settings:
+    cdromMaxReadSpeedupCycles: 150000
   metadata:
     publisher: "Infogrames"
     developer: "Darkworks"
@@ -5689,6 +5712,9 @@ SLUS-01201:
   controllers:
     - AnalogController
     - DigitalController
+  settings:
+    cdromMaxReadSpeedupCycles: 150000
+    displayCropMode: Borders
   metadata:
     publisher: "Infogrames"
     developer: "Darkworks"
@@ -5713,6 +5739,9 @@ SLUS-01377:
   controllers:
     - AnalogController
     - DigitalController
+  settings:
+    cdromMaxReadSpeedupCycles: 150000
+    displayCropMode: Borders
   metadata:
     publisher: "Infogrames"
     developer: "Darkworks"
@@ -10434,7 +10463,6 @@ SLES-02474:
 SLES-01748:
   name: "Asterix (Europe) (De,Es,It)"
   controllers:
-    - AnalogController
     - DigitalController
   metadata:
     publisher: "Infogrames"
@@ -10457,7 +10485,6 @@ SLES-01748:
 SLES-01416:
   name: "Asterix (Europe) (En,Fr,De,Nl)"
   controllers:
-    - AnalogController
     - DigitalController
   metadata:
     publisher: "Infogrames"
@@ -29515,6 +29542,11 @@ SLES-00927:
   controllers:
     - DigitalController
     - PlayStationMouse
+  traits:
+    - DisableUpscaling # Breaks rendering.
+    - DisablePGXP # 2D game, redundant.
+    - DisableWidescreen # Breaks rendering.
+    - DisableSpriteTextureFiltering # Breaks rendering.
   metadata:
     publisher: "Acclaim"
     developer: "System 3 Software"
@@ -29537,6 +29569,11 @@ SLES-01428:
   controllers:
     - DigitalController
     - PlayStationMouse
+  traits:
+    - DisableUpscaling # Breaks rendering.
+    - DisablePGXP # 2D game, redundant.
+    - DisableWidescreen # Breaks rendering.
+    - DisableSpriteTextureFiltering # Breaks rendering.
   metadata:
     publisher: "Acclaim"
     developer: "System 3 Software"
@@ -39301,6 +39338,8 @@ SCES-03004:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - ForcePGXPCPUMode
   metadata:
     publisher: "Sony / Disney Interactive"
     developer: "Argonaut Games"
@@ -39320,6 +39359,8 @@ SCES-03006:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - ForcePGXPCPUMode
   metadata:
     publisher: "Sony / Disney Interactive"
     developer: "Argonaut Games"
@@ -39339,6 +39380,8 @@ SCES-03008:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - ForcePGXPCPUMode
   metadata:
     publisher: "Sony / Disney Interactive"
     developer: "Argonaut Games"
@@ -40489,6 +40532,8 @@ SCES-03002:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - ForcePGXPCPUMode
   metadata:
     publisher: "Sony / Disney Interactive"
     developer: "Argonaut Games"
@@ -42502,6 +42547,8 @@ SCES-03003:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - ForcePGXPCPUMode
   metadata:
     publisher: "Sony / Disney Interactive"
     developer: "Argonaut Games"
@@ -42598,6 +42645,8 @@ SCES-03001:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - ForcePGXPCPUMode
   metadata:
     publisher: "Sony / Disney Interactive"
     developer: "Argonaut Games"
@@ -42617,6 +42666,8 @@ SCES-03007:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - ForcePGXPCPUMode
   metadata:
     publisher: "Sony / Disney Interactive"
     developer: "Argonaut Games"
@@ -42636,6 +42687,8 @@ SCES-03005:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - ForcePGXPCPUMode
   metadata:
     publisher: "Sony / Disney Interactive"
     developer: "Argonaut Games"
@@ -42655,6 +42708,8 @@ SCES-03009:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - ForcePGXPCPUMode
   metadata:
     publisher: "Sony / Disney Interactive"
     developer: "Argonaut Games"
@@ -57717,7 +57772,6 @@ SLUS-01541:
     rating: NoIssues
     versionTested: "0.1-4599-ga542fa85"
   controllers:
-    - AnalogController
     - DigitalController
   metadata:
     publisher: "Squaresoft"
@@ -57736,7 +57790,6 @@ SLUS-01541:
 SLES-04034:
   name: "Final Fantasy Origins - Final Fantasy (Europe)"
   controllers:
-    - AnalogController
     - DigitalController
   metadata:
     publisher: "Infogrames / Squaresoft"
@@ -57755,7 +57808,6 @@ SLES-04034:
 SLES-14034:
   name: "Final Fantasy Origins - Final Fantasy II (Europe)"
   controllers:
-    - AnalogController
     - DigitalController
   metadata:
     publisher: "Infogrames / Squaresoft"
@@ -67813,7 +67865,7 @@ SLES-00032:
     name: "Grand Theft Auto (Europe) (En,Fr,De,It)"
     serials:
       - SLES-00032
-      - SLES-03389
+      - SLES-01714
   controllers:
     - DigitalController
   metadata:
@@ -67826,12 +67878,11 @@ SLES-00032:
       - French
       - German
       - Italian
-      - Spanish
     minPlayers: 1
     maxPlayers: 1
     minBlocks: 1
     maxBlocks: 1
-    vibration: true
+    vibration: false
     multitap: false
     linkCable: false
 SLUS-00106:
@@ -67857,18 +67908,12 @@ SLUS-00106:
     maxPlayers: 1
     minBlocks: 1
     maxBlocks: 1
-    vibration: true
+    vibration: false
     multitap: false
     linkCable: false
 SLES-03389:
   name: "Grand Theft Auto - London 1969 (Europe) (En,Fr,De,It)"
-  discSet:
-    name: "Grand Theft Auto (Europe) (En,Fr,De,It)"
-    serials:
-      - SLES-00032
-      - SLES-03389
   controllers:
-    - AnalogController
     - DigitalController
   metadata:
     publisher: "Take 2 Interactive, Inc"
@@ -67880,7 +67925,6 @@ SLES-03389:
       - French
       - German
       - Italian
-      - Spanish
     minPlayers: 1
     maxPlayers: 1
     minBlocks: 1
@@ -67890,8 +67934,12 @@ SLES-03389:
     linkCable: false
 SLES-01714:
   name: "Grand Theft Auto - Mission Pack 1 - London 1969 (Europe) (En,De,It)"
+  discSet:
+    name: "Grand Theft Auto (Europe) (En,Fr,De,It)"
+    serials:
+      - SLES-00032
+      - SLES-01714
   controllers:
-    - AnalogController
     - DigitalController
   metadata:
     publisher: "Take 2 Interactive, Inc"
@@ -67900,10 +67948,8 @@ SLES-01714:
     genre: "Action / Driving"
     languages:
       - English
-      - French
       - German
       - Italian
-      - Spanish
     minPlayers: 1
     maxPlayers: 1
     minBlocks: 1
@@ -67919,7 +67965,6 @@ SLUS-00846:
       - SLUS-00106
       - SLUS-00846
   controllers:
-    - AnalogController
     - DigitalController
   metadata:
     publisher: "Take 2 Interactive, Inc"
@@ -67938,7 +67983,6 @@ SLUS-00846:
 SLES-01404:
   name: "Grand Theft Auto 2 (Europe) (En,Fr,De,Es,It)"
   controllers:
-    - AnalogController
     - DigitalController
   metadata:
     publisher: "Rockstar Games"
@@ -67966,7 +68010,6 @@ SLUS-00789:
     rating: NoIssues
     versionTested: "0.1-1308-g622e50fa"
   controllers:
-    - AnalogController
     - DigitalController
   metadata:
     publisher: "Rockstar Games"
@@ -67985,7 +68028,6 @@ SLUS-00789:
 SLES-02458:
   name: "Grand Theft Auto 2 (aka GTA 2)"
   controllers:
-    - AnalogController
     - DigitalController
   metadata:
     publisher: "Rockstar Games"
@@ -80692,6 +80734,10 @@ SLUS-01313:
     linkCable: false
 PAPX-90049:
   name: "Jingle Cats - Love-Para Daisakusen no Maki (Japan) (Demo)"
+  controllers:
+    - AnalogController
+    - DigitalController
+    - PlayStationMouse
   metadata:
     genre: "** DEMO **"
 SCES-03908:
@@ -93047,6 +93093,8 @@ SLES-00451:
     versionTested: "0.1-1645-g42d49426"
   controllers:
     - DigitalController
+  traits:
+    - ForceFullBoot # Stops crashing after FMV.
   metadata:
     publisher: "Psygnosis"
     developer: "Psygnosis"
@@ -93069,6 +93117,8 @@ SLED-00516:
   name: "Lomax (Europe) (En,Fr,De,Es,It) (Demo)"
   controllers:
     - DigitalController
+  traits:
+    - ForceFullBoot # Stops crashing after FMV.
   metadata:
     genre: "** DEMO **"
 SLPS-00987:
@@ -93078,6 +93128,8 @@ SLPS-00987:
     versionTested: "0.1-1645-g42d49426"
   controllers:
     - DigitalController
+  traits:
+    - ForceFullBoot # Stops crashing after FMV.
   metadata:
     publisher: "Tomy"
     developer: "Psygnosis"
@@ -164714,7 +164766,7 @@ SCES-02285:
     languages:
       - English
     minPlayers: 1
-    maxPlayers: 1
+    maxPlayers: 2
     minBlocks: 3
     maxBlocks: 3
     vibration: true
@@ -164738,7 +164790,7 @@ SCES-12285:
     languages:
       - English
     minPlayers: 1
-    maxPlayers: 1
+    maxPlayers: 2
     minBlocks: 3
     maxBlocks: 3
     vibration: true
@@ -164762,7 +164814,7 @@ SCES-02286:
     languages:
       - French
     minPlayers: 1
-    maxPlayers: 1
+    maxPlayers: 2
     minBlocks: 3
     maxBlocks: 3
     vibration: true
@@ -164786,7 +164838,7 @@ SCES-12286:
     languages:
       - French
     minPlayers: 1
-    maxPlayers: 1
+    maxPlayers: 2
     minBlocks: 3
     maxBlocks: 3
     vibration: true
@@ -164810,7 +164862,7 @@ SCES-02287:
     languages:
       - German
     minPlayers: 1
-    maxPlayers: 1
+    maxPlayers: 2
     minBlocks: 3
     maxBlocks: 3
     vibration: true
@@ -164834,7 +164886,7 @@ SCES-12287:
     languages:
       - German
     minPlayers: 1
-    maxPlayers: 1
+    maxPlayers: 2
     minBlocks: 3
     maxBlocks: 3
     vibration: true
@@ -164858,7 +164910,7 @@ SCES-02288:
     languages:
       - Italian
     minPlayers: 1
-    maxPlayers: 1
+    maxPlayers: 2
     minBlocks: 3
     maxBlocks: 3
     vibration: true
@@ -164882,7 +164934,7 @@ SCES-12288:
     languages:
       - Italian
     minPlayers: 1
-    maxPlayers: 1
+    maxPlayers: 2
     minBlocks: 3
     maxBlocks: 3
     vibration: true
@@ -164914,7 +164966,7 @@ SCUS-94451:
     languages:
       - English
     minPlayers: 1
-    maxPlayers: 1
+    maxPlayers: 2
     minBlocks: 3
     maxBlocks: 3
     vibration: true
@@ -164942,7 +164994,7 @@ SCUS-94492:
     languages:
       - English
     minPlayers: 1
-    maxPlayers: 1
+    maxPlayers: 2
     minBlocks: 3
     maxBlocks: 3
     vibration: true
@@ -164977,7 +165029,7 @@ SCES-02289:
     languages:
       - Spanish
     minPlayers: 1
-    maxPlayers: 1
+    maxPlayers: 2
     minBlocks: 3
     maxBlocks: 3
     vibration: true
@@ -165004,7 +165056,7 @@ SCES-12289:
     languages:
       - Spanish
     minPlayers: 1
-    maxPlayers: 1
+    maxPlayers: 2
     minBlocks: 3
     maxBlocks: 3
     vibration: true
@@ -165025,7 +165077,7 @@ SCES-03697:
     languages:
       - English
     minPlayers: 1
-    maxPlayers: 1
+    maxPlayers: 2
     minBlocks: 3
     maxBlocks: 3
     vibration: true
@@ -165046,7 +165098,7 @@ SCES-03698:
     languages:
       - French
     minPlayers: 1
-    maxPlayers: 1
+    maxPlayers: 2
     minBlocks: 3
     maxBlocks: 3
     vibration: true
@@ -165067,7 +165119,7 @@ SCES-03699:
     languages:
       - German
     minPlayers: 1
-    maxPlayers: 1
+    maxPlayers: 2
     minBlocks: 3
     maxBlocks: 3
     vibration: true
@@ -165088,7 +165140,7 @@ SCES-03700:
     languages:
       - Italian
     minPlayers: 1
-    maxPlayers: 1
+    maxPlayers: 2
     minBlocks: 3
     maxBlocks: 3
     vibration: true
@@ -165112,7 +165164,7 @@ SCUS-94640:
     languages:
       - English
     minPlayers: 1
-    maxPlayers: 1
+    maxPlayers: 2
     minBlocks: 3
     maxBlocks: 3
     vibration: true
@@ -165142,7 +165194,7 @@ SCES-03701:
     languages:
       - Spanish
     minPlayers: 1
-    maxPlayers: 1
+    maxPlayers: 2
     minBlocks: 3
     maxBlocks: 3
     vibration: true

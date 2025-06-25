@@ -16,14 +16,13 @@ set(SRCS
   advancedsettingswidget.cpp
   advancedsettingswidget.h
   advancedsettingswidget.ui
-  audioexpansionsettingsdialog.ui
   audiosettingswidget.cpp
   audiosettingswidget.h
   audiosettingswidget.ui
   audiostretchsettingsdialog.ui
-  autoupdaterdialog.cpp
-  autoupdaterdialog.h
-  autoupdaterdialog.ui
+  autoupdaterwindow.cpp
+  autoupdaterwindow.h
+  autoupdaterwindow.ui
   biossettingswidget.cpp
   biossettingswidget.h
   biossettingswidget.ui

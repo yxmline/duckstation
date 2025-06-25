@@ -57,8 +57,10 @@ namespace MiniHost {
 /// Use two async worker threads, should be enough for most tasks.
 static constexpr u32 NUM_ASYNC_WORKER_THREADS = 2;
 
-static constexpr u32 DEFAULT_WINDOW_WIDTH = 1280;
-static constexpr u32 DEFAULT_WINDOW_HEIGHT = 720;
+//static constexpr u32 DEFAULT_WINDOW_WIDTH = 1280;
+//static constexpr u32 DEFAULT_WINDOW_HEIGHT = 720;
+static constexpr u32 DEFAULT_WINDOW_WIDTH = 1920;
+static constexpr u32 DEFAULT_WINDOW_HEIGHT = 1080;
 
 static constexpr u32 SETTINGS_VERSION = 3;
 static constexpr auto CPU_THREAD_POLL_INTERVAL =
@@ -97,7 +99,7 @@ static void SavePlatformWindowGeometry(s32 x, s32 y, s32 width, s32 height);
 struct SDLHostState
 {
   // UI thread state
-  ALIGN_TO_CACHE_LINE std::unique_ptr<INISettingsInterface> base_settings_interface;
+  ALIGN_TO_CACHE_LINE INISettingsInterface base_settings_interface;
   bool batch_mode = false;
   bool start_fullscreen_ui_fullscreen = false;
   bool was_paused_by_focus_loss = false;
@@ -265,47 +267,44 @@ bool MiniHost::InitializeConfig()
   std::string settings_path = Path::Combine(EmuFolders::DataRoot, "settings.ini");
   const bool settings_exists = FileSystem::FileExists(settings_path.c_str());
   INFO_LOG("Loading config from {}.", settings_path);
-  s_state.base_settings_interface = std::make_unique<INISettingsInterface>(std::move(settings_path));
-  Host::Internal::SetBaseSettingsLayer(s_state.base_settings_interface.get());
+  s_state.base_settings_interface.SetPath(std::move(settings_path));
+  Host::Internal::SetBaseSettingsLayer(&s_state.base_settings_interface);
 
   u32 settings_version;
-  if (!settings_exists || !s_state.base_settings_interface->Load() ||
-      !s_state.base_settings_interface->GetUIntValue("Main", "SettingsVersion", &settings_version) ||
+  if (!settings_exists || !s_state.base_settings_interface.Load() ||
+      !s_state.base_settings_interface.GetUIntValue("Main", "SettingsVersion", &settings_version) ||
       settings_version != SETTINGS_VERSION)
   {
-    if (s_state.base_settings_interface->ContainsValue("Main", "SettingsVersion"))
+    if (s_state.base_settings_interface.ContainsValue("Main", "SettingsVersion"))
     {
       // NOTE: No point translating this, because there's no config loaded, so no language loaded.
       Host::ReportErrorAsync("Error", fmt::format("Settings version {} does not match expected version {}, resetting.",
                                                   settings_version, SETTINGS_VERSION));
     }
 
-    s_state.base_settings_interface->SetUIntValue("Main", "SettingsVersion", SETTINGS_VERSION);
-    SetDefaultSettings(*s_state.base_settings_interface, true, true);
+    s_state.base_settings_interface.SetUIntValue("Main", "SettingsVersion", SETTINGS_VERSION);
+    SetDefaultSettings(s_state.base_settings_interface, true, true);
 
     // Make sure we can actually save the config, and the user doesn't have some permission issue.
     Error error;
-    if (!s_state.base_settings_interface->Save(&error))
+    if (!s_state.base_settings_interface.Save(&error))
     {
       Host::ReportFatalError(
         "Error",
         fmt::format(
           "Failed to save configuration to\n\n{}\n\nThe error was: {}\n\nPlease ensure this directory is writable. You "
           "can also try portable mode by creating portable.txt in the same directory you installed DuckStation into.",
-          s_state.base_settings_interface->GetPath(), error.GetDescription()));
+          s_state.base_settings_interface.GetPath(), error.GetDescription()));
       return false;
     }
   }
 
-  EmuFolders::LoadConfig(*s_state.base_settings_interface.get());
+  EmuFolders::LoadConfig(s_state.base_settings_interface);
   EmuFolders::EnsureFoldersExist();
 
   // We need to create the console window early, otherwise it appears in front of the main window.
-  if (!Log::IsConsoleOutputEnabled() && s_state.base_settings_interface->GetBoolValue("Logging", "LogToConsole", false))
-    Log::SetConsoleOutputParams(true, s_state.base_settings_interface->GetBoolValue("Logging", "LogTimestamps", true));
-
-  // imgui setup, make sure it doesn't bug out
-  ImGuiManager::SetFontPathAndRange(std::string(), {0x0020, 0x00FF, 0x2022, 0x2022, 0, 0});
+  if (!Log::IsConsoleOutputEnabled() && s_state.base_settings_interface.GetBoolValue("Logging", "LogToConsole", false))
+    Log::SetConsoleOutputParams(true, s_state.base_settings_interface.GetBoolValue("Logging", "LogTimestamps", true));
 
   return true;
 }
@@ -444,7 +443,7 @@ void Host::CommitBaseSettingChanges()
 {
   auto lock = Host::GetSettingsLock();
   Error error;
-  if (!MiniHost::s_state.base_settings_interface->Save(&error))
+  if (!MiniHost::s_state.base_settings_interface.Save(&error))
     ERROR_LOG("Failed to save settings: {}", error.GetDescription());
 }
 
@@ -730,12 +729,12 @@ void Host::DestroyAuxiliaryRenderWindow(AuxiliaryRenderWindowHandle handle, s32*
 
 bool MiniHost::GetSavedPlatformWindowGeometry(s32* x, s32* y, s32* width, s32* height)
 {
-  auto lock = Host::GetSettingsLock();
+  const auto lock = Host::GetSettingsLock();
 
-  bool result = s_state.base_settings_interface->GetIntValue("SimpleHost", "WindowX", x);
-  result = result && s_state.base_settings_interface->GetIntValue("SimpleHost", "WindowY", y);
-  result = result && s_state.base_settings_interface->GetIntValue("SimpleHost", "WindowWidth", width);
-  result = result && s_state.base_settings_interface->GetIntValue("SimpleHost", "WindowHeight", height);
+  bool result = s_state.base_settings_interface.GetIntValue("SimpleHost", "WindowX", x);
+  result = result && s_state.base_settings_interface.GetIntValue("SimpleHost", "WindowY", y);
+  result = result && s_state.base_settings_interface.GetIntValue("SimpleHost", "WindowWidth", width);
+  result = result && s_state.base_settings_interface.GetIntValue("SimpleHost", "WindowHeight", height);
   return result;
 }
 
@@ -744,12 +743,11 @@ void MiniHost::SavePlatformWindowGeometry(s32 x, s32 y, s32 width, s32 height)
   if (Host::IsFullscreen())
     return;
 
-  auto lock = Host::GetSettingsLock();
-  s_state.base_settings_interface->SetIntValue("SimpleHost", "WindowX", x);
-  s_state.base_settings_interface->SetIntValue("SimpleHost", "WindowY", y);
-  s_state.base_settings_interface->SetIntValue("SimpleHost", "WindowWidth", width);
-  s_state.base_settings_interface->SetIntValue("SimpleHost", "WindowHeight", height);
-  s_state.base_settings_interface->Save();
+  const auto lock = Host::GetSettingsLock();
+  s_state.base_settings_interface.SetIntValue("SimpleHost", "WindowX", x);
+  s_state.base_settings_interface.SetIntValue("SimpleHost", "WindowY", y);
+  s_state.base_settings_interface.SetIntValue("SimpleHost", "WindowWidth", width);
+  s_state.base_settings_interface.SetIntValue("SimpleHost", "WindowHeight", height);
 }
 
 void MiniHost::UIThreadMainLoop()
@@ -1113,7 +1111,17 @@ void Host::OnAchievementsRefreshed()
   // noop
 }
 
+void Host::OnAchievementsActiveChanged(bool active)
+{
+  // noop
+}
+
 void Host::OnAchievementsHardcoreModeChanged(bool enabled)
+{
+  // noop
+}
+
+void Host::OnAchievementsAllProgressRefreshed()
 {
   // noop
 }
@@ -1176,14 +1184,19 @@ void MiniHost::WarnAboutInterface()
   Host::AddIconOSDWarning("MiniWarning", ICON_EMOJI_WARNING, message, Host::OSD_INFO_DURATION);
 }
 
-void Host::OnGameChanged(const std::string& disc_path, const std::string& game_serial, const std::string& game_name,
-                         GameHash game_hash)
+void Host::OnSystemGameChanged(const std::string& disc_path, const std::string& game_serial,
+                               const std::string& game_name, GameHash game_hash)
 {
   using namespace MiniHost;
 
   VERBOSE_LOG("Host::OnGameChanged(\"{}\", \"{}\", \"{}\")", disc_path, game_serial, game_name);
   if (s_state.sdl_window)
     SDL_SetWindowTitle(s_state.sdl_window, GetWindowTitle(game_name).c_str());
+}
+
+void Host::OnSystemUndoStateAvailabilityChanged(bool available, u64 timestamp)
+{
+  //
 }
 
 void Host::RunOnCPUThread(std::function<void()> function, bool block /* = false */)
@@ -1265,7 +1278,7 @@ void Host::RequestResetSettings(bool system, bool controller)
 
   auto lock = Host::GetSettingsLock();
   {
-    SettingsInterface& si = *s_state.base_settings_interface.get();
+    SettingsInterface& si = s_state.base_settings_interface;
 
     if (system)
     {
@@ -1444,7 +1457,7 @@ void Host::ConfirmMessageAsync(std::string_view title, std::string_view message,
 
       ImGuiFullscreen::OpenConfirmMessageDialog(std::move(title), std::move(message), std::move(final_callback),
                                                 fmt::format(ICON_FA_CHECK " {}", yes_text),
-                                                fmt::format(ICON_FA_TIMES " {}", no_text));
+                                                fmt::format(ICON_FA_XMARK " {}", no_text));
       FullscreenUI::UpdateRunIdleState();
     });
   });
@@ -1836,7 +1849,8 @@ int main(int argc, char* argv[])
   // Ensure log is flushed.
   Log::SetFileOutputParams(false, nullptr);
 
-  s_state.base_settings_interface.reset();
+  if (s_state.base_settings_interface.IsDirty())
+    s_state.base_settings_interface.Save();
 
   SDL_QuitSubSystem(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
 

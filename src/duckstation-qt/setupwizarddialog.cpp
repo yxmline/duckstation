@@ -640,6 +640,12 @@ void SetupWizardDialog::setupAchievementsPage(bool initial)
 {
   if (initial)
   {
+    m_ui.achievementsIconLabel->setPixmap(QPixmap(QString::fromStdString(QtHost::GetResourcePath("images/ra-icon.webp", true))));
+    QFont title_font(m_ui.achievementsTitleLabel->font());
+    title_font.setBold(true);
+    title_font.setPixelSize(20);
+    m_ui.achievementsTitleLabel->setFont(title_font);
+
     SettingWidgetBinder::BindWidgetToBoolSetting(nullptr, m_ui.enable, "Cheevos", "Enabled", false);
     SettingWidgetBinder::BindWidgetToBoolSetting(nullptr, m_ui.hardcoreMode, "Cheevos", "ChallengeMode", false);
     connect(m_ui.enable, &QCheckBox::checkStateChanged, this, &SetupWizardDialog::updateAchievementsEnableState);
@@ -692,7 +698,7 @@ void SetupWizardDialog::onAchievementsLoginLogoutClicked()
 
   AchievementLoginDialog login(this, Achievements::LoginRequestReason::UserInitiated);
   int res = login.exec();
-  if (res != 0)
+  if (res == QDialog::Rejected)
     return;
 
   updateAchievementsEnableState();

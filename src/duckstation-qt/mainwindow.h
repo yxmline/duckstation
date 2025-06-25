@@ -29,7 +29,7 @@ class QShortcut;
 class MainWindow;
 class GameListWidget;
 class EmuThread;
-class AutoUpdaterDialog;
+class AutoUpdaterWindow;
 class MemoryCardEditorWindow;
 class DebuggerWindow;
 class MemoryScannerWindow;
@@ -100,6 +100,7 @@ public:
   ALWAYS_INLINE QLabel* getStatusResolutionWidget() const { return m_status_resolution_widget; }
   ALWAYS_INLINE QLabel* getStatusFPSWidget() const { return m_status_fps_widget; }
   ALWAYS_INLINE QLabel* getStatusVPSWidget() const { return m_status_vps_widget; }
+  ALWAYS_INLINE AutoUpdaterWindow* getAutoUpdaterDialog() const { return m_auto_updater_dialog; }
 
   /// Opens the editor for a specific input profile.
   void openInputProfileEditor(const std::string_view name);
@@ -146,12 +147,15 @@ private Q_SLOTS:
   void onSystemDestroyed();
   void onSystemPaused();
   void onSystemResumed();
-  void onRunningGameChanged(const QString& filename, const QString& game_serial, const QString& game_title);
+  void onSystemGameChanged(const QString& filename, const QString& game_serial, const QString& game_title);
+  void onSystemUndoStateAvailabilityChanged(bool available, quint64 timestamp);
   void onMediaCaptureStarted();
   void onMediaCaptureStopped();
   void onAchievementsLoginRequested(Achievements::LoginRequestReason reason);
   void onAchievementsLoginSuccess(const QString& username, quint32 points, quint32 sc_points, quint32 unread_messages);
+  void onAchievementsActiveChanged(bool active);
   void onAchievementsHardcoreModeChanged(bool enabled);
+  void onAchievementsAllProgressRefreshed();
   bool onCreateAuxiliaryRenderWindow(RenderAPI render_api, qint32 x, qint32 y, quint32 width, quint32 height,
                                      const QString& title, const QString& icon_name,
                                      Host::AuxiliaryRenderWindowUserData userdata,
@@ -178,7 +182,10 @@ private Q_SLOTS:
   void onRemoveDiscActionTriggered();
   void onScanForNewGamesTriggered();
   void onViewToolbarActionToggled(bool checked);
-  void onViewLockToolbarActionToggled(bool checked);
+  void onViewToolbarLockActionToggled(bool checked);
+  void onViewToolbarSmallIconsActionToggled(bool checked);
+  void onViewToolbarLabelsActionToggled(bool checked);
+  void onViewToolbarLabelsBesideIconsActionToggled(bool checked);
   void onViewStatusBarActionToggled(bool checked);
   void onViewGameListActionTriggered();
   void onViewGameGridActionTriggered();
@@ -213,7 +220,6 @@ private Q_SLOTS:
   void onDebugLogChannelsMenuAboutToShow();
   void openCPUDebugger();
 
-
 protected:
   void showEvent(QShowEvent* event) override;
   void closeEvent(QCloseEvent* event) override;
@@ -235,6 +241,7 @@ private:
   void connectSignals();
 
   void updateToolbarActions();
+  void updateToolbarIconStyle();
   void updateEmulationActions(bool starting, bool running, bool cheevos_challenge_mode);
   void updateShortcutActions(bool starting);
   void updateStatusBarWidgetVisibility();
@@ -294,6 +301,8 @@ private:
   void startFileOrChangeDisc(const QString& path);
   void promptForDiscChange(const QString& path);
 
+  static QString formatTimestampForSaveStateMenu(u64 timestamp);
+
   Ui::MainWindow m_ui;
 
   GameListWidget* m_game_list_widget = nullptr;
@@ -322,7 +331,7 @@ private:
   ControllerSettingsWindow* m_controller_settings_window = nullptr;
   ControllerSettingsWindow* m_input_profile_editor_window = nullptr;
 
-  AutoUpdaterDialog* m_auto_updater_dialog = nullptr;
+  AutoUpdaterWindow* m_auto_updater_dialog = nullptr;
   MemoryCardEditorWindow* m_memory_card_editor_window = nullptr;
   DebuggerWindow* m_debugger_window = nullptr;
   MemoryScannerWindow* m_memory_scanner_window = nullptr;
