@@ -139,10 +139,40 @@ enum class GPUShaderLanguage : u8
   Count
 };
 
+enum class GPUDriverType : u16
+{
+  MobileFlag = 0x100,
+  SoftwareFlag = 0x200,
+
+  Unknown = 0,
+  AMDProprietary = 1,
+  AMDMesa = 2,
+  IntelProprietary = 3,
+  IntelMesa = 4,
+  NVIDIAProprietary = 5,
+  NVIDIAMesa = 6,
+  AppleProprietary = 7,
+  AppleMesa = 8,
+  DozenMesa = 9,
+
+  ImaginationProprietary = MobileFlag | 1,
+  ImaginationMesa = MobileFlag | 2,
+  ARMProprietary = MobileFlag | 3,
+  ARMMesa = MobileFlag | 4,
+  QualcommProprietary = MobileFlag | 5,
+  QualcommMesa = MobileFlag | 6,
+  BroadcomProprietary = MobileFlag | 7,
+  BroadcomMesa = MobileFlag | 8,
+
+  LLVMPipe = SoftwareFlag | 1,
+  SwiftShader = SoftwareFlag | 2,
+};
+IMPLEMENT_ENUM_CLASS_BITWISE_OPERATORS(GPUDriverType);
+
 class GPUShader
 {
 public:
-  GPUShader(GPUShaderStage stage);
+  explicit GPUShader(GPUShaderStage stage);
   virtual ~GPUShader();
 
   static const char* GetStageName(GPUShaderStage stage);
@@ -248,8 +278,8 @@ public:
 
     // clang-format off
     ALWAYS_INLINE VertexAttribute() = default;
-    ALWAYS_INLINE constexpr VertexAttribute(const VertexAttribute& rhs) : key(rhs.key) {}
-    ALWAYS_INLINE VertexAttribute& operator=(const VertexAttribute& rhs) { key = rhs.key; return *this; }
+    ALWAYS_INLINE constexpr VertexAttribute(const VertexAttribute& rhs) = default;
+    ALWAYS_INLINE VertexAttribute& operator=(const VertexAttribute& rhs) = default;
     ALWAYS_INLINE bool operator==(const VertexAttribute& rhs) const { return key == rhs.key; }
     ALWAYS_INLINE bool operator!=(const VertexAttribute& rhs) const { return key != rhs.key; }
     ALWAYS_INLINE bool operator<(const VertexAttribute& rhs) const { return key < rhs.key; }
@@ -339,13 +369,11 @@ public:
   // TODO: purge this?
   union RasterizationState
   {
-    BitField<u8, CullMode, 0, 2> cull_mode;
     u8 key;
 
+    BitField<u8, CullMode, 0, 2> cull_mode;
+
     // clang-format off
-    ALWAYS_INLINE RasterizationState() = default;
-    ALWAYS_INLINE RasterizationState(const RasterizationState& rhs) : key(rhs.key) {}
-    ALWAYS_INLINE RasterizationState& operator=(const RasterizationState& rhs) { key = rhs.key; return *this; }
     ALWAYS_INLINE bool operator==(const RasterizationState& rhs) const { return key == rhs.key; }
     ALWAYS_INLINE bool operator!=(const RasterizationState& rhs) const { return key != rhs.key; }
     ALWAYS_INLINE bool operator<(const RasterizationState& rhs) const { return key < rhs.key; }
@@ -356,14 +384,12 @@ public:
 
   union DepthState
   {
-    BitField<u8, DepthFunc, 0, 3> depth_test;
-    BitField<u8, bool, 4, 1> depth_write;
     u8 key;
 
+    BitField<u8, DepthFunc, 0, 3> depth_test;
+    BitField<u8, bool, 4, 1> depth_write;
+
     // clang-format off
-    ALWAYS_INLINE DepthState() = default;
-    ALWAYS_INLINE DepthState(const DepthState& rhs) : key(rhs.key) {}
-    ALWAYS_INLINE DepthState& operator=(const DepthState& rhs) { key = rhs.key; return *this; }
     ALWAYS_INLINE bool operator==(const DepthState& rhs) const { return key == rhs.key; }
     ALWAYS_INLINE bool operator!=(const DepthState& rhs) const { return key != rhs.key; }
     ALWAYS_INLINE bool operator<(const DepthState& rhs) const { return key < rhs.key; }
@@ -375,6 +401,8 @@ public:
 
   union BlendState
   {
+    u64 key;
+
     BitField<u64, bool, 0, 1> enable;
     BitField<u64, BlendFunc, 1, 4> src_blend;
     BitField<u64, BlendFunc, 5, 4> src_alpha_blend;
@@ -392,12 +420,7 @@ public:
     BitField<u64, u16, 1, 16> blend_factors;
     BitField<u64, u8, 17, 6> blend_ops;
 
-    u64 key;
-
     // clang-format off
-    ALWAYS_INLINE BlendState() = default;
-    ALWAYS_INLINE BlendState(const BlendState& rhs) : key(rhs.key) {}
-    ALWAYS_INLINE BlendState& operator=(const BlendState& rhs) { key = rhs.key; return *this; }
     ALWAYS_INLINE bool operator==(const BlendState& rhs) const { return key == rhs.key; }
     ALWAYS_INLINE bool operator!=(const BlendState& rhs) const { return key != rhs.key; }
     ALWAYS_INLINE bool operator<(const BlendState& rhs) const { return key < rhs.key; }
@@ -643,6 +666,7 @@ public:
     std::vector<ExclusiveFullscreenMode> fullscreen_modes;
     u32 max_texture_size;
     u32 max_multisamples;
+    GPUDriverType driver_type;
     bool supports_sample_shading;
   };
   using AdapterInfoList = std::vector<AdapterInfo>;
@@ -720,6 +744,9 @@ public:
     return std::make_tuple((count_x + (local_size_x - 1)) / local_size_x, (count_y + (local_size_y - 1)) / local_size_y,
                            (count_z + (local_size_z - 1)) / local_size_z);
   }
+
+  /// Determines the driver type for a given adapter.
+  static GPUDriverType GuessDriverType(u32 pci_vendor_id, std::string_view vendor_name, std::string_view adapter_name);
 
   ALWAYS_INLINE const Features& GetFeatures() const { return m_features; }
   ALWAYS_INLINE RenderAPI GetRenderAPI() const { return m_render_api; }
@@ -926,11 +953,14 @@ protected:
                                                                 DynamicHeapArray<u8>* out_binary, Error* error);
   static std::optional<DynamicHeapArray<u8>> OptimizeVulkanSpv(const std::span<const u8> spirv, Error* error);
 
+  void SetDriverType(GPUDriverType type);
+
   Features m_features = {};
   RenderAPI m_render_api = RenderAPI::None;
   u32 m_render_api_version = 0;
   u32 m_max_texture_size = 0;
-  u32 m_max_multisamples = 0;
+  GPUDriverType m_driver_type = GPUDriverType::Unknown;
+  u16 m_max_multisamples = 0;
 
   std::unique_ptr<GPUSwapChain> m_main_swap_chain;
   std::unique_ptr<GPUTexture> m_empty_texture;

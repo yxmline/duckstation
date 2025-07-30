@@ -7035,7 +7035,7 @@ SLES-04071:
     publisher: "Phoenix Games"
     developer: "The Code Monkeys Ltd"
     releaseDate: "2003-01-01"
-    genre: "Jigsaw puzzle"
+    genre: "Jigsaw Puzzle"
     languages:
       - English
       - French
@@ -15687,6 +15687,8 @@ SLPS-01222:
     - DigitalController
   traits:
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 70000
   metadata:
     publisher: "Capcom"
     developer: "Capcom Production Studio 4"
@@ -15712,6 +15714,8 @@ SLPS-01223:
     - DigitalController
   traits:
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 70000
   metadata:
     publisher: "Capcom"
     developer: "Capcom Production Studio 4"
@@ -15728,8 +15732,12 @@ SLPS-01223:
     linkCable: false
 SLPS-00999:
   name: "Biohazard 2 (Japan) (Trial Edition)"
+  controllers:
+    - DigitalController
   traits:
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 70000
 SLPS-01510:
   name: "Biohazard 2 - Dual Shock Ver. (Japan) (Disc 1) (Leon-hen)"
   discSet:
@@ -15742,10 +15750,12 @@ SLPS-01510:
     - DigitalController
   traits:
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 70000
   metadata:
     publisher: "Capcom"
     developer: "Capcom Production Studio 4"
-    releaseDate: "1998-06-08"
+    releaseDate: "1998-08-06"
     genre: "Survival Horror"
     languages:
       - Japanese
@@ -15768,10 +15778,12 @@ SLPS-01511:
     - DigitalController
   traits:
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 70000
   metadata:
     publisher: "Capcom"
     developer: "Capcom Production Studio 4"
-    releaseDate: "1998-06-08"
+    releaseDate: "1998-08-06"
     genre: "Survival Horror"
     languages:
       - Japanese
@@ -19428,6 +19440,8 @@ SLES-03552:
     - ForceRecompilerICache
     - DisableWidescreen # Breaks sprite sizes.
     - DisableFullTrueColor # Breaks menu background colour.
+  settings:
+    cdromMaxReadSpeedupCycles: 90000
   metadata:
     publisher: "Capcom"
     developer: "Capcom"
@@ -19454,6 +19468,8 @@ SLUS-01324:
     - ForceRecompilerICache
     - DisableWidescreen # Breaks sprite sizes.
     - DisableFullTrueColor # Breaks menu background colour.
+  settings:
+    cdromMaxReadSpeedupCycles: 90000
   metadata:
     publisher: "Capcom"
     developer: "Capcom"
@@ -19477,6 +19493,8 @@ SLPS-02728:
     - ForceRecompilerICache
     - DisableWidescreen # Breaks sprite sizes.
     - DisableFullTrueColor # Breaks menu background colour.
+  settings:
+    cdromMaxReadSpeedupCycles: 90000
   codes:
     - SLPS-02728
     - SLPM-87159
@@ -23042,6 +23060,8 @@ SLES-00524:
   name: "Castlevania - Symphony of the Night (Europe)"
   controllers:
     - DigitalController
+  settings:
+    cdromMaxReadSpeedupCycles: 35000
   metadata:
     publisher: "Konami"
     developer: "Konami"
@@ -23063,6 +23083,8 @@ SLUS-00067:
     versionTested: "0.1-1323-ga6acd33"
   controllers:
     - DigitalController
+  settings:
+    cdromMaxReadSpeedupCycles: 35000
   metadata:
     publisher: "Konami"
     developer: "Konami"
@@ -34741,7 +34763,7 @@ SLPS-00789:
     publisher: "KOEI"
     developer: "KOEI"
     releaseDate: "1997-07-30"
-    genre: "Adventure / Interactive comic"
+    genre: "Adventure / Interactive Comic"
     languages:
       - English
       - Japanese
@@ -38668,7 +38690,12 @@ SLPS-91486:
 SLES-02207:
   name: "Dino Crisis (Europe)"
   controllers:
+    - AnalogController
     - DigitalController
+  traits:
+    - DisableAutoAnalogMode # Analog sticks do nothing.
+  settings:
+    cdromMaxReadSpeedupCycles: 120000
   libcrypt: true
   metadata:
     publisher: "Virgin Interactive"
@@ -38687,7 +38714,12 @@ SLES-02207:
 SLES-02208:
   name: "Dino Crisis (France)"
   controllers:
+    - AnalogController
     - DigitalController
+  traits:
+    - DisableAutoAnalogMode # Analog sticks do nothing.
+  settings:
+    cdromMaxReadSpeedupCycles: 120000
   libcrypt: true
   metadata:
     publisher: "Virgin Interactive"
@@ -38706,7 +38738,12 @@ SLES-02208:
 SLES-02209:
   name: "Dino Crisis (Germany)"
   controllers:
+    - AnalogController
     - DigitalController
+  traits:
+    - DisableAutoAnalogMode # Analog sticks do nothing.
+  settings:
+    cdromMaxReadSpeedupCycles: 120000
   libcrypt: true
   metadata:
     publisher: "Virgin Interactive"
@@ -38725,7 +38762,12 @@ SLES-02209:
 SLES-02210:
   name: "Dino Crisis (Italy)"
   controllers:
+    - AnalogController
     - DigitalController
+  traits:
+    - DisableAutoAnalogMode # Analog sticks do nothing.
+  settings:
+    cdromMaxReadSpeedupCycles: 120000
   libcrypt: true
   metadata:
     publisher: "Virgin Interactive"
@@ -38744,7 +38786,12 @@ SLES-02210:
 SLPS-02180:
   name: "Dino Crisis (Japan)"
   controllers:
+    - AnalogController
     - DigitalController
+  traits:
+    - DisableAutoAnalogMode # Analog sticks do nothing.
+  settings:
+    cdromMaxReadSpeedupCycles: 120000
   metadata:
     publisher: "Capcom"
     developer: "Capcom"
@@ -38765,7 +38812,12 @@ SLES-02211:
     rating: NoIssues
     versionTested: "0.1-4423-g32ab7c13"
   controllers:
+    - AnalogController
     - DigitalController
+  traits:
+    - DisableAutoAnalogMode # Analog sticks do nothing.
+  settings:
+    cdromMaxReadSpeedupCycles: 120000
   libcrypt: true
   metadata:
     publisher: "Virgin Interactive"
@@ -38787,7 +38839,12 @@ SLUS-00922:
     rating: NoIssues
     versionTested: "0.1-908-g9f22684"
   controllers:
+    - AnalogController
     - DigitalController
+  traits:
+    - DisableAutoAnalogMode # Analog sticks do nothing.
+  settings:
+    cdromMaxReadSpeedupCycles: 120000
   metadata:
     publisher: "Capcom"
     developer: "Capcom"
@@ -38806,6 +38863,8 @@ SLUS-90066:
   name: "Dino Crisis (USA) (Demo)"
   metadata:
     genre: "** DEMO **"
+  settings:
+    cdromMaxReadSpeedupCycles: 120000
 SLES-03221:
   name: "Dino Crisis 2 (Europe)"
   controllers:
@@ -38814,6 +38873,8 @@ SLES-03221:
   traits:
     - DisableWidescreen
     - ForceRecompilerICache
+  settings:
+    cdromMaxReadSpeedupCycles: 80000
   metadata:
     publisher: "Virgin Interactive"
     developer: "Capcom"
@@ -38836,6 +38897,8 @@ SLES-03222:
   traits:
     - DisableWidescreen
     - ForceRecompilerICache
+  settings:
+    cdromMaxReadSpeedupCycles: 80000
   metadata:
     publisher: "Virgin Interactive"
     developer: "Capcom"
@@ -38858,6 +38921,8 @@ SLES-03223:
   traits:
     - DisableWidescreen
     - ForceRecompilerICache
+  settings:
+    cdromMaxReadSpeedupCycles: 80000
   metadata:
     publisher: "Virgin Interactive"
     developer: "Capcom"
@@ -38880,6 +38945,8 @@ SLES-03224:
   traits:
     - DisableWidescreen
     - ForceRecompilerICache
+  settings:
+    cdromMaxReadSpeedupCycles: 80000
   metadata:
     publisher: "Virgin Interactive"
     developer: "Capcom"
@@ -38901,6 +38968,8 @@ SLPM-86627:
     - DigitalController
   traits:
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 80000
   codes:
     - SLPM-86627
     - SLPM-87234
@@ -38924,6 +38993,8 @@ SLPM-80573:
     genre: "** DEMO **"
   traits:
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 80000
 SLES-03225:
   name: "Dino Crisis 2 (Spain)"
   compatibility:
@@ -38935,6 +39006,8 @@ SLES-03225:
   traits:
     - DisableWidescreen
     - ForceRecompilerICache
+  settings:
+    cdromMaxReadSpeedupCycles: 80000
   metadata:
     publisher: "Virgin Interactive"
     developer: "Capcom"
@@ -38959,6 +39032,8 @@ SLUS-01279:
     - DigitalController
   traits:
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 80000
   metadata:
     publisher: "Capcom"
     developer: "Capcom"
@@ -38979,6 +39054,8 @@ SLUS-90087:
     genre: "** DEMO **"
   traits:
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 80000
 SLES-03989:
   name: "Dinomaster Party (Europe) (En,Fr,De,Es,It,Nl)"
   controllers:
@@ -44367,7 +44444,7 @@ SLPS-00077:
     publisher: "Argent"
     developer: "Agenda"
     releaseDate: "1995-07-07"
-    genre: "Jigsaw puzzle"
+    genre: "Jigsaw Puzzle"
     languages:
       - Japanese
     minPlayers: 1
@@ -58721,6 +58798,9 @@ SCED-02062:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
 SLED-02258:
   name: "Final Fantasy VIII (Europe) (Demo 2)"
   metadata:
@@ -58728,6 +58808,9 @@ SLED-02258:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
 SCES-02080:
   name: "Final Fantasy VIII (Europe, Australia) (Disc 1)"
   discSet:
@@ -58746,6 +58829,9 @@ SCES-02080:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   libcrypt: true
   codes:
     - SCES-02080
@@ -58782,6 +58868,9 @@ SCES-12080:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   libcrypt: true
   codes:
     - SCES-12080
@@ -58818,6 +58907,9 @@ SCES-22080:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   libcrypt: true
   codes:
     - SCES-22080
@@ -58854,6 +58946,9 @@ SCES-32080:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   libcrypt: true
   codes:
     - SCES-32080
@@ -58877,6 +58972,9 @@ SLED-02259:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
 SLES-02081:
   name: "Final Fantasy VIII (France) (Disc 1)"
   discSet:
@@ -58892,6 +58990,9 @@ SLES-02081:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -58922,6 +59023,9 @@ SLES-12081:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -58952,6 +59056,9 @@ SLES-22081:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -58982,6 +59089,9 @@ SLES-32081:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -59012,6 +59122,9 @@ SLES-02082:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -59042,6 +59155,9 @@ SLES-12082:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -59072,6 +59188,9 @@ SLES-22082:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -59102,6 +59221,9 @@ SLES-32082:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -59132,6 +59254,9 @@ SLES-02083:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -59162,6 +59287,9 @@ SLES-12083:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -59192,6 +59320,9 @@ SLES-22083:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -59222,6 +59353,9 @@ SLES-32083:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -59254,6 +59388,9 @@ SLPM-87384:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   codes:
     - SLPM-87384
     - SLPS-01880
@@ -59286,6 +59423,9 @@ SLPM-87385:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   codes:
     - SLPM-87385
     - SLPS-01881
@@ -59318,6 +59458,9 @@ SLPM-87386:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   codes:
     - SLPM-87386
     - SLPS-01882
@@ -59350,6 +59493,9 @@ SLPM-87387:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   codes:
     - SLPM-87387
     - SLPS-01883
@@ -59374,6 +59520,9 @@ SLPM-80269:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
 SLED-02262:
   name: "Final Fantasy VIII (Spain) (Demo)"
   metadata:
@@ -59381,6 +59530,9 @@ SLED-02262:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
 SLES-02084:
   name: "Final Fantasy VIII (Spain) (Disc 1)"
   discSet:
@@ -59399,6 +59551,9 @@ SLES-02084:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -59432,6 +59587,9 @@ SLES-12084:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -59465,6 +59623,9 @@ SLES-22084:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -59498,6 +59659,9 @@ SLES-32084:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -59531,6 +59695,9 @@ SLUS-00892:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   metadata:
     publisher: "Squaresoft"
     developer: "Squaresoft"
@@ -59563,6 +59730,9 @@ SLUS-00908:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   metadata:
     publisher: "Squaresoft"
     developer: "Squaresoft"
@@ -59595,6 +59765,9 @@ SLUS-00909:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   metadata:
     publisher: "Squaresoft"
     developer: "Squaresoft"
@@ -59627,6 +59800,9 @@ SLUS-00910:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   metadata:
     publisher: "Squaresoft"
     developer: "Squaresoft"
@@ -59649,6 +59825,9 @@ SCPS-45375:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   codes:
     - SCPS-45375
     - SCPS-45376
@@ -87798,7 +87977,7 @@ SCPS-45441:
     publisher: "SNK"
     developer: "Sacnoth"
     releaseDate: "1999-12-16"
-    genre: "RPG / Survival horror"
+    genre: "RPG / Survival Horror"
     languages:
       - Japanese
     minPlayers: 1
@@ -87825,8 +88004,8 @@ SLES-02897:
   metadata:
     publisher: "Infogrames"
     developer: "Sacnoth"
-    releaseDate: "2000-09-29"
-    genre: "RPG / Survival horror"
+    releaseDate: "2000-09-27"
+    genre: "RPG / Survival Horror"
     languages:
       - English
     minPlayers: 1
@@ -87847,6 +88026,20 @@ SLES-12897:
       - SLES-32897
   traits:
     - DisableWidescreen
+  metadata:
+    publisher: "Infogrames"
+    developer: "Sacnoth"
+    releaseDate: "2000-09-27"
+    genre: "RPG / Survival Horror"
+    languages:
+      - English
+    minPlayers: 1
+    maxPlayers: 1
+    minBlocks: 1
+    maxBlocks: 1
+    vibration: true
+    multitap: false
+    linkCable: false
 SLES-22897:
   name: "Koudelka (Europe) (Disc 3)"
   discSet:
@@ -87858,6 +88051,20 @@ SLES-22897:
       - SLES-32897
   traits:
     - DisableWidescreen
+  metadata:
+    publisher: "Infogrames"
+    developer: "Sacnoth"
+    releaseDate: "2000-09-27"
+    genre: "RPG / Survival Horror"
+    languages:
+      - English
+    minPlayers: 1
+    maxPlayers: 1
+    minBlocks: 1
+    maxBlocks: 1
+    vibration: true
+    multitap: false
+    linkCable: false
 SLES-32897:
   name: "Koudelka (Europe) (Disc 4)"
   discSet:
@@ -87869,6 +88076,20 @@ SLES-32897:
       - SLES-32897
   traits:
     - DisableWidescreen
+  metadata:
+    publisher: "Infogrames"
+    developer: "Sacnoth"
+    releaseDate: "2000-09-27"
+    genre: "RPG / Survival Horror"
+    languages:
+      - English
+    minPlayers: 1
+    maxPlayers: 1
+    minBlocks: 1
+    maxBlocks: 1
+    vibration: true
+    multitap: false
+    linkCable: false
 SLES-02898:
   name: "Koudelka (France) (Disc 1)"
   discSet:
@@ -87886,8 +88107,8 @@ SLES-02898:
   metadata:
     publisher: "Infogrames"
     developer: "Sacnoth"
-    releaseDate: "2000-09-29"
-    genre: "RPG / Survival horror"
+    releaseDate: "2000-09-27"
+    genre: "RPG / Survival Horror"
     languages:
       - French
     minPlayers: 1
@@ -87908,6 +88129,20 @@ SLES-12898:
       - SLES-32898
   traits:
     - DisableWidescreen
+  metadata:
+    publisher: "Infogrames"
+    developer: "Sacnoth"
+    releaseDate: "2000-09-27"
+    genre: "RPG / Survival Horror"
+    languages:
+      - French
+    minPlayers: 1
+    maxPlayers: 1
+    minBlocks: 1
+    maxBlocks: 1
+    vibration: true
+    multitap: false
+    linkCable: false
 SLES-22898:
   name: "Koudelka (France) (Disc 3)"
   discSet:
@@ -87919,6 +88154,20 @@ SLES-22898:
       - SLES-32898
   traits:
     - DisableWidescreen
+  metadata:
+    publisher: "Infogrames"
+    developer: "Sacnoth"
+    releaseDate: "2000-09-27"
+    genre: "RPG / Survival Horror"
+    languages:
+      - French
+    minPlayers: 1
+    maxPlayers: 1
+    minBlocks: 1
+    maxBlocks: 1
+    vibration: true
+    multitap: false
+    linkCable: false
 SLES-32898:
   name: "Koudelka (France) (Disc 4)"
   discSet:
@@ -87930,6 +88179,20 @@ SLES-32898:
       - SLES-32898
   traits:
     - DisableWidescreen
+  metadata:
+    publisher: "Infogrames"
+    developer: "Sacnoth"
+    releaseDate: "2000-09-27"
+    genre: "RPG / Survival Horror"
+    languages:
+      - French
+    minPlayers: 1
+    maxPlayers: 1
+    minBlocks: 1
+    maxBlocks: 1
+    vibration: true
+    multitap: false
+    linkCable: false
 SLES-02899:
   name: "Koudelka (Germany) (Disc 1)"
   discSet:
@@ -87947,8 +88210,8 @@ SLES-02899:
   metadata:
     publisher: "Infogrames"
     developer: "Sacnoth"
-    releaseDate: "2000-09-29"
-    genre: "RPG / Survival horror"
+    releaseDate: "2000-09-27"
+    genre: "RPG / Survival Horror"
     languages:
       - German
     minPlayers: 1
@@ -87969,6 +88232,20 @@ SLES-12899:
       - SLES-32899
   traits:
     - DisableWidescreen
+  metadata:
+    publisher: "Infogrames"
+    developer: "Sacnoth"
+    releaseDate: "2000-09-27"
+    genre: "RPG / Survival Horror"
+    languages:
+      - German
+    minPlayers: 1
+    maxPlayers: 1
+    minBlocks: 1
+    maxBlocks: 1
+    vibration: true
+    multitap: false
+    linkCable: false
 SLES-22899:
   name: "Koudelka (Germany) (Disc 3)"
   discSet:
@@ -87980,6 +88257,20 @@ SLES-22899:
       - SLES-32899
   traits:
     - DisableWidescreen
+  metadata:
+    publisher: "Infogrames"
+    developer: "Sacnoth"
+    releaseDate: "2000-09-27"
+    genre: "RPG / Survival Horror"
+    languages:
+      - German
+    minPlayers: 1
+    maxPlayers: 1
+    minBlocks: 1
+    maxBlocks: 1
+    vibration: true
+    multitap: false
+    linkCable: false
 SLES-32899:
   name: "Koudelka (Germany) (Disc 4)"
   discSet:
@@ -87991,6 +88282,20 @@ SLES-32899:
       - SLES-32899
   traits:
     - DisableWidescreen
+  metadata:
+    publisher: "Infogrames"
+    developer: "Sacnoth"
+    releaseDate: "2000-09-27"
+    genre: "RPG / Survival Horror"
+    languages:
+      - German
+    minPlayers: 1
+    maxPlayers: 1
+    minBlocks: 1
+    maxBlocks: 1
+    vibration: true
+    multitap: false
+    linkCable: false
 SLES-02900:
   name: "Koudelka (Italy) (Disc 1)"
   discSet:
@@ -88008,8 +88313,8 @@ SLES-02900:
   metadata:
     publisher: "Infogrames"
     developer: "Sacnoth"
-    releaseDate: "2000-09-29"
-    genre: "RPG / Survival horror"
+    releaseDate: "2000-09-27"
+    genre: "RPG / Survival Horror"
     languages:
       - Italian
     minPlayers: 1
@@ -88030,6 +88335,20 @@ SLES-12900:
       - SLES-32900
   traits:
     - DisableWidescreen
+  metadata:
+    publisher: "Infogrames"
+    developer: "Sacnoth"
+    releaseDate: "2000-09-27"
+    genre: "RPG / Survival Horror"
+    languages:
+      - Italian
+    minPlayers: 1
+    maxPlayers: 1
+    minBlocks: 1
+    maxBlocks: 1
+    vibration: true
+    multitap: false
+    linkCable: false
 SLES-22900:
   name: "Koudelka (Italy) (Disc 3)"
   discSet:
@@ -88041,6 +88360,20 @@ SLES-22900:
       - SLES-32900
   traits:
     - DisableWidescreen
+  metadata:
+    publisher: "Infogrames"
+    developer: "Sacnoth"
+    releaseDate: "2000-09-27"
+    genre: "RPG / Survival Horror"
+    languages:
+      - Italian
+    minPlayers: 1
+    maxPlayers: 1
+    minBlocks: 1
+    maxBlocks: 1
+    vibration: true
+    multitap: false
+    linkCable: false
 SLES-32900:
   name: "Koudelka (Italy) (Disc 4)"
   discSet:
@@ -88052,6 +88385,20 @@ SLES-32900:
       - SLES-32900
   traits:
     - DisableWidescreen
+  metadata:
+    publisher: "Infogrames"
+    developer: "Sacnoth"
+    releaseDate: "2000-09-27"
+    genre: "RPG / Survival Horror"
+    languages:
+      - Italian
+    minPlayers: 1
+    maxPlayers: 1
+    minBlocks: 1
+    maxBlocks: 1
+    vibration: true
+    multitap: false
+    linkCable: false
 SLPS-02460:
   name: "Koudelka (Japan) (Disc 1)"
   discSet:
@@ -88070,7 +88417,7 @@ SLPS-02460:
     publisher: "SNK"
     developer: "Sacnoth"
     releaseDate: "1999-12-16"
-    genre: "RPG / Survival horror"
+    genre: "RPG / Survival Horror"
     languages:
       - Japanese
     minPlayers: 1
@@ -88098,7 +88445,7 @@ SLPS-02461:
     publisher: "SNK"
     developer: "Sacnoth"
     releaseDate: "1999-12-16"
-    genre: "RPG / Survival horror"
+    genre: "RPG / Survival Horror"
     languages:
       - Japanese
     minPlayers: 1
@@ -88126,7 +88473,7 @@ SLPS-02462:
     publisher: "SNK"
     developer: "Sacnoth"
     releaseDate: "1999-12-16"
-    genre: "RPG / Survival horror"
+    genre: "RPG / Survival Horror"
     languages:
       - Japanese
     minPlayers: 1
@@ -88154,7 +88501,7 @@ SLPS-02463:
     publisher: "SNK"
     developer: "Sacnoth"
     releaseDate: "1999-12-16"
-    genre: "RPG / Survival horror"
+    genre: "RPG / Survival Horror"
     languages:
       - Japanese
     minPlayers: 1
@@ -88189,8 +88536,8 @@ SLES-02901:
   metadata:
     publisher: "Infogrames"
     developer: "Sacnoth"
-    releaseDate: "2000-09-29"
-    genre: "RPG / Survival horror"
+    releaseDate: "2000-09-27"
+    genre: "RPG / Survival Horror"
     languages:
       - Spanish
     minPlayers: 1
@@ -88211,6 +88558,20 @@ SLES-12901:
       - SLES-32901
   traits:
     - DisableWidescreen
+  metadata:
+    publisher: "Infogrames"
+    developer: "Sacnoth"
+    releaseDate: "2000-09-27"
+    genre: "RPG / Survival Horror"
+    languages:
+      - Spanish
+    minPlayers: 1
+    maxPlayers: 1
+    minBlocks: 1
+    maxBlocks: 1
+    vibration: true
+    multitap: false
+    linkCable: false
 SLES-22901:
   name: "Koudelka (Spain) (Disc 3)"
   discSet:
@@ -88222,6 +88583,20 @@ SLES-22901:
       - SLES-32901
   traits:
     - DisableWidescreen
+  metadata:
+    publisher: "Infogrames"
+    developer: "Sacnoth"
+    releaseDate: "2000-09-27"
+    genre: "RPG / Survival Horror"
+    languages:
+      - Spanish
+    minPlayers: 1
+    maxPlayers: 1
+    minBlocks: 1
+    maxBlocks: 1
+    vibration: true
+    multitap: false
+    linkCable: false
 SLES-32901:
   name: "Koudelka (Spain) (Disc 4)"
   discSet:
@@ -88233,6 +88608,20 @@ SLES-32901:
       - SLES-32901
   traits:
     - DisableWidescreen
+  metadata:
+    publisher: "Infogrames"
+    developer: "Sacnoth"
+    releaseDate: "2000-09-27"
+    genre: "RPG / Survival Horror"
+    languages:
+      - Spanish
+    minPlayers: 1
+    maxPlayers: 1
+    minBlocks: 1
+    maxBlocks: 1
+    vibration: true
+    multitap: false
+    linkCable: false
 SLUS-01051:
   name: "Koudelka (USA) (Disc 1)"
   discSet:
@@ -88252,8 +88641,8 @@ SLUS-01051:
   metadata:
     publisher: "Infogrames"
     developer: "Sacnoth"
-    releaseDate: "2000-02-15"
-    genre: "RPG / Survival horror"
+    releaseDate: "2000-06-29"
+    genre: "RPG / Survival Horror"
     languages:
       - English
     minPlayers: 1
@@ -88276,6 +88665,20 @@ SLUS-01100:
     rating: NoIssues
   traits:
     - DisableWidescreen
+  metadata:
+    publisher: "Infogrames"
+    developer: "Sacnoth"
+    releaseDate: "2000-06-29"
+    genre: "RPG / Survival Horror"
+    languages:
+      - English
+    minPlayers: 1
+    maxPlayers: 1
+    minBlocks: 1
+    maxBlocks: 1
+    vibration: true
+    multitap: false
+    linkCable: false
 SLUS-01101:
   name: "Koudelka (USA) (Disc 3)"
   discSet:
@@ -88289,6 +88692,20 @@ SLUS-01101:
     rating: NoIssues
   traits:
     - DisableWidescreen
+  metadata:
+    publisher: "Infogrames"
+    developer: "Sacnoth"
+    releaseDate: "2000-06-29"
+    genre: "RPG / Survival Horror"
+    languages:
+      - English
+    minPlayers: 1
+    maxPlayers: 1
+    minBlocks: 1
+    maxBlocks: 1
+    vibration: true
+    multitap: false
+    linkCable: false
 SLUS-01102:
   name: "Koudelka (USA) (Disc 4)"
   discSet:
@@ -88302,6 +88719,20 @@ SLUS-01102:
     rating: NoIssues
   traits:
     - DisableWidescreen
+  metadata:
+    publisher: "Infogrames"
+    developer: "Sacnoth"
+    releaseDate: "2000-06-29"
+    genre: "RPG / Survival Horror"
+    languages:
+      - English
+    minPlayers: 1
+    maxPlayers: 1
+    minBlocks: 1
+    maxBlocks: 1
+    vibration: true
+    multitap: false
+    linkCable: false
 SLPM-80567:
   name: "Kougien CD-ROM 2000-nen Natsu-ban (Japan)"
 SLPS-00684:
@@ -88433,7 +88864,7 @@ SLPS-02955:
     publisher: "ASK Corporation"
     developer: "Rythmics"
     releaseDate: "2000-10-26"
-    genre: "Adventure / Dating / Sound novel"
+    genre: "Adventure / Dating / Sound Novel"
     languages:
       - Japanese
     minPlayers: 1
@@ -91492,9 +91923,26 @@ SCPS-10120:
       - SCPS-10120
       - SCPS-10121
       - SCPS-10122
+  controllers:
+    - AnalogController
+    - DigitalController
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableSpriteTextureFiltering # Breaks background rendering.
+  metadata:
+    publisher: "Sony"
+    developer: "Sony"
+    releaseDate: "1999-12-02"
+    genre: "RPG"
+    languages:
+      - Japanese
+    minPlayers: 1
+    maxPlayers: 1
+    minBlocks: 1
+    maxBlocks: 1
+    vibration: true
+    multitap: false
+    linkCable: false
 SCPS-10121:
   name: "Legend of Dragoon, The (Japan) (Disc 3)"
   discSet:
@@ -91504,9 +91952,26 @@ SCPS-10121:
       - SCPS-10120
       - SCPS-10121
       - SCPS-10122
+  controllers:
+    - AnalogController
+    - DigitalController
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableSpriteTextureFiltering # Breaks background rendering.
+  metadata:
+    publisher: "Sony"
+    developer: "Sony"
+    releaseDate: "1999-12-02"
+    genre: "RPG"
+    languages:
+      - Japanese
+    minPlayers: 1
+    maxPlayers: 1
+    minBlocks: 1
+    maxBlocks: 1
+    vibration: true
+    multitap: false
+    linkCable: false
 SCPS-10122:
   name: "Legend of Dragoon, The (Japan) (Disc 4)"
   discSet:
@@ -91516,9 +91981,26 @@ SCPS-10122:
       - SCPS-10120
       - SCPS-10121
       - SCPS-10122
+  controllers:
+    - AnalogController
+    - DigitalController
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableSpriteTextureFiltering # Breaks background rendering.
+  metadata:
+    publisher: "Sony"
+    developer: "Sony"
+    releaseDate: "1999-12-02"
+    genre: "RPG"
+    languages:
+      - Japanese
+    minPlayers: 1
+    maxPlayers: 1
+    minBlocks: 1
+    maxBlocks: 1
+    vibration: true
+    multitap: false
+    linkCable: false
 SCES-03047:
   name: "Legend of Dragoon, The (Spain) (Disc 1)"
   discSet:
@@ -91658,7 +92140,7 @@ SCUS-94491:
       - SCUS-94586
   compatibility:
     rating: NoIssues
-    versionTested: "0.1-1425-g05f0ce6d"
+    versionTested: "0.1-2663-gfd39f09a"
   controllers:
     - AnalogController
     - DigitalController
@@ -91691,9 +92173,26 @@ SCUS-94584:
   compatibility:
     rating: NoIssues
     versionTested: "0.1-2663-gfd39f09a"
+  controllers:
+    - AnalogController
+    - DigitalController
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableSpriteTextureFiltering # Breaks background rendering.
+  metadata:
+    publisher: "Sony"
+    developer: "Sony"
+    releaseDate: "2000-06-11"
+    genre: "RPG"
+    languages:
+      - English
+    minPlayers: 1
+    maxPlayers: 1
+    minBlocks: 1
+    maxBlocks: 1
+    vibration: true
+    multitap: false
+    linkCable: false
 SCUS-94585:
   name: "Legend of Dragoon, The (USA) (Disc 3)"
   discSet:
@@ -91706,9 +92205,26 @@ SCUS-94585:
   compatibility:
     rating: NoIssues
     versionTested: "0.1-2663-gfd39f09a"
+  controllers:
+    - AnalogController
+    - DigitalController
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableSpriteTextureFiltering # Breaks background rendering.
+  metadata:
+    publisher: "Sony"
+    developer: "Sony"
+    releaseDate: "2000-06-11"
+    genre: "RPG"
+    languages:
+      - English
+    minPlayers: 1
+    maxPlayers: 1
+    minBlocks: 1
+    maxBlocks: 1
+    vibration: true
+    multitap: false
+    linkCable: false
 SCUS-94586:
   name: "Legend of Dragoon, The (USA) (Disc 4)"
   discSet:
@@ -91721,9 +92237,26 @@ SCUS-94586:
   compatibility:
     rating: NoIssues
     versionTested: "0.1-2663-gfd39f09a"
+  controllers:
+    - AnalogController
+    - DigitalController
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableSpriteTextureFiltering # Breaks background rendering.
+  metadata:
+    publisher: "Sony"
+    developer: "Sony"
+    releaseDate: "2000-06-11"
+    genre: "RPG"
+    languages:
+      - English
+    minPlayers: 1
+    maxPlayers: 1
+    minBlocks: 1
+    maxBlocks: 1
+    vibration: true
+    multitap: false
+    linkCable: false
 SLES-01273:
   name: "Legend of Foresia - La Contree Interdite (France)"
   controllers:
@@ -101123,8 +101656,7 @@ SCPS-45320:
   traits:
     - ForcePGXPCPUMode
   settings:
-    cdromMaxSeekSpeedupCycles: 30000
-    cdromMaxReadSpeedupCycles: 80000
+    cdromMaxReadSpeedupCycles: 100000
   codes:
     - SCPS-45320
     - SCPS-45321
@@ -101153,8 +101685,7 @@ PAPX-90044:
   traits:
     - ForcePGXPCPUMode
   settings:
-    cdromMaxSeekSpeedupCycles: 30000
-    cdromMaxReadSpeedupCycles: 80000
+    cdromMaxReadSpeedupCycles: 100000
 SCPS-45317:
   name: "Metal Gear Solid (Japan, Asia) (Disc 1) (Ichi) (Premium Package)"
   discSet:
@@ -101168,8 +101699,7 @@ SCPS-45317:
   traits:
     - ForcePGXPCPUMode
   settings:
-    cdromMaxSeekSpeedupCycles: 30000
-    cdromMaxReadSpeedupCycles: 80000
+    cdromMaxReadSpeedupCycles: 100000
   codes:
     - SCPS-45317
     - SLPM-86111
@@ -101200,8 +101730,7 @@ SCPS-45318:
   traits:
     - ForcePGXPCPUMode
   settings:
-    cdromMaxSeekSpeedupCycles: 30000
-    cdromMaxReadSpeedupCycles: 80000
+    cdromMaxReadSpeedupCycles: 100000
   codes:
     - SCPS-45318
     - SLPM-86112
@@ -101226,8 +101755,7 @@ SLED-01400:
   traits:
     - ForcePGXPCPUMode
   settings:
-    cdromMaxSeekSpeedupCycles: 30000
-    cdromMaxReadSpeedupCycles: 80000
+    cdromMaxReadSpeedupCycles: 100000
 SLED-01775:
   name: "Metal Gear Solid (Europe) (Demo 2)"
   metadata:
@@ -101235,8 +101763,7 @@ SLED-01775:
   traits:
     - ForcePGXPCPUMode
   settings:
-    cdromMaxSeekSpeedupCycles: 30000
-    cdromMaxReadSpeedupCycles: 80000
+    cdromMaxReadSpeedupCycles: 100000
 SLES-01370:
   name: "Metal Gear Solid (Europe) (Disc 1)"
   discSet:
@@ -101253,8 +101780,7 @@ SLES-01370:
   traits:
     - ForcePGXPCPUMode
   settings:
-    cdromMaxSeekSpeedupCycles: 30000
-    cdromMaxReadSpeedupCycles: 80000
+    cdromMaxReadSpeedupCycles: 100000
   metadata:
     publisher: "Konami"
     developer: "KCE Japan"
@@ -101285,8 +101811,7 @@ SLES-11370:
   traits:
     - ForcePGXPCPUMode
   settings:
-    cdromMaxSeekSpeedupCycles: 30000
-    cdromMaxReadSpeedupCycles: 80000
+    cdromMaxReadSpeedupCycles: 100000
   metadata:
     publisher: "Konami"
     developer: "KCE Japan"
@@ -101317,8 +101842,7 @@ SLES-01506:
   traits:
     - ForcePGXPCPUMode
   settings:
-    cdromMaxSeekSpeedupCycles: 30000
-    cdromMaxReadSpeedupCycles: 80000
+    cdromMaxReadSpeedupCycles: 100000
   metadata:
     publisher: "Konami"
     developer: "KCE Japan"
@@ -101349,8 +101873,7 @@ SLES-11506:
   traits:
     - ForcePGXPCPUMode
   settings:
-    cdromMaxSeekSpeedupCycles: 30000
-    cdromMaxReadSpeedupCycles: 80000
+    cdromMaxReadSpeedupCycles: 100000
   metadata:
     publisher: "Konami"
     developer: "KCE Japan"
@@ -101381,8 +101904,7 @@ SLES-01507:
   traits:
     - ForcePGXPCPUMode
   settings:
-    cdromMaxSeekSpeedupCycles: 30000
-    cdromMaxReadSpeedupCycles: 80000
+    cdromMaxReadSpeedupCycles: 100000
   metadata:
     publisher: "Konami"
     developer: "KCE Japan"
@@ -101413,8 +101935,7 @@ SLES-11507:
   traits:
     - ForcePGXPCPUMode
   settings:
-    cdromMaxSeekSpeedupCycles: 30000
-    cdromMaxReadSpeedupCycles: 80000
+    cdromMaxReadSpeedupCycles: 100000
   metadata:
     publisher: "Konami"
     developer: "KCE Japan"
@@ -101445,8 +101966,7 @@ SLES-01508:
   traits:
     - ForcePGXPCPUMode
   settings:
-    cdromMaxSeekSpeedupCycles: 30000
-    cdromMaxReadSpeedupCycles: 80000
+    cdromMaxReadSpeedupCycles: 100000
   metadata:
     publisher: "Konami"
     developer: "KCE Japan"
@@ -101477,8 +101997,7 @@ SLES-11508:
   traits:
     - ForcePGXPCPUMode
   settings:
-    cdromMaxSeekSpeedupCycles: 30000
-    cdromMaxReadSpeedupCycles: 80000
+    cdromMaxReadSpeedupCycles: 100000
   metadata:
     publisher: "Konami"
     developer: "KCE Japan"
@@ -101501,8 +102020,7 @@ SLPM-86098:
   traits:
     - ForcePGXPCPUMode
   settings:
-    cdromMaxSeekSpeedupCycles: 30000
-    cdromMaxReadSpeedupCycles: 80000
+    cdromMaxReadSpeedupCycles: 100000
   metadata:
     publisher: "Konami"
     developer: "Konami / Diamond Head"
@@ -101530,8 +102048,7 @@ SLPM-86114:
   traits:
     - ForcePGXPCPUMode
   settings:
-    cdromMaxSeekSpeedupCycles: 30000
-    cdromMaxReadSpeedupCycles: 80000
+    cdromMaxReadSpeedupCycles: 100000
   codes:
     - SLPM-86114
     - SLPM-87411
@@ -101562,8 +102079,7 @@ SLPM-86115:
   traits:
     - ForcePGXPCPUMode
   settings:
-    cdromMaxSeekSpeedupCycles: 30000
-    cdromMaxReadSpeedupCycles: 80000
+    cdromMaxReadSpeedupCycles: 100000
   codes:
     - SLPM-86115
     - SLPM-87412
@@ -101597,8 +102113,7 @@ SLES-01734:
   traits:
     - ForcePGXPCPUMode
   settings:
-    cdromMaxSeekSpeedupCycles: 30000
-    cdromMaxReadSpeedupCycles: 80000
+    cdromMaxReadSpeedupCycles: 100000
   metadata:
     publisher: "Konami"
     developer: "KCE Japan"
@@ -101629,8 +102144,7 @@ SLES-11734:
   traits:
     - ForcePGXPCPUMode
   settings:
-    cdromMaxSeekSpeedupCycles: 30000
-    cdromMaxReadSpeedupCycles: 80000
+    cdromMaxReadSpeedupCycles: 100000
   metadata:
     publisher: "Konami"
     developer: "KCE Japan"
@@ -101652,8 +102166,7 @@ SLUS-90035:
   traits:
     - ForcePGXPCPUMode
   settings:
-    cdromMaxSeekSpeedupCycles: 30000
-    cdromMaxReadSpeedupCycles: 80000
+    cdromMaxReadSpeedupCycles: 100000
 SLUS-00594:
   name: "Metal Gear Solid (USA) (Disc 1)"
   discSet:
@@ -101670,8 +102183,7 @@ SLUS-00594:
   traits:
     - ForcePGXPCPUMode
   settings:
-    cdromMaxSeekSpeedupCycles: 30000
-    cdromMaxReadSpeedupCycles: 80000
+    cdromMaxReadSpeedupCycles: 100000
   metadata:
     publisher: "Konami"
     developer: "KCE Japan"
@@ -101702,8 +102214,7 @@ SLUS-00776:
   traits:
     - ForcePGXPCPUMode
   settings:
-    cdromMaxSeekSpeedupCycles: 30000
-    cdromMaxReadSpeedupCycles: 80000
+    cdromMaxReadSpeedupCycles: 100000
   metadata:
     publisher: "Konami"
     developer: "KCE Japan"
@@ -122706,8 +123217,10 @@ SLPS-91479:
     - AnalogController
     - DigitalController
   traits:
-    - DisableCDROMReadSpeedup
+    - DisableCDROMSpeedupOnMDEC # Prevents visual glitches in the scene outside Akropolis Tower.
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 120000
   codes:
     - SLPS-91479
     - SLPS-91480
@@ -122731,8 +123244,10 @@ SLPS-02779:
     - AnalogController
     - DigitalController
   traits:
-    - DisableCDROMReadSpeedup
+    - DisableCDROMSpeedupOnMDEC # Prevents visual glitches in the scene outside Akropolis Tower.
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 120000
   codes:
     - SLPS-02779
     - SLPS-02780
@@ -122761,8 +123276,10 @@ SLES-02558:
     - AnalogController
     - DigitalController
   traits:
-    - DisableCDROMReadSpeedup
+    - DisableCDROMSpeedupOnMDEC # Prevents visual glitches in the scene outside Akropolis Tower.
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 120000
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -122789,8 +123306,10 @@ SLES-12558:
     - AnalogController
     - DigitalController
   traits:
-    - DisableCDROMReadSpeedup
+    - DisableCDROMSpeedupOnMDEC # Prevents visual glitches in the scene outside Akropolis Tower.
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 120000
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -122817,8 +123336,10 @@ SLES-02559:
     - AnalogController
     - DigitalController
   traits:
-    - DisableCDROMReadSpeedup
+    - DisableCDROMSpeedupOnMDEC # Prevents visual glitches in the scene outside Akropolis Tower.
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 120000
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -122845,8 +123366,10 @@ SLES-12559:
     - AnalogController
     - DigitalController
   traits:
-    - DisableCDROMReadSpeedup
+    - DisableCDROMSpeedupOnMDEC # Prevents visual glitches in the scene outside Akropolis Tower.
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 120000
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -122873,8 +123396,10 @@ SLES-02560:
     - AnalogController
     - DigitalController
   traits:
-    - DisableCDROMReadSpeedup
+    - DisableCDROMSpeedupOnMDEC # Prevents visual glitches in the scene outside Akropolis Tower.
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 120000
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -122901,8 +123426,10 @@ SLES-12560:
     - AnalogController
     - DigitalController
   traits:
-    - DisableCDROMReadSpeedup
+    - DisableCDROMSpeedupOnMDEC # Prevents visual glitches in the scene outside Akropolis Tower.
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 120000
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -122929,8 +123456,10 @@ SLES-02562:
     - AnalogController
     - DigitalController
   traits:
-    - DisableCDROMReadSpeedup
+    - DisableCDROMSpeedupOnMDEC # Prevents visual glitches in the scene outside Akropolis Tower.
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 120000
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -122957,8 +123486,10 @@ SLES-12562:
     - AnalogController
     - DigitalController
   traits:
-    - DisableCDROMReadSpeedup
+    - DisableCDROMSpeedupOnMDEC # Prevents visual glitches in the scene outside Akropolis Tower.
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 120000
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -122985,8 +123516,10 @@ SCPS-45467:
     - AnalogController
     - DigitalController
   traits:
-    - DisableCDROMReadSpeedup
+    - DisableCDROMSpeedupOnMDEC # Prevents visual glitches in the scene outside Akropolis Tower.
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 120000
   codes:
     - SCPS-45467
     - SLPS-02480
@@ -123015,8 +123548,10 @@ SCPS-45468:
     - AnalogController
     - DigitalController
   traits:
-    - DisableCDROMReadSpeedup
+    - DisableCDROMSpeedupOnMDEC # Prevents visual glitches in the scene outside Akropolis Tower.
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 120000
   codes:
     - SCPS-45468
     - SLPS-02481
@@ -123048,8 +123583,10 @@ SLES-02561:
     - AnalogController
     - DigitalController
   traits:
-    - DisableCDROMReadSpeedup
+    - DisableCDROMSpeedupOnMDEC # Prevents visual glitches in the scene outside Akropolis Tower.
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 120000
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -123079,8 +123616,10 @@ SLES-12561:
     - AnalogController
     - DigitalController
   traits:
-    - DisableCDROMReadSpeedup
+    - DisableCDROMSpeedupOnMDEC # Prevents visual glitches in the scene outside Akropolis Tower.
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 120000
   libcrypt: true
   metadata:
     publisher: "Squaresoft"
@@ -123110,12 +123649,14 @@ SLUS-01042:
     - AnalogController
     - DigitalController
   traits:
-    - DisableCDROMReadSpeedup
+    - DisableCDROMSpeedupOnMDEC # Prevents visual glitches in the scene outside Akropolis Tower.
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 120000
   metadata:
     publisher: "Squaresoft"
     developer: "Squaresoft"
-    releaseDate: "2000-09-02"
+    releaseDate: "2000-09-12"
     genre: "Survival Horror"
     languages:
       - English
@@ -123139,12 +123680,14 @@ SLUS-01055:
     - AnalogController
     - DigitalController
   traits:
-    - DisableCDROMReadSpeedup
+    - DisableCDROMSpeedupOnMDEC # Prevents visual glitches in the scene outside Akropolis Tower.
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 120000
   metadata:
     publisher: "Squaresoft"
     developer: "Squaresoft"
-    releaseDate: "2000-09-02"
+    releaseDate: "2000-09-12"
     genre: "Survival Horror"
     languages:
       - English
@@ -125847,7 +126390,7 @@ SCPS-19007:
     publisher: "Sony"
     developer: "Arc Entertainment"
     releaseDate: "1999-05-27"
-    genre: "Interactive comic"
+    genre: "Interactive Comic"
     languages:
       - Japanese
     minPlayers: 1
@@ -125866,7 +126409,7 @@ SCPS-19006:
     publisher: "Sony"
     developer: "Arc Entertainment"
     releaseDate: "1999-05-27"
-    genre: "Interactive comic"
+    genre: "Interactive Comic"
     languages:
       - Japanese
     minPlayers: 1
@@ -125884,7 +126427,7 @@ SCPS-19003:
     publisher: "Sony"
     developer: "Syufo Hitahashi"
     releaseDate: "1998-04-02"
-    genre: "Interactive comic"
+    genre: "Interactive Comic"
     languages:
       - Japanese
     minPlayers: 1
@@ -135590,6 +136133,8 @@ SLES-00972:
     - DigitalController
   traits:
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 70000
   metadata:
     publisher: "Virgin Interactive"
     developer: "Capcom Production Studio 4"
@@ -135615,6 +136160,8 @@ SLES-10972:
     - DigitalController
   traits:
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 70000
   metadata:
     publisher: "Virgin Interactive"
     developer: "Capcom Production Studio 4"
@@ -135631,8 +136178,12 @@ SLES-10972:
     linkCable: false
 SLED-00977:
   name: "Resident Evil 2 (Europe) (Preview)"
+  controllers:
+    - DigitalController
   traits:
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 70000
 SLES-00973:
   name: "Resident Evil 2 (France) (Disc 1)"
   discSet:
@@ -135644,6 +136195,8 @@ SLES-00973:
     - DigitalController
   traits:
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 70000
   metadata:
     publisher: "Virgin Interactive"
     developer: "Capcom Production Studio 4"
@@ -135669,6 +136222,8 @@ SLES-10973:
     - DigitalController
   traits:
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 70000
   metadata:
     publisher: "Virgin Interactive"
     developer: "Capcom Production Studio 4"
@@ -135694,6 +136249,8 @@ SLES-00974:
     - DigitalController
   traits:
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 70000
   metadata:
     publisher: "Virgin Interactive"
     developer: "Capcom Production Studio 4"
@@ -135719,6 +136276,8 @@ SLES-10974:
     - DigitalController
   traits:
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 70000
   metadata:
     publisher: "Virgin Interactive"
     developer: "Capcom Production Studio 4"
@@ -135744,6 +136303,8 @@ SLES-00975:
     - DigitalController
   traits:
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 70000
   metadata:
     publisher: "Virgin Interactive"
     developer: "Capcom Production Studio 4"
@@ -135769,6 +136330,8 @@ SLES-10975:
     - DigitalController
   traits:
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 70000
   metadata:
     publisher: "Virgin Interactive"
     developer: "Capcom Production Studio 4"
@@ -135797,6 +136360,8 @@ SLES-00976:
     - DigitalController
   traits:
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 70000
   metadata:
     publisher: "Virgin Interactive"
     developer: "Capcom Production Studio 4"
@@ -135825,6 +136390,8 @@ SLES-10976:
     - DigitalController
   traits:
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 70000
   metadata:
     publisher: "Virgin Interactive"
     developer: "Capcom Production Studio 4"
@@ -135845,6 +136412,8 @@ SLUS-80421:
     genre: "** DEMO **"
   traits:
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 70000
   codes:
     - SLUS-80421
     - SLUS-90009
@@ -135862,10 +136431,12 @@ SLUS-00421:
     - DigitalController
   traits:
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 70000
   metadata:
     publisher: "Capcom"
     developer: "Capcom Production Studio 4"
-    releaseDate: "1998-01-10"
+    releaseDate: "1998-01-21"
     genre: "Survival Horror"
     languages:
       - English
@@ -135890,10 +136461,12 @@ SLUS-00592:
     - DigitalController
   traits:
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 70000
   metadata:
     publisher: "Capcom"
     developer: "Capcom Production Studio 4"
-    releaseDate: "1998-01-10"
+    releaseDate: "1998-01-21"
     genre: "Survival Horror"
     languages:
       - English
@@ -135916,6 +136489,8 @@ SLUS-00748:
     - DigitalController
   traits:
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 70000
   metadata:
     publisher: "Capcom"
     developer: "Capcom Production Studio 4"
@@ -135942,6 +136517,8 @@ SLUS-00756:
     - DigitalController
   traits:
     - DisableWidescreen
+  settings:
+    cdromMaxReadSpeedupCycles: 70000
   metadata:
     publisher: "Capcom"
     developer: "Capcom Production Studio 4"
@@ -147048,7 +147625,7 @@ SCPS-45380:
     publisher: "Konami"
     developer: "KCET"
     releaseDate: "1999-03-04"
-    genre: "Survival horror / Adventure"
+    genre: "Survival Horror / Adventure"
     languages:
       - Japanese
     minPlayers: 1
@@ -147081,7 +147658,7 @@ SLES-01514:
     publisher: "Konami"
     developer: "KCET"
     releaseDate: "1999-08-01"
-    genre: "Survival horror / Adventure"
+    genre: "Survival Horror / Adventure"
     languages:
       - English
       - French
@@ -147114,7 +147691,7 @@ SLPM-86192:
     publisher: "Konami"
     developer: "KCET"
     releaseDate: "1999-03-04"
-    genre: "Survival horror / Adventure"
+    genre: "Survival Horror / Adventure"
     languages:
       - Japanese
     minPlayers: 1
@@ -147141,7 +147718,7 @@ SLPM-86498:
     publisher: "Konami"
     developer: "KCET"
     releaseDate: "2002-01-24"
-    genre: "Survival horror / Adventure"
+    genre: "Survival Horror / Adventure"
     languages:
       - Japanese
     minPlayers: 1
@@ -147167,7 +147744,7 @@ SLUS-00707:
     publisher: "Konami"
     developer: "KCET"
     releaseDate: "1999-02-24"
-    genre: "Survival horror / Adventure"
+    genre: "Survival Horror / Adventure"
     languages:
       - English
     minPlayers: 1
@@ -153316,7 +153893,7 @@ SLPS-01794:
     publisher: "Chunsoft"
     developer: "Astroll"
     releaseDate: "1999-12-02"
-    genre: "Adventure / Sound novel"
+    genre: "Adventure / Sound Novel"
     languages:
       - Japanese
     minPlayers: 1
@@ -155601,6 +156178,7 @@ SCES-02835:
     - AnalogController
     - DigitalController
   traits:
+    - DisableCDROMReadSpeedup # Fixes cutscene audio.
     - ForcePGXPCPUMode # Required, but not perfect. Game messes with geometry.
   libcrypt: true
   metadata:
@@ -155630,6 +156208,7 @@ SCUS-94467:
     - AnalogController
     - DigitalController
   traits:
+    - DisableCDROMReadSpeedup # Fixes cutscene audio.
     - ForcePGXPCPUMode # Required, but not perfect. Game messes with geometry.
   metadata:
     publisher: "Sony"
@@ -155650,6 +156229,7 @@ SCUS-94615:
   metadata:
     genre: "** DEMO **"
   traits:
+    - DisableCDROMReadSpeedup # Fixes cutscene audio.
     - ForcePGXPCPUMode # Required, but not perfect. Game messes with geometry.
 SCES-02104:
   name: "Spyro 2 - Gateway to Glimmer (Europe) (En,Fr,De,Es,It)"
@@ -155659,6 +156239,7 @@ SCES-02104:
     - AnalogController
     - DigitalController
   traits:
+    - DisableCDROMReadSpeedup # Fixes cutscene audio.
     - ForcePGXPCPUMode # Required, but not perfect. Game messes with geometry.
   libcrypt: true
   metadata:
@@ -155688,6 +156269,7 @@ SCUS-94425:
     - AnalogController
     - DigitalController
   traits:
+    - DisableCDROMReadSpeedup # Fixes cutscene audio.
     - ForcePGXPCPUMode # Required, but not perfect. Game messes with geometry.
   metadata:
     publisher: "Sony"
@@ -155708,10 +156290,12 @@ SCUS-94460:
   metadata:
     genre: "** DEMO **"
   traits:
+    - DisableCDROMReadSpeedup # Fixes cutscene audio.
     - ForcePGXPCPUMode # Required, but not perfect. Game messes with geometry.
 SCUS-94632:
   name: "Spyro 2 - Ripto's Rage! + Crash Team Racing (USA)"
   traits:
+    - DisableCDROMReadSpeedup # Fixes cutscene audio.
     - ForcePGXPCPUMode # Required, but not perfect. Game messes with geometry.
 SCPS-45395:
   name: "Spyro the Dragon"
@@ -156008,6 +156592,9 @@ SLUS-90029:
   traits:
     - DisableWidescreen # Breaks background rendering.
     - DisableScaledInterlacing # Breaks intro rendering.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 40000 # Stops FMVs breaking.
   metadata:
     publisher: "Squaresoft"
     developer: "Squaresoft"
@@ -180410,6 +180997,9 @@ SLPM-86379:
     - DigitalController
   traits:
     - ForcePGXPCPUMode # Fixes wobble in screen transitions/battle stages.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 60000 # Stops FMVs breaking.
   metadata:
     publisher: "Enix Corporation"
     developer: "tri-Ace"
@@ -180436,6 +181026,9 @@ SLPM-86371:
     - DigitalController
   traits:
     - ForcePGXPCPUMode # Fixes wobble in screen transitions/battle stages.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 60000 # Stops FMVs breaking.
   metadata:
     publisher: "Enix Corporation"
     developer: "tri-Ace"
@@ -180462,6 +181055,9 @@ SLPM-86380:
     - DigitalController
   traits:
     - ForcePGXPCPUMode # Fixes wobble in screen transitions/battle stages.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 60000 # Stops FMVs breaking.
   metadata:
     publisher: "Enix Corporation"
     developer: "tri-Ace"
@@ -180488,6 +181084,9 @@ SLPM-86372:
     - DigitalController
   traits:
     - ForcePGXPCPUMode # Fixes wobble in screen transitions/battle stages.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 60000 # Stops FMVs breaking.
   metadata:
     publisher: "Enix Corporation"
     developer: "tri-Ace"
@@ -180509,6 +181108,9 @@ SLPM-87355:
     - DigitalController
   traits:
     - ForcePGXPCPUMode # Fixes wobble in screen transitions/battle stages.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 60000 # Stops FMVs breaking.
   codes:
     - SLPM-87355
     - SLPM-87373
@@ -180541,6 +181143,9 @@ SLUS-01156:
     - DigitalController
   traits:
     - ForcePGXPCPUMode # Fixes wobble in screen transitions/battle stages.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 60000 # Stops FMVs breaking.
   metadata:
     publisher: "Enix America Inc"
     developer: "tri-Ace"
@@ -180570,6 +181175,9 @@ SLUS-01179:
     - DigitalController
   traits:
     - ForcePGXPCPUMode # Fixes wobble in screen transitions/battle stages.
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking with speedup.
+  settings:
+    cdromMaxReadSpeedupCycles: 60000 # Stops FMVs breaking.
   metadata:
     publisher: "Enix America Inc"
     developer: "tri-Ace"
@@ -186513,7 +187121,7 @@ SLES-04070:
     publisher: "Phoenix Games"
     developer: "The Code Monkeys Ltd"
     releaseDate: "2003-06-26"
-    genre: "Educational / Jigsaw puzzle"
+    genre: "Educational / Jigsaw Puzzle"
     languages:
       - English
       - French
@@ -189986,6 +190594,10 @@ SLES-00455:
   name: "X2 - No Relief (Europe)"
   controllers:
     - DigitalController
+  traits:
+    - ForceSoftwareRenderer # Lots of readbacks.
+    - DisablePGXP # 2D, PGXP is not beneficial.
+    - DisableWidescreen # GTE is not used, no effect.
   metadata:
     publisher: "Ocean"
     developer: "Team 17"
@@ -190004,6 +190616,10 @@ SLPS-00766:
   name: "X2 - No Relief (Japan)"
   controllers:
     - DigitalController
+  traits:
+    - ForceSoftwareRenderer # Lots of readbacks.
+    - DisablePGXP # 2D, PGXP is not beneficial.
+    - DisableWidescreen # GTE is not used, no effect.
   metadata:
     publisher: "Capcom"
     developer: "Team 17"

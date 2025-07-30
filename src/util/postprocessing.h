@@ -93,8 +93,8 @@ struct ShaderOption
 };
 
 namespace Config {
-static constexpr const char* DISPLAY_CHAIN_SECTION = "PostProcessing";
-static constexpr const char* INTERNAL_CHAIN_SECTION = "InternalPostProcessing";
+inline constexpr const char* DISPLAY_CHAIN_SECTION = "PostProcessing";
+inline constexpr const char* INTERNAL_CHAIN_SECTION = "InternalPostProcessing";
 
 bool IsEnabled(const SettingsInterface& si, const char* section);
 u32 GetStageCount(const SettingsInterface& si, const char* section);
@@ -114,7 +114,7 @@ void ClearStages(SettingsInterface& si, const char* section);
 class Chain final
 {
 public:
-  Chain(const char* section);
+  explicit Chain(const char* section);
   ~Chain();
 
   ALWAYS_INLINE bool HasStages() const { return !m_stages.empty(); }

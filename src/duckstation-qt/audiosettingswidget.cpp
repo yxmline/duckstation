@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2019-2024 Connor McLaughlin <stenzek@gmail.com>
+// SPDX-FileCopyrightText: 2019-2025 Connor McLaughlin <stenzek@gmail.com>
 // SPDX-License-Identifier: CC-BY-NC-ND-4.0
 
 #include "audiosettingswidget.h"
@@ -13,6 +13,8 @@
 
 #include <bit>
 #include <cmath>
+
+#include "moc_audiosettingswidget.cpp"
 
 AudioSettingsWidget::AudioSettingsWidget(SettingsWindow* dialog, QWidget* parent) : QWidget(parent), m_dialog(dialog)
 {
@@ -168,7 +170,7 @@ void AudioSettingsWidget::updateDeviceNames()
   std::vector<AudioStream::DeviceInfo> devices =
     AudioStream::GetOutputDevices(backend, driver_name.c_str(), SPU::SAMPLE_RATE);
 
-  m_ui.outputDevice->disconnect();
+  SettingWidgetBinder::DisconnectWidget(m_ui.outputDevice);
   m_ui.outputDevice->clear();
   m_output_device_latency = 0;
 

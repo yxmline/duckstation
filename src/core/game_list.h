@@ -65,7 +65,7 @@ struct Entry
   TinyString GetLanguageIconName() const;
   TinyString GetCompatibilityIconFileName() const;
 
-  TinyString GetReleaseDateString() const;
+  std::string GetReleaseDateString() const;
 
   ALWAYS_INLINE bool IsValid() const { return (type < EntryType::MaxCount); }
   ALWAYS_INLINE bool IsDisc() const { return (type == EntryType::Disc); }
@@ -125,7 +125,7 @@ void ClearPlayedTimeForEntry(const Entry* entry);
 std::time_t GetCachedPlayedTimeForSerial(const std::string& serial);
 
 /// Formats a timestamp to something human readable (e.g. Today, Yesterday, 10/11/12).
-TinyString FormatTimestamp(std::time_t timestamp);
+std::string FormatTimestamp(std::time_t timestamp);
 
 /// Formats a timespan to something human readable (e.g. 1h2m3s or 1 hour).
 TinyString FormatTimespan(std::time_t timespan, bool long_format = false);
@@ -136,8 +136,8 @@ std::string GetNewCoverImagePathForEntry(const Entry* entry, const char* new_fil
 
 /// Returns a list of (title, entry) for entries matching serials. Titles will match the gamedb title,
 /// except when two files have the same serial, in which case the filename will be used instead.
-std::vector<std::pair<std::string, const Entry*>>
-GetMatchingEntriesForSerial(const std::span<const std::string> serials);
+std::vector<std::pair<std::string_view, const Entry*>>
+GetMatchingEntriesForSerial(const std::span<const std::string_view> serials);
 
 /// Downloads covers using the specified URL templates. By default, covers are saved by title, but this can be changed
 /// with the use_serial parameter. save_callback optionall takes the entry and the path the new cover is saved to.

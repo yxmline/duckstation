@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2019-2024 Connor McLaughlin <stenzek@gmail.com>
+// SPDX-FileCopyrightText: 2019-2025 Connor McLaughlin <stenzek@gmail.com>
 // SPDX-License-Identifier: CC-BY-NC-ND-4.0
 
 #include "gamesummarywidget.h"
@@ -24,6 +24,8 @@
 #include <QtWidgets/QDialogButtonBox>
 #include <QtWidgets/QMessageBox>
 #include <QtWidgets/QTextBrowser>
+
+#include "moc_gamesummarywidget.cpp"
 
 GameSummaryWidget::GameSummaryWidget(const std::string& path, const std::string& serial, DiscRegion region,
                                      const GameDatabase::Entry* entry, SettingsWindow* dialog, QWidget* parent)
@@ -159,8 +161,11 @@ void GameSummaryWidget::populateUi(const std::string& path, const std::string& s
 
     QString release_info;
     if (entry->release_date != 0)
-      release_info =
-        tr("Released %1").arg(QDateTime::fromSecsSinceEpoch(entry->release_date, QTimeZone::utc()).date().toString());
+    {
+      const QString date = QDateTime::fromSecsSinceEpoch(static_cast<qint64>(entry->release_date), QTimeZone::utc())
+                             .toString(QtHost::GetApplicationLocale().dateFormat());
+      release_info = tr("Released %1").arg(date);
+    }
     if (entry->min_players != 0)
     {
       if (!release_info.isEmpty())

@@ -440,17 +440,17 @@ Token de inicio de sesión generado en %2.</translation>
     <message>
         <location filename="../../core/achievements.cpp" line="1543"/>
         <source>Your Time: {} (Best: {})</source>
-        <translation>Tu tiempo: {}{} (Mejor: {})</translation>
+        <translation>Tu tiempo: {} (Mejor: {})</translation>
     </message>
     <message>
         <location filename="../../core/achievements.cpp" line="1544"/>
         <source>Your Score: {} (Best: {})</source>
-        <translation>Tu puntuación: {}{} (Mejor: {})</translation>
+        <translation>Tu puntuación {} (Mejor: {})</translation>
     </message>
     <message>
         <location filename="../../core/achievements.cpp" line="1545"/>
         <source>Your Value: {} (Best: {})</source>
-        <translation>Tu valor: {}{} (Mejor: {})</translation>
+        <translation>Tu valor: {} (Mejor: {})</translation>
     </message>
     <message>
         <location filename="../../core/achievements.cpp" line="1550"/>
@@ -9162,8 +9162,8 @@ Comprueba el nombre de usuario y contraseña e intenta de nuevo.</translation>
     </message>
     <message>
         <location filename="../../core/fullscreen_ui.cpp" line="9249"/>
-        <source>Saved {:%c}</source>
-        <translation>Guardado {:%c}</translation>
+        <source>Saved {}</source>
+        <translation>Guardado {}</translation>
     </message>
     <message>
         <location filename="../../core/fullscreen_ui.cpp" line="9250"/>
@@ -10233,7 +10233,7 @@ Do you want to {0} anyway?</source>
     <message>
         <location filename="../../core/gpu_hw.cpp" line="484"/>
         <source>Internal resolution set to {0}x ({1}x{2}).</source>
-        <translation>Resolución interna establecida en {0}x (pantalla {1}x{2}, VRAM {3}x{4}).</translation>
+        <translation>Resolución interna establecida en {0}x (pantalla {1}x{2}).</translation>
     </message>
     <message>
         <location filename="../../core/gpu_hw.cpp" line="496"/>
@@ -19597,6 +19597,8 @@ Una vez extraída, esta imagen BIOS debe ubicarse en el directorio de BIOS dentr
 
 This may be due to your GPU not supporting the chosen renderer ({1}), or because your graphics drivers need to be updated.</source>
         <translation>Fallo al crear dispositivo de renderizado.
+
+{0}
 
 Puede ser tu GPU no sea compatible con el renderizador seleccionado ({1}), o que tus controladores gráficos no estén actualizados.</translation>
     </message>

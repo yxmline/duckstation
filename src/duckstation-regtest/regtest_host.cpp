@@ -40,6 +40,7 @@
 
 #include <csignal>
 #include <cstdio>
+#include <ctime>
 
 LOG_CHANNEL(Host);
 
@@ -190,6 +191,11 @@ std::span<const std::pair<const char*, const char*>> Host::GetAvailableLanguageL
   return {};
 }
 
+const char* Host::GetLanguageName(std::string_view language_code)
+{
+  return "";
+}
+
 bool Host::ChangeLanguage(const char* new_language)
 {
   return false;
@@ -282,6 +288,11 @@ void Host::OnSystemStarting()
 }
 
 void Host::OnSystemStarted()
+{
+  //
+}
+
+void Host::OnSystemStopping()
 {
   //
 }
@@ -560,6 +571,64 @@ bool Host::CopyTextToClipboard(std::string_view text)
   return false;
 }
 
+std::string Host::FormatNumber(NumberFormatType type, s64 value)
+{
+  std::string ret;
+
+  if (type >= NumberFormatType::ShortDate && type <= NumberFormatType::LongDateTime)
+  {
+    const char* format;
+    switch (type)
+    {
+      case NumberFormatType::ShortDate:
+        format = "%x";
+        break;
+
+      case NumberFormatType::LongDate:
+        format = "%A %B %e %Y";
+        break;
+
+      case NumberFormatType::ShortTime:
+      case NumberFormatType::LongTime:
+        format = "%X";
+        break;
+
+      case NumberFormatType::ShortDateTime:
+        format = "%X %x";
+        break;
+
+      case NumberFormatType::LongDateTime:
+        format = "%c";
+        break;
+
+        DefaultCaseIsUnreachable();
+    }
+
+    struct tm ttime = {};
+    const std::time_t tvalue = static_cast<std::time_t>(value);
+#ifdef _MSC_VER
+    localtime_s(&ttime, &tvalue);
+#else
+    localtime_r(&tvalue, &ttime);
+#endif
+
+    char buf[128];
+    std::strftime(buf, std::size(buf), "%x", &ttime);
+    ret.assign(buf);
+  }
+  else
+  {
+    ret = fmt::format("{}", value);
+  }
+
+  return ret;
+}
+
+std::string Host::FormatNumber(NumberFormatType type, double value)
+{
+  return fmt::format("{}", value);
+}
+
 void Host::SetMouseMode(bool relative, bool hide_cursor)
 {
   //
@@ -603,11 +672,6 @@ void Host::OnRAIntegrationMenuChanged()
 }
 
 #endif
-
-void Host::OnCoverDownloaderOpenRequested()
-{
-  // noop
-}
 
 const char* Host::GetDefaultFullscreenUITheme()
 {

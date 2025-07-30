@@ -308,7 +308,7 @@ private:
     VkFence fence = VK_NULL_HANDLE;
     u64 fence_counter = 0;
     bool init_buffer_used = false;
-    bool needs_fence_wait = false;
+    bool needs_descriptor_pool_reset = false;
     bool timestamp_written = false;
   };
 
@@ -325,18 +325,6 @@ private:
   bool EnableDebugUtils();
   void DisableDebugUtils();
 
-  /// Returns true if running on an NVIDIA GPU.
-  bool IsDeviceNVIDIA() const;
-
-  /// Returns true if running on an AMD GPU.
-  bool IsDeviceAMD() const;
-
-  // Vendor queries.
-  bool IsDeviceAdreno() const;
-  bool IsDeviceMali() const;
-  bool IsDeviceImgTec() const;
-  bool IsBrokenMobileDriver() const;
-
   using ExtensionList = std::vector<const char*>;
   static bool SelectInstanceExtensions(ExtensionList* extension_list, const WindowInfo& wi, OptionalExtensions* oe,
                                        bool enable_debug_utils);
@@ -349,6 +337,8 @@ private:
   void SetFeatures(FeatureMask disabled_features, VkPhysicalDevice physical_device,
                    const VkPhysicalDeviceFeatures& vk_features);
 
+  static GPUDriverType GuessDriverType(const VkPhysicalDeviceProperties& device_properties,
+                                        const VkPhysicalDeviceDriverProperties& driver_properties);
   static u32 GetMaxMultisamples(VkPhysicalDevice physical_device, const VkPhysicalDeviceProperties& properties);
 
   bool CreateAllocator();
@@ -432,7 +422,7 @@ private:
   VkDebugUtilsMessengerEXT m_debug_messenger_callback = VK_NULL_HANDLE;
 
   VkPhysicalDeviceProperties m_device_properties = {};
-  VkPhysicalDeviceDriverPropertiesKHR m_device_driver_properties = {};
+  VkPhysicalDeviceDriverProperties m_device_driver_properties = {};
   OptionalExtensions m_optional_extensions = {};
   std::optional<bool> m_exclusive_fullscreen_control;
 

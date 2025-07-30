@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2019-2024 Connor McLaughlin <stenzek@gmail.com>
+// SPDX-FileCopyrightText: 2019-2025 Connor McLaughlin <stenzek@gmail.com>
 // SPDX-License-Identifier: CC-BY-NC-ND-4.0
 
 #include "achievementsettingswidget.h"
@@ -15,6 +15,8 @@
 
 #include <QtCore/QDateTime>
 #include <QtWidgets/QMessageBox>
+
+#include "moc_achievementsettingswidget.cpp"
 
 AchievementSettingsWidget::AchievementSettingsWidget(SettingsWindow* dialog, QWidget* parent)
   : QWidget(parent), m_dialog(dialog)
@@ -84,6 +86,7 @@ AchievementSettingsWidget::AchievementSettingsWidget(SettingsWindow* dialog, QWi
   {
     connect(m_ui.loginButton, &QPushButton::clicked, this, &AchievementSettingsWidget::onLoginLogoutPressed);
     connect(m_ui.viewProfile, &QPushButton::clicked, this, &AchievementSettingsWidget::onViewProfilePressed);
+    connect(m_ui.refreshProgress, &QPushButton::clicked, g_emu_thread, &EmuThread::refreshAchievementsAllProgress);
     connect(g_emu_thread, &EmuThread::achievementsRefreshed, this, &AchievementSettingsWidget::onAchievementsRefreshed);
     updateLoginState();
 
@@ -142,6 +145,7 @@ void AchievementSettingsWidget::updateEnableState()
   m_ui.encoreMode->setEnabled(enabled);
   m_ui.spectatorMode->setEnabled(enabled);
   m_ui.unofficialAchievements->setEnabled(enabled);
+  m_ui.refreshProgress->setEnabled(enabled && m_ui.viewProfile->isEnabled());
 }
 
 void AchievementSettingsWidget::onHardcoreModeStateChanged()
@@ -195,10 +199,11 @@ void AchievementSettingsWidget::updateLoginState()
   {
     const u64 login_unix_timestamp =
       StringUtil::FromChars<u64>(Host::GetBaseStringSettingValue("Cheevos", "LoginTimestamp", "0")).value_or(0);
-    const QDateTime login_timestamp(QDateTime::fromSecsSinceEpoch(static_cast<qint64>(login_unix_timestamp)));
+    const QString login_timestamp = QtHost::FormatNumber(Host::NumberFormatType::ShortDateTime,
+                                                         static_cast<s64>(login_unix_timestamp));
     m_ui.loginStatus->setText(tr("Username: %1\nLogin token generated on %2.")
                                 .arg(QString::fromStdString(username))
-                                .arg(login_timestamp.toString(Qt::TextDate)));
+                                .arg(login_timestamp));
     m_ui.loginButton->setText(tr("Logout"));
   }
   else
@@ -208,6 +213,7 @@ void AchievementSettingsWidget::updateLoginState()
   }
 
   m_ui.viewProfile->setEnabled(logged_in);
+  m_ui.refreshProgress->setEnabled(logged_in && Host::GetBaseBoolSettingValue("Cheevos", "Enabled", false));
 }
 
 void AchievementSettingsWidget::onLoginLogoutPressed()

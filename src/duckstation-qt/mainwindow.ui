@@ -169,6 +169,7 @@
     <addaction name="actionLogToWindow"/>
     <addaction name="actionLogToFile"/>
     <addaction name="actionLogTimestamps"/>
+    <addaction name="actionLogFileTimestamps"/>
     <addaction name="separator"/>
     <addaction name="actionCPUDebugger"/>
     <addaction name="separator"/>
@@ -420,6 +421,9 @@
    </property>
   </action>
   <action name="actionFullscreen">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
    <property name="icon">
     <iconset theme="fullscreen-line"/>
    </property>
@@ -742,9 +746,6 @@
    <property name="checkable">
     <bool>true</bool>
    </property>
-   <property name="checked">
-    <bool>false</bool>
-   </property>
    <property name="text">
     <string>Lock Toolbar</string>
    </property>
@@ -785,6 +786,9 @@
    </property>
   </action>
   <action name="actionViewGameList">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
    <property name="icon">
     <iconset theme="list-check"/>
    </property>
@@ -793,6 +797,9 @@
    </property>
   </action>
   <action name="actionViewSystemDisplay">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
    <property name="enabled">
     <bool>false</bool>
    </property>
@@ -825,6 +832,9 @@
    </property>
   </action>
   <action name="actionViewGameGrid">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
    <property name="icon">
     <iconset theme="function-line"/>
    </property>
@@ -839,6 +849,9 @@
    <property name="checked">
     <bool>true</bool>
    </property>
+   <property name="icon">
+    <iconset theme="play-list-2-line"/>
+   </property>
    <property name="text">
     <string>Merge Multi-Disc Games</string>
    </property>
@@ -850,8 +863,14 @@
    <property name="checked">
     <bool>true</bool>
    </property>
+   <property name="icon">
+    <iconset theme="price-tag-3-line"/>
+   </property>
    <property name="text">
     <string>Show Titles (Grid View)</string>
+   </property>
+   <property name="toolTip">
+    <string>Show Titles</string>
    </property>
   </action>
   <action name="actionGridViewZoomIn">
@@ -920,8 +939,14 @@
    <property name="checked">
     <bool>true</bool>
    </property>
+   <property name="icon">
+    <iconset theme="image-fill"/>
+   </property>
    <property name="text">
     <string>Show Game Icons (List View)</string>
+   </property>
+   <property name="toolTip">
+    <string>Show Game Icons</string>
    </property>
   </action>
   <action name="actionMediaCapture">
@@ -953,6 +978,14 @@
    </property>
    <property name="text">
     <string>Log Timestamps</string>
+   </property>
+  </action>
+  <action name="actionLogFileTimestamps">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Log File Timestamps</string>
    </property>
   </action>
   <action name="actionLogToSystemConsole">

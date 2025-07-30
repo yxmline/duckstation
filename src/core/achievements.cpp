@@ -1189,7 +1189,7 @@ bool Achievements::IdentifyCurrentGame()
 
   // this crap is only needed because we can't grab the image from the reader...
   std::unique_ptr<CDImage> temp_image;
-  if (const std::string& disc_path = System::GetDiscPath(); !disc_path.empty())
+  if (const std::string& disc_path = System::GetGamePath(); !disc_path.empty())
   {
     Error error;
     temp_image = CDImage::Open(disc_path.c_str(), g_settings.cdrom_load_image_patches, &error);
@@ -1856,7 +1856,7 @@ bool Achievements::DoState(StateWrapper& sw)
     {
       // Messy because GPU-thread, but at least it looks pretty.
       GPUThread::RunOnThread([]() {
-        FullscreenUI::OpenLoadingScreen(ImGuiManager::LOGO_IMAGE_NAME,
+        FullscreenUI::OpenLoadingScreen(System::GetImageForLoadingScreen(GPUThread::GetGamePath()),
                                         TRANSLATE_SV("Achievements", "Downloading achievements data..."));
       });
 
@@ -2569,14 +2569,12 @@ void Achievements::DrawPauseMenuOverlays(float start_pos_y)
     text_pos.y += UIStyle.MediumFontSize + paragraph_spacing;
 
     const ImRect progress_bb(text_pos, text_pos + ImVec2(box_content_width, progress_height));
-    const u32 progress_color = ImGui::GetColorU32(DarkerColor(UIStyle.SecondaryColor));
     dl->AddRectFilled(progress_bb.Min, progress_bb.Max, ImGui::GetColorU32(UIStyle.PrimaryDarkColor),
                       progress_rounding);
     if (s_state.game_summary.num_unlocked_achievements > 0)
     {
-      dl->AddRectFilled(progress_bb.Min,
-                        ImVec2(progress_bb.Min.x + unlocked_fraction * progress_bb.GetWidth(), progress_bb.Max.y),
-                        progress_color, progress_rounding);
+      ImGui::RenderRectFilledRangeH(dl, progress_bb, ImGui::GetColorU32(DarkerColor(UIStyle.SecondaryColor)), 0.0f,
+                                    unlocked_fraction, progress_rounding);
     }
 
     buffer.format("{}/{}", s_state.game_summary.num_unlocked_achievements, s_state.game_summary.num_core_achievements);
@@ -2675,6 +2673,19 @@ bool Achievements::PrepareAchievementsWindow()
   {
     ERROR_LOG("rc_client_create_achievement_list() returned null");
     return false;
+  }
+
+  // sort unlocked achievements by unlock time
+  for (size_t i = 0; i < s_state.achievement_list->num_buckets; i++)
+  {
+    const rc_client_achievement_bucket_t* bucket = &s_state.achievement_list->buckets[i];
+    if (bucket->bucket_type == RC_CLIENT_ACHIEVEMENT_BUCKET_UNLOCKED)
+    {
+      std::sort(bucket->achievements, bucket->achievements + bucket->num_achievements,
+                [](const rc_client_achievement_t* a, const rc_client_achievement_t* b) {
+                  return a->unlock_time > b->unlock_time;
+                });
+    }
   }
 
   return true;
@@ -2784,9 +2795,8 @@ void Achievements::DrawAchievementsWindow()
                         progress_rounding);
       if (s_state.game_summary.num_unlocked_achievements > 0)
       {
-        dl->AddRectFilled(progress_bb.Min,
-                          ImVec2(progress_bb.Min.x + fraction * progress_bb.GetWidth(), progress_bb.Max.y),
-                          ImGui::GetColorU32(UIStyle.SecondaryColor), progress_rounding);
+        ImGui::RenderRectFilledRangeH(dl, progress_bb, ImGui::GetColorU32(UIStyle.SecondaryColor), 0.0f, fraction,
+                                      progress_rounding);
       }
 
       text.format("{}%", static_cast<u32>(std::round(fraction * 100.0f)));
@@ -2822,6 +2832,7 @@ void Achievements::DrawAchievementsWindow()
       {ICON_EMOJI_UNLOCKED, TRANSLATE_NOOP("Achievements", "Recently Unlocked")},
       {ICON_FA_STOPWATCH, TRANSLATE_NOOP("Achievements", "Active Challenges")},
       {ICON_FA_RULER_HORIZONTAL, TRANSLATE_NOOP("Achievements", "Almost There")},
+      {ICON_FA_TRIANGLE_EXCLAMATION, TRANSLATE_NOOP("Achievements", "Unsynchronized")},
     };
 
     ImGuiFullscreen::ResetFocusHere();
@@ -2845,7 +2856,7 @@ void Achievements::DrawAchievementsWindow()
         bucket_collapsed ^= ImGuiFullscreen::MenuHeadingButton(
           TinyString::from_format("{} {}", bucket_names[bucket.bucket_type].first,
                                   Host::TranslateToStringView("Achievements", bucket_names[bucket.bucket_type].second)),
-          bucket_collapsed ? ICON_FA_CHEVRON_DOWN : ICON_FA_CHEVRON_UP);
+          bucket_collapsed ? ICON_FA_CHEVRON_DOWN : ICON_FA_CHEVRON_UP, UIStyle.MediumLargeFontSize);
         if (!bucket_collapsed)
         {
           for (u32 i = 0; i < bucket.num_achievements; i++)
@@ -2996,8 +3007,8 @@ void Achievements::DrawAchievement(const rc_client_achievement_t* cheevo)
 
   if (is_unlocked)
   {
-    TinyString date;
-    FullscreenUI::TimeToPrintableString(&date, cheevo->unlock_time);
+    const std::string date =
+      Host::FormatNumber(Host::NumberFormatType::LongDateTime, static_cast<s64>(cheevo->unlock_time));
     text.format(TRANSLATE_FS("Achievements", "Unlocked: {} | {:.1f}% of players have this achievement"), date,
                 rarity_to_display);
 
@@ -3025,8 +3036,8 @@ void Achievements::DrawAchievement(const rc_client_achievement_t* cheevo)
     const float fraction = cheevo->measured_percent * 0.01f;
     dl->AddRectFilled(progress_bb.Min, progress_bb.Max, ImGui::GetColorU32(ImGuiFullscreen::UIStyle.PrimaryDarkColor),
                       progress_rounding);
-    dl->AddRectFilled(progress_bb.Min, ImVec2(progress_bb.Min.x + fraction * progress_bb.GetWidth(), progress_bb.Max.y),
-                      ImGui::GetColorU32(ImGuiFullscreen::UIStyle.SecondaryColor), progress_rounding);
+    ImGui::RenderRectFilledRangeH(dl, progress_bb, ImGui::GetColorU32(ImGuiFullscreen::UIStyle.SecondaryColor), 0.0f,
+                                  fraction, progress_rounding);
 
     const ImVec2 text_size = UIStyle.Font->CalcTextSizeA(UIStyle.MediumFontSize, UIStyle.NormalFontWeight, FLT_MAX,
                                                          0.0f, IMSTR_START_END(measured_progress));
@@ -3302,6 +3313,9 @@ void Achievements::DrawLeaderboardsWindow()
       const ImVec2 line_end(end_x, line_start.y);
       ImGui::GetWindowDrawList()->AddLine(line_start, line_end, ImGui::GetColorU32(ImGuiCol_TextDisabled),
                                           line_thickness);
+
+      // keep imgui happy
+      ImGui::Dummy(ImVec2(end_x - column_heading_pos.x, column_heading_pos.y - line_end.y));
     }
   }
   ImGuiFullscreen::EndFullscreenWindow();
@@ -3387,7 +3401,7 @@ void Achievements::DrawLeaderboardsWindow()
 
         bool visible;
         text.format(ICON_FA_HOURGLASS_HALF " {}", TRANSLATE_SV("Achievements", "Loading..."));
-        ImGuiFullscreen::MenuButtonWithVisibilityQuery(text, {}, {}, &visible, false);
+        ImGuiFullscreen::MenuButtonWithVisibilityQuery(text, text, {}, {}, &visible, false);
         if (visible && !s_state.leaderboard_fetch_handle)
           FetchNextLeaderboardEntries();
       }
@@ -3482,8 +3496,9 @@ void Achievements::DrawLeaderboardEntry(const rc_client_leaderboard_entry_t& ent
   text_start_x += time_column_width + column_spacing;
 
   const ImRect time_bb(ImVec2(text_start_x, bb.Min.y), ImVec2(bb.Max.x, midpoint));
-  SmallString submit_time;
-  FullscreenUI::TimeToPrintableString(&submit_time, entry.submitted);
+
+  const std::string submit_time =
+    Host::FormatNumber(Host::NumberFormatType::LongDateTime, static_cast<s64>(entry.submitted));
   RenderShadowedTextClipped(UIStyle.Font, UIStyle.LargeFontSize, UIStyle.BoldFontWeight, time_bb.Min, time_bb.Max,
                             text_color, submit_time, nullptr, ImVec2(0.0f, 0.0f), 0.0f, &time_bb);
 

@@ -30,12 +30,10 @@ void OnSystemStarting();
 void OnSystemPaused();
 void OnSystemResumed();
 void OnSystemDestroyed();
-void OnRunningGameChanged(const std::string& path, const std::string& serial, const std::string& title, GameHash hash);
 
 void Shutdown(bool clear_state);
 void Render();
 void InvalidateCoverCache();
-void TimeToPrintableString(SmallStringBase* str, time_t t);
 
 float GetBackgroundAlpha();
 
@@ -49,9 +47,9 @@ void SetTheme();
 void UpdateRunIdleState();
 void UpdateTransitionState();
 
-static constexpr float SHORT_TRANSITION_TIME = 0.08f;
-static constexpr float DEFAULT_TRANSITION_TIME = 0.15f;
-static constexpr float LONG_TRANSITION_TIME = 0.3f;
+inline constexpr float SHORT_TRANSITION_TIME = 0.08f;
+inline constexpr float DEFAULT_TRANSITION_TIME = 0.15f;
+inline constexpr float LONG_TRANSITION_TIME = 0.3f;
 
 enum class TransitionState : u8
 {
@@ -79,14 +77,13 @@ void OpenCheatsMenu();
 void OpenDiscChangeMenu();
 void OpenAchievementsWindow();
 void OpenLeaderboardsWindow();
-void ReturnToMainWindow();
 void ReturnToPreviousWindow();
 void SetStandardSelectionFooterText(bool back_instead_of_cancel);
 
 class BackgroundProgressCallback final : public ProgressCallback
 {
 public:
-  BackgroundProgressCallback(std::string name);
+  explicit BackgroundProgressCallback(std::string name);
   ~BackgroundProgressCallback() override;
 
   void SetStatusText(const std::string_view text) override;
@@ -139,6 +136,7 @@ private:
   float m_open_delay = 1.0f;
   s32 m_last_progress_percent = -1;
   bool m_on_gpu_thread = false;
+  std::string m_image;
 };
 
 // Host UI triggers from Big Picture mode.
@@ -155,9 +153,6 @@ void RequestExitApplication(bool allow_confirm);
 
 /// Requests Big Picture mode to be shut down, returning to the desktop interface.
 void RequestExitBigPicture();
-
-/// Requests the cover downloader be opened.
-void OnCoverDownloaderOpenRequested();
 
 #endif
 

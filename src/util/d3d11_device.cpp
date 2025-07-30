@@ -81,14 +81,11 @@ bool D3D11Device::CreateDeviceAndMainSwapChain(std::string_view adapter, Feature
 
   ComPtr<ID3D11Device> temp_device;
   ComPtr<ID3D11DeviceContext> temp_context;
-  HRESULT hr =
-    D3D11CreateDevice(dxgi_adapter.Get(), dxgi_adapter ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE, nullptr,
-                      create_flags, requested_feature_levels.data(), static_cast<UINT>(requested_feature_levels.size()),
-                      D3D11_SDK_VERSION, temp_device.GetAddressOf(), nullptr, temp_context.GetAddressOf());
-
-  if (FAILED(hr))
+  HRESULT hr;
+  if (!D3DCommon::CreateD3D11Device(dxgi_adapter.Get(), create_flags, requested_feature_levels.data(),
+                                    static_cast<UINT>(requested_feature_levels.size()), &temp_device, nullptr,
+                                    &temp_context, error))
   {
-    Error::SetHResult(error, "Failed to create D3D device: ", hr);
     return false;
   }
   else if (FAILED(hr = temp_device.As(&m_device)) || FAILED(hr = temp_context.As(&m_context)))
@@ -122,14 +119,16 @@ bool D3D11Device::CreateDeviceAndMainSwapChain(std::string_view adapter, Feature
 #endif
 
   ComPtr<IDXGIDevice> dxgi_device;
+  GPUDriverType driver_type = GPUDriverType::Unknown;
   if (SUCCEEDED(m_device.As(&dxgi_device)) &&
       SUCCEEDED(dxgi_device->GetParent(IID_PPV_ARGS(dxgi_adapter.GetAddressOf()))))
-    INFO_LOG("D3D Adapter: {}", D3DCommon::GetAdapterName(dxgi_adapter.Get()));
+    INFO_LOG("D3D Adapter: {}", D3DCommon::GetAdapterName(dxgi_adapter.Get(), &driver_type));
   else
     ERROR_LOG("Failed to obtain D3D adapter name.");
   INFO_LOG("Max device feature level: {}",
            D3DCommon::GetFeatureLevelString(D3DCommon::GetRenderAPIVersionForFeatureLevel(m_max_feature_level)));
 
+  SetDriverType(driver_type);
   SetFeatures(disabled_features);
 
   if (!wi.IsSurfaceless())
@@ -170,7 +169,7 @@ void D3D11Device::SetFeatures(FeatureMask disabled_features)
           m_device->CheckMultisampleQualityLevels(DXGI_FORMAT_R8G8B8A8_UNORM, multisamples, &num_quality_levels)) &&
         num_quality_levels > 0)
     {
-      m_max_multisamples = multisamples;
+      m_max_multisamples = static_cast<u16>(multisamples);
     }
   }
 

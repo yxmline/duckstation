@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2019-2024 Connor McLaughlin <stenzek@gmail.com>
+// SPDX-FileCopyrightText: 2019-2025 Connor McLaughlin <stenzek@gmail.com>
 // SPDX-License-Identifier: CC-BY-NC-ND-4.0
 
 #include "advancedsettingswidget.h"
@@ -12,6 +12,8 @@
 
 #include <QtGui/QCursor>
 #include <QtWidgets/QMenu>
+
+#include "moc_advancedsettingswidget.cpp"
 
 static QCheckBox* addBooleanTweakOption(SettingsWindow* dialog, QTableWidget* table, QString name, std::string section,
                                         std::string key, bool default_value)
@@ -180,15 +182,22 @@ AdvancedSettingsWidget::AdvancedSettingsWidget(SettingsWindow* dialog, QWidget* 
   SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.logToDebug, "Logging", "LogToDebug", false);
   SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.logToWindow, "Logging", "LogToWindow", false);
   SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.logToFile, "Logging", "LogToFile", false);
-
-  SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.showDebugMenu, "Main", "ShowDebugMenu", false);
+  SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.logTimestamps, "Logging", "LogTimestamps", true);
+  SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.logFileTimestamps, "Logging", "LogFileTimestamps", false);
+  connect(m_ui.logToConsole, &QCheckBox::checkStateChanged, this, &AdvancedSettingsWidget::onAnyLogSinksChanged);
+  connect(m_ui.logToWindow, &QCheckBox::checkStateChanged, this, &AdvancedSettingsWidget::onAnyLogSinksChanged);
+  connect(m_ui.logToFile, &QCheckBox::checkStateChanged, this, &AdvancedSettingsWidget::onAnyLogSinksChanged);
+  onAnyLogSinksChanged(); // initialize enabled/disabled state of checkboxes
 
   connect(m_ui.logChannels, &QToolButton::clicked, this, &AdvancedSettingsWidget::onLogChannelsButtonClicked);
-  connect(m_ui.resetToDefaultButton, &QPushButton::clicked, this, &AdvancedSettingsWidget::onResetToDefaultClicked);
+
+  SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.showDebugMenu, "Main", "ShowDebugMenu", false);
   connect(m_ui.showDebugMenu, &QCheckBox::checkStateChanged, g_main_window, &MainWindow::updateDebugMenuVisibility,
           Qt::QueuedConnection);
   connect(m_ui.showDebugMenu, &QCheckBox::checkStateChanged, this,
           &AdvancedSettingsWidget::onShowDebugOptionsStateChanged);
+
+  connect(m_ui.resetToDefaultButton, &QPushButton::clicked, this, &AdvancedSettingsWidget::onResetToDefaultClicked);
 
   m_ui.tweakOptionTable->setColumnWidth(0, 380);
   m_ui.tweakOptionTable->setColumnWidth(1, 170);
@@ -205,6 +214,10 @@ AdvancedSettingsWidget::AdvancedSettingsWidget(SettingsWindow* dialog, QWidget* 
                              tr("Logs messages to the window."));
   dialog->registerWidgetHelp(m_ui.logToFile, tr("Log To File"), tr("User Preference"),
                              tr("Logs messages to duckstation.log in the user directory."));
+  dialog->registerWidgetHelp(m_ui.logTimestamps, tr("Log Timestamps"), tr("User Preference"),
+                             tr("Includes the elapsed time since the application start in window and console logs."));
+  dialog->registerWidgetHelp(m_ui.logFileTimestamps, tr("Log File Timestamps"), tr("User Preference"),
+                             tr("Includes the elapsed time since the application start in file logs."));
   dialog->registerWidgetHelp(m_ui.showDebugMenu, tr("Show Debug Menu"), tr("Unchecked"),
                              tr("Shows a debug menu bar with additional statistics and quick settings."));
 }
@@ -216,6 +229,16 @@ void AdvancedSettingsWidget::onLogChannelsButtonClicked()
   QMenu menu;
   LogWindow::populateFilterMenu(&menu);
   menu.exec(QCursor::pos());
+}
+
+void AdvancedSettingsWidget::onAnyLogSinksChanged()
+{
+  const bool log_to_console = m_dialog->getEffectiveBoolValue("Logging", "LogToConsole", false);
+  const bool log_to_window = m_dialog->getEffectiveBoolValue("Logging", "LogToWindow", false);
+  const bool log_to_file = m_dialog->getEffectiveBoolValue("Logging", "LogToFile", false);
+
+  m_ui.logTimestamps->setEnabled(log_to_console || log_to_window);
+  m_ui.logFileTimestamps->setEnabled(log_to_file);
 }
 
 void AdvancedSettingsWidget::onShowDebugOptionsStateChanged()
@@ -281,12 +304,14 @@ void AdvancedSettingsWidget::addTweakOptions()
                        Settings::DEFAULT_CDROM_MECHACON_VERSION);
   addIntRangeTweakOption(m_dialog, m_ui.tweakOptionTable, tr("CD-ROM Readahead Sectors"), "CDROM", "ReadaheadSectors",
                          0, 32, Settings::DEFAULT_CDROM_READAHEAD_SECTORS, tr(" sectors"));
-  addIntRangeTweakOption(m_dialog, m_ui.tweakOptionTable, tr("CD-ROM Max Seek Speedup Cycles"), "CDROM",
-                         "MaxSeekSpeedupCycles", 1, 1000000, Settings::DEFAULT_CDROM_MAX_SEEK_SPEEDUP_CYCLES,
-                         tr(" cycles"));
   addIntRangeTweakOption(m_dialog, m_ui.tweakOptionTable, tr("CD-ROM Max Read Speedup Cycles"), "CDROM",
                          "MaxReadSpeedupCycles", 1, 1000000, Settings::DEFAULT_CDROM_MAX_READ_SPEEDUP_CYCLES,
                          tr(" cycles"));
+  addIntRangeTweakOption(m_dialog, m_ui.tweakOptionTable, tr("CD-ROM Max Seek Speedup Cycles"), "CDROM",
+                         "MaxSeekSpeedupCycles", 1, 1000000, Settings::DEFAULT_CDROM_MAX_SEEK_SPEEDUP_CYCLES,
+                         tr(" cycles"));
+  addBooleanTweakOption(m_dialog, m_ui.tweakOptionTable, tr("CD-ROM Disable Speedup on MDEC"), "CDROM",
+                        "DisableSpeedupOnMDEC", false);
   addBooleanTweakOption(m_dialog, m_ui.tweakOptionTable, tr("CD-ROM Region Check"), "CDROM", "RegionCheck", false);
   addBooleanTweakOption(m_dialog, m_ui.tweakOptionTable, tr("CD-ROM SubQ Skew"), "CDROM", "SubQSkew", false);
   addBooleanTweakOption(m_dialog, m_ui.tweakOptionTable, tr("Allow Booting Without SBI File"), "CDROM",
@@ -298,6 +323,7 @@ void AdvancedSettingsWidget::addTweakOptions()
 
   addBooleanTweakOption(m_dialog, m_ui.tweakOptionTable, tr("Export Shared Memory"), "Hacks", "ExportSharedMemory",
                         false);
+  addBooleanTweakOption(m_dialog, m_ui.tweakOptionTable, tr("Redirect SIO to TTY"), "SIO", "RedirectToTTY", false);
   addBooleanTweakOption(m_dialog, m_ui.tweakOptionTable, tr("Enable PCDrv"), "PCDrv", "Enabled", false);
   addBooleanTweakOption(m_dialog, m_ui.tweakOptionTable, tr("Enable PCDrv Writes"), "PCDrv", "EnableWrites", false);
   addDirectoryOption(m_dialog, m_ui.tweakOptionTable, tr("PCDrv Root Directory"), "PCDrv", "Root");
@@ -332,15 +358,17 @@ void AdvancedSettingsWidget::onResetToDefaultClicked()
     setIntRangeTweakOption(m_ui.tweakOptionTable, i++,
                            Settings::DEFAULT_CDROM_READAHEAD_SECTORS); // CD-ROM Readahead Sectors
     setIntRangeTweakOption(m_ui.tweakOptionTable, i++,
-                           Settings::DEFAULT_CDROM_MAX_SEEK_SPEEDUP_CYCLES); // CD-ROM Max Speedup Seek Cycles
-    setIntRangeTweakOption(m_ui.tweakOptionTable, i++,
                            Settings::DEFAULT_CDROM_MAX_READ_SPEEDUP_CYCLES); // CD-ROM Max Speedup Read Cycles
+    setIntRangeTweakOption(m_ui.tweakOptionTable, i++,
+                           Settings::DEFAULT_CDROM_MAX_SEEK_SPEEDUP_CYCLES); // CD-ROM Max Speedup Seek Cycles
+    setBooleanTweakOption(m_ui.tweakOptionTable, i++, false);                // CDROM Disable Speedup on MDEC
     setBooleanTweakOption(m_ui.tweakOptionTable, i++, false);                // CDROM Region Check
     setBooleanTweakOption(m_ui.tweakOptionTable, i++, false);                // CDROM SubQ Skew
     setBooleanTweakOption(m_ui.tweakOptionTable, i++, false);                // Allow booting without SBI file
     setBooleanTweakOption(m_ui.tweakOptionTable, i++, false);                // Enable GDB Server
     setIntRangeTweakOption(m_ui.tweakOptionTable, i++, Settings::DEFAULT_GDB_SERVER_PORT); // GDB Server Port
     setBooleanTweakOption(m_ui.tweakOptionTable, i++, false);                              // Export Shared Memory
+    setBooleanTweakOption(m_ui.tweakOptionTable, i++, false);                              // Redirect SIO to TTY
     setBooleanTweakOption(m_ui.tweakOptionTable, i++, false);                              // Enable PCDRV
     setBooleanTweakOption(m_ui.tweakOptionTable, i++, false);                              // Enable PCDRV Writes
     setDirectoryOption(m_ui.tweakOptionTable, i++, "");                                    // PCDrv Root Directory
@@ -368,12 +396,15 @@ void AdvancedSettingsWidget::onResetToDefaultClicked()
   sif->DeleteValue("CPU", "FastmemMode");
   sif->DeleteValue("CDROM", "MechaconVersion");
   sif->DeleteValue("CDROM", "ReadaheadSectors");
-  sif->DeleteValue("CDROM", "MaxSpeedupCycles");
+  sif->DeleteValue("CDROM", "MaxReadSpeedupCycles");
+  sif->DeleteValue("CDROM", "MaxSeekSpeedupCycles");
+  sif->DeleteValue("CDROM", "DisableSpeedupOnMDEC");
   sif->DeleteValue("CDROM", "RegionCheck");
   sif->DeleteValue("CDROM", "SubQSkew");
   sif->DeleteValue("CDROM", "AllowBootingWithoutSBIFile");
   sif->DeleteValue("Debug", "EnableGDBServer");
   sif->DeleteValue("Debug", "GDBServerPort");
+  sif->DeleteValue("SIO", "RedirectToTTY");
   sif->DeleteValue("PCDrv", "Enabled");
   sif->DeleteValue("PCDrv", "EnableWrites");
   sif->DeleteValue("PCDrv", "Root");

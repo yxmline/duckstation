@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2019-2024 Connor McLaughlin <stenzek@gmail.com>
+// SPDX-FileCopyrightText: 2019-2025 Connor McLaughlin <stenzek@gmail.com>
 // SPDX-License-Identifier: CC-BY-NC-ND-4.0
 
 #include "displaywidget.h"
@@ -21,6 +21,8 @@
 #include <QtGui/QWindow>
 #include <QtGui/QWindowStateChangeEvent>
 #include <cmath>
+
+#include "moc_displaywidget.cpp"
 
 #if !defined(_WIN32) && !defined(APPLE)
 #include <qpa/qplatformnativeinterface.h>
@@ -137,10 +139,11 @@ void DisplayWidget::handleCloseEvent(QCloseEvent* event)
   // In the latter case, it's going to destroy us, so don't let Qt do it first.
   // Treat a close event while fullscreen as an exit, that way ALT+F4 closes DuckStation,
   // rather than just the game.
-  if (QtHost::IsSystemValid() && !isActuallyFullscreen())
+  if (QtHost::IsSystemValidOrStarting() && !isActuallyFullscreen())
   {
     QMetaObject::invokeMethod(g_main_window, "requestShutdown", Qt::QueuedConnection, Q_ARG(bool, true),
-                              Q_ARG(bool, true), Q_ARG(bool, false), Q_ARG(bool, true));
+                              Q_ARG(bool, true), Q_ARG(bool, false), Q_ARG(bool, true), Q_ARG(bool, true),
+                              Q_ARG(bool, false));
   }
   else
   {
@@ -398,8 +401,15 @@ bool DisplayWidget::event(QEvent* event)
     {
       QWidget::event(event);
 
-      if (static_cast<QWindowStateChangeEvent*>(event)->oldState() & Qt::WindowMinimized)
+      const QWindowStateChangeEvent* ws_event = static_cast<const QWindowStateChangeEvent*>(event);
+      if (ws_event->oldState() & Qt::WindowMinimized)
         emit windowRestoredEvent();
+
+#ifdef __APPLE__
+      // On MacOS, the user can "cancel" fullscreen by unmaximizing the window.
+      if (ws_event->oldState() & Qt::WindowFullScreen && !(windowState() & Qt::WindowFullScreen))
+        g_emu_thread->setFullscreen(false);
+#endif
 
       return true;
     }

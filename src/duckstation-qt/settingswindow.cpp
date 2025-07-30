@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2019-2024 Connor McLaughlin <stenzek@gmail.com>
+// SPDX-FileCopyrightText: 2019-2025 Connor McLaughlin <stenzek@gmail.com>
 // SPDX-License-Identifier: CC-BY-NC-ND-4.0
 
 #include "settingswindow.h"
@@ -36,7 +36,9 @@
 #include <QtWidgets/QScrollBar>
 #include <QtWidgets/QTextEdit>
 
-LOG_CHANNEL(SettingsWindow);
+#include "moc_settingswindow.cpp"
+
+LOG_CHANNEL(Host);
 
 static QList<SettingsWindow*> s_open_game_properties_dialogs;
 
@@ -151,19 +153,15 @@ void SettingsWindow::addPages()
     QStringLiteral("volume-up-line"),
     tr("<strong>Audio Settings</strong><hr>These options control the audio output of the console. Mouse over an option "
        "for additional information."));
-  {
-    QString title(tr("Achievements"));
-    QString icon_text(QStringLiteral("trophy-line"));
-    QString help_text(
-      tr("<strong>Achievement Settings</strong><hr>DuckStation uses RetroAchievements as an achievement database and "
-         "for tracking progress. To use achievements, please sign up for an account at retroachievements.org. To view "
-         "the achievement list in-game, press the hotkey for <strong>Open Pause Menu</strong> and select "
-         "<strong>Achievements</strong> from the menu. Mouse over an option for additional information, and "
-         "Shift+Wheel to scroll this panel."));
-
-    addWidget(m_achievement_settings = new AchievementSettingsWidget(this, m_ui.settingsContainer), std::move(title),
-              std::move(icon_text), std::move(help_text));
-  }
+  addWidget(
+    m_achievement_settings = new AchievementSettingsWidget(this, m_ui.settingsContainer), tr("Achievements"),
+    QStringLiteral("trophy-line"),
+    tr("<strong>Achievement Settings</strong><hr>DuckStation uses RetroAchievements as an achievement database and "
+       "for tracking progress. To use achievements, please sign up for an account at <a href=\"%1\">%1</a>. To view "
+       "the achievement list in-game, press the hotkey for <strong>Open Pause Menu</strong> and select "
+       "<strong>Achievements</strong> from the menu. Mouse over an option for additional information, and "
+       "Shift+Wheel to scroll this panel.")
+      .arg("https://retroachievements.org/"));
 
   if (!isPerGameSettings())
   {
@@ -182,6 +180,10 @@ void SettingsWindow::addPages()
           &GraphicsSettingsWidget::onShowDebugSettingsChanged);
 
   SettingWidgetBinder::BindWidgetToBoolSetting(m_sif.get(), m_ui.safeMode, "Main", "DisableAllEnhancements", false);
+
+  registerWidgetHelp(m_ui.safeMode, tr("Safe Mode"), tr("Unchecked"),
+                     tr("Disables all enhancement options, simulating the system as accurately as possible. Use to "
+                        "quickly determine whether an enhancement is responsible for game bugs."));
 }
 
 void SettingsWindow::reloadPages()
@@ -199,11 +201,12 @@ void SettingsWindow::reloadPages()
   }
 
   if (isPerGameSettings())
-  {
     m_game_summary->reloadGameSettings();
-    m_ui.safeMode->disconnect();
-  }
 
+  SettingWidgetBinder::DisconnectWidget(m_ui.safeMode);
+
+  m_widget_help_text_map.clear();
+  m_current_help_widget = nullptr;
   addPages();
 }
 
@@ -225,7 +228,6 @@ void SettingsWindow::connectUi()
     m_ui.clearGameSettings = nullptr;
   }
 
-  m_ui.settingsCategory->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
   m_ui.settingsCategory->setCurrentRow(0);
   m_ui.settingsContainer->setCurrentIndex(0);
   m_ui.helpText->setOpenExternalLinks(true);
@@ -238,10 +240,6 @@ void SettingsWindow::connectUi()
     connect(m_ui.copyGlobalSettings, &QPushButton::clicked, this, &SettingsWindow::onCopyGlobalSettingsClicked);
   if (m_ui.clearGameSettings)
     connect(m_ui.clearGameSettings, &QPushButton::clicked, this, &SettingsWindow::onClearSettingsClicked);
-
-  registerWidgetHelp(m_ui.safeMode, tr("Safe Mode"), tr("Unchecked"),
-                     tr("Disables all enhancement options, simulating the system as accurately as possible. Use to "
-                        "quickly determine whether an enhancement is responsible for game bugs."));
 }
 
 void SettingsWindow::addWidget(QWidget* widget, QString title, QString icon, QString help_text)
@@ -354,6 +352,9 @@ void SettingsWindow::onClearSettingsClicked()
 
 void SettingsWindow::registerWidgetHelp(QObject* object, QString title, QString recommended_value, QString text)
 {
+  if (!object)
+    return;
+
   // construct rich text with formatted description
   QString full_text;
   full_text += "<table width='100%' cellpadding='0' cellspacing='0'><tr><td><strong>";

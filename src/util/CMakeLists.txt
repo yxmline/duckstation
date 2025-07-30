@@ -241,7 +241,7 @@ if(WIN32)
     xinput_source.h
   )
   target_link_libraries(util PRIVATE d3d12ma)
-  target_link_libraries(util PRIVATE d3d11.lib d3d12.lib d3dcompiler.lib dxgi.lib winmm.lib Dwmapi.lib winhttp.lib)
+  target_link_libraries(util PRIVATE winmm.lib Dwmapi.lib winhttp.lib)
 
   if(CMAKE_BUILD_TYPE MATCHES "Debug|Devel")
     target_link_libraries(util PRIVATE WinPixEventRuntime::WinPixEventRuntime)
@@ -322,20 +322,14 @@ function(add_util_resources target)
       set_source_files_properties(${target} PRIVATE ${version_lib} PROPERTIES MACOSX_PACKAGE_LOCATION Frameworks)
     endforeach()
   elseif(ALLOW_INSTALL)
-    if(INSTALL_SELF_CONTAINED)
-      # Ensure we look for dependency libraries in the installation directory.
-      set_target_properties(${target} PROPERTIES INSTALL_RPATH "$ORIGIN")
+    # Ensure we look for dependency libraries in the installation directory.
+    set_target_properties(${target} PROPERTIES INSTALL_RPATH "$ORIGIN")
 
-      # Copy dependency libraries to installation directory.
-      install_imported_dep_library(SDL3::SDL3)
-      install_imported_dep_library(Shaderc::shaderc_shared)
-      install_imported_dep_library(spirv-cross-c-shared)
-      install_imported_dep_library(SoundTouch::SoundTouchDLL)
-      install_imported_dep_library(plutosvg::plutosvg)
-    else()
-      # Prevent CMake from overriding the RPATH in the binary. i.e. use the build locations.
-      # This is needed for Flatpak builds, since the libs are in /app.
-      set_target_properties(${target} PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE)
-    endif()
+    # Copy dependency libraries to installation directory.
+    install_imported_dep_library(SDL3::SDL3)
+    install_imported_dep_library(Shaderc::shaderc_shared)
+    install_imported_dep_library(spirv-cross-c-shared)
+    install_imported_dep_library(SoundTouch::SoundTouchDLL)
+    install_imported_dep_library(plutosvg::plutosvg)
   endif()
 endfunction()

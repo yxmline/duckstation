@@ -40,7 +40,7 @@ namespace GameDatabase {
 enum : u32
 {
   GAME_DATABASE_CACHE_SIGNATURE = 0x45434C48,
-  GAME_DATABASE_CACHE_VERSION = 26,
+  GAME_DATABASE_CACHE_VERSION = 27,
 };
 
 static const Entry* GetEntryForId(std::string_view code);
@@ -87,6 +87,7 @@ static constexpr const std::array s_trait_names = {
   "DisableMultitap",
   "DisableCDROMReadSpeedup",
   "DisableCDROMSeekSpeedup",
+  "DisableCDROMSpeedupOnMDEC",
   "DisableTrueColor",
   "DisableFullTrueColor",
   "DisableUpscaling",
@@ -122,6 +123,7 @@ static constexpr const std::array s_trait_display_names = {
   TRANSLATE_DISAMBIG_NOOP("GameDatabase", "Disable Multitap", "GameDatabase::Trait"),
   TRANSLATE_DISAMBIG_NOOP("GameDatabase", "Disable CD-ROM Read Speedup", "GameDatabase::Trait"),
   TRANSLATE_DISAMBIG_NOOP("GameDatabase", "Disable CD-ROM Seek Speedup", "GameDatabase::Trait"),
+  TRANSLATE_DISAMBIG_NOOP("GameDatabase", "Disable CD-ROM Speedup on MDEC", "GameDatabase::Trait"),
   TRANSLATE_DISAMBIG_NOOP("GameDatabase", "Disable True Color", "GameDatabase::Trait"),
   TRANSLATE_DISAMBIG_NOOP("GameDatabase", "Disable Full True Color", "GameDatabase::Trait"),
   TRANSLATE_DISAMBIG_NOOP("GameDatabase", "Disable Upscaling", "GameDatabase::Trait"),
@@ -494,6 +496,19 @@ void GameDatabase::Entry::ApplySettings(Settings& settings, bool display_osd_mes
       APPEND_MESSAGE(TRANSLATE_SV("GameDatabase", "CD-ROM seek speedup disabled."));
 
     settings.cdrom_seek_speedup = 1;
+  }
+
+  if (HasTrait(Trait::DisableCDROMSpeedupOnMDEC))
+  {
+    WARNING_LOG("Disabling CD-ROM speedup on MDEC.");
+    settings.mdec_disable_cdrom_speedup = true;
+  }
+  else if (settings.mdec_disable_cdrom_speedup && settings.cdrom_read_speedup != 1)
+  {
+    Host::AddIconOSDWarning(
+      "GameDBDisableCDROMSpeedupUnnecessary", ICON_EMOJI_WARNING,
+      TRANSLATE_STR("GameDatabase", "Disable CD-ROM speedup on MDEC is enabled, but it is not required for this game."),
+      Host::OSD_WARNING_DURATION);
   }
 
   if (display_crop_mode.has_value())
@@ -974,7 +989,7 @@ std::string GameDatabase::Entry::GenerateCompatibilityReport() const
   if (!disc_set_name.empty())
   {
     ret.append_format("**{}:** {}\n", TRANSLATE_SV("GameDatabase", "Disc Set"), disc_set_name);
-    for (const std::string& ds_serial : disc_set_serials)
+    for (const std::string_view& ds_serial : disc_set_serials)
       ret.append_format(" - {}\n", ds_serial);
   }
 
@@ -1172,7 +1187,7 @@ bool GameDatabase::SaveToCache()
 
     writer.WriteSizePrefixedString(entry.disc_set_name);
     writer.WriteU32(static_cast<u32>(entry.disc_set_serials.size()));
-    for (const std::string& serial : entry.disc_set_serials)
+    for (const std::string_view& serial : entry.disc_set_serials)
       writer.WriteSizePrefixedString(serial);
   }
 

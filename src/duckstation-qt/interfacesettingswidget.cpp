@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2019-2024 Connor McLaughlin <stenzek@gmail.com>
+// SPDX-FileCopyrightText: 2019-2025 Connor McLaughlin <stenzek@gmail.com>
 // SPDX-License-Identifier: CC-BY-NC-ND-4.0
 
 #include "interfacesettingswidget.h"
@@ -8,6 +8,8 @@
 #include "scmversion/scmversion.h"
 #include "settingswindow.h"
 #include "settingwidgetbinder.h"
+
+#include "moc_interfacesettingswidget.cpp"
 
 const char* InterfaceSettingsWidget::THEME_NAMES[] = {
   QT_TRANSLATE_NOOP("MainWindow", "Native"),
@@ -47,8 +49,6 @@ const char* InterfaceSettingsWidget::THEME_VALUES[] = {
   nullptr,
 };
 
-const char* InterfaceSettingsWidget::DEFAULT_THEME_NAME = "darkfusion";
-
 InterfaceSettingsWidget::InterfaceSettingsWidget(SettingsWindow* dialog, QWidget* parent)
   : QWidget(parent), m_dialog(dialog)
 {
@@ -84,8 +84,7 @@ InterfaceSettingsWidget::InterfaceSettingsWidget(SettingsWindow* dialog, QWidget
     connect(m_ui.theme, QOverload<int>::of(&QComboBox::currentIndexChanged), [this]() { emit themeChanged(); });
 
     populateLanguageDropdown(m_ui.language);
-    SettingWidgetBinder::BindWidgetToStringSetting(sif, m_ui.language, "Main", "Language",
-                                                   QtHost::GetDefaultLanguage());
+    SettingWidgetBinder::BindWidgetToStringSetting(sif, m_ui.language, "Main", "Language", {});
     connect(m_ui.language, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &InterfaceSettingsWidget::onLanguageChanged);
 
@@ -178,16 +177,8 @@ void InterfaceSettingsWidget::populateLanguageDropdown(QComboBox* cb)
 {
   for (const auto& [language, code] : Host::GetAvailableLanguageList())
   {
-    QString icon_filename(QStringLiteral(":/icons/flags/%1.png").arg(QLatin1StringView(code)));
-    if (!QFile::exists(icon_filename))
-    {
-      // try without the suffix (e.g. es-es -> es)
-      const char* pos = std::strrchr(code, '-');
-      if (pos)
-        icon_filename = QStringLiteral(":/icons/flags/%1.png").arg(QLatin1StringView(pos));
-    }
-
-    cb->addItem(QIcon(icon_filename), QString::fromUtf8(language), QString::fromLatin1(code));
+    cb->addItem(QtUtils::GetIconForTranslationLanguage(code), QString::fromUtf8(Host::GetLanguageName(code)),
+                QString::fromLatin1(code));
   }
 }
 

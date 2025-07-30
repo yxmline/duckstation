@@ -3,11 +3,16 @@
 
 #pragma once
 
+#include "host.h"
+
+#include "common/small_string.h"
 #include "common/types.h"
 
 #include "IconsFontAwesome6.h"
 #include "imgui.h"
 #include "imgui_internal.h"
+
+#include "fmt/format.h"
 
 #include <functional>
 #include <memory>
@@ -20,7 +25,7 @@
 
 class Image;
 class GPUTexture;
-class SmallStringBase;
+class ProgressCallback;
 
 namespace ImGuiFullscreen {
 
@@ -31,31 +36,31 @@ namespace ImGuiFullscreen {
 // end_ptr() for string_view
 #define IMSTR_START_END(sv) (sv).data(), (sv).data() + (sv).length()
 
-static constexpr float LAYOUT_SCREEN_WIDTH = 1280.0f;
-static constexpr float LAYOUT_SCREEN_HEIGHT = 720.0f;
-static constexpr float LAYOUT_LARGE_FONT_SIZE = 26.0f;
-static constexpr float LAYOUT_MEDIUM_FONT_SIZE = 16.0f;
-static constexpr float LAYOUT_MEDIUM_LARGE_FONT_SIZE = 21.0f;
-static constexpr float LAYOUT_SMALL_FONT_SIZE = 10.0f;
-static constexpr float LAYOUT_MENU_BUTTON_X_PADDING = 15.0f;
-static constexpr float LAYOUT_MENU_BUTTON_Y_PADDING = 10.0f;
-static constexpr float LAYOUT_MENU_BUTTON_SPACING = 6.0f;
-static constexpr float LAYOUT_MENU_WINDOW_X_PADDING = 12.0f;
-static constexpr float LAYOUT_MENU_WINDOW_Y_PADDING = 12.0f;
-static constexpr float LAYOUT_MENU_ITEM_TITLE_SUMMARY_SPACING = 6.0f;
-static constexpr float LAYOUT_MENU_ITEM_EXTRA_HEIGHT = 2.0f;
-static constexpr float LAYOUT_FOOTER_PADDING = 10.0f;
-static constexpr float LAYOUT_FOOTER_HEIGHT = LAYOUT_MEDIUM_FONT_SIZE + LAYOUT_FOOTER_PADDING * 2.0f;
-static constexpr float LAYOUT_HORIZONTAL_MENU_HEIGHT = 320.0f;
-static constexpr float LAYOUT_HORIZONTAL_MENU_PADDING = 30.0f;
-static constexpr float LAYOUT_HORIZONTAL_MENU_ITEM_WIDTH = 250.0f;
-static constexpr float LAYOUT_HORIZONTAL_MENU_ITEM_IMAGE_SIZE = 150.0f;
-static constexpr float LAYOUT_SHADOW_OFFSET = 1.0f;
-static constexpr float LAYOUT_SMALL_POPUP_PADDING = 20.0f;
-static constexpr float LAYOUT_LARGE_POPUP_PADDING = 30.0f;
-static constexpr float LAYOUT_LARGE_POPUP_ROUNDING = 40.0f;
-static constexpr float LAYOUT_WIDGET_FRAME_ROUNDING = 20.0f;
-static constexpr ImVec2 LAYOUT_CENTER_ALIGN_TEXT = ImVec2(0.5f, 0.0f);
+inline constexpr float LAYOUT_SCREEN_WIDTH = 1280.0f;
+inline constexpr float LAYOUT_SCREEN_HEIGHT = 720.0f;
+inline constexpr float LAYOUT_LARGE_FONT_SIZE = 26.0f;
+inline constexpr float LAYOUT_MEDIUM_FONT_SIZE = 16.0f;
+inline constexpr float LAYOUT_MEDIUM_LARGE_FONT_SIZE = 21.0f;
+inline constexpr float LAYOUT_SMALL_FONT_SIZE = 10.0f;
+inline constexpr float LAYOUT_MENU_BUTTON_X_PADDING = 15.0f;
+inline constexpr float LAYOUT_MENU_BUTTON_Y_PADDING = 10.0f;
+inline constexpr float LAYOUT_MENU_BUTTON_SPACING = 6.0f;
+inline constexpr float LAYOUT_MENU_WINDOW_X_PADDING = 12.0f;
+inline constexpr float LAYOUT_MENU_WINDOW_Y_PADDING = 12.0f;
+inline constexpr float LAYOUT_MENU_ITEM_TITLE_SUMMARY_SPACING = 6.0f;
+inline constexpr float LAYOUT_MENU_ITEM_EXTRA_HEIGHT = 2.0f;
+inline constexpr float LAYOUT_FOOTER_PADDING = 10.0f;
+inline constexpr float LAYOUT_FOOTER_HEIGHT = LAYOUT_MEDIUM_FONT_SIZE + LAYOUT_FOOTER_PADDING * 2.0f;
+inline constexpr float LAYOUT_HORIZONTAL_MENU_HEIGHT = 320.0f;
+inline constexpr float LAYOUT_HORIZONTAL_MENU_PADDING = 30.0f;
+inline constexpr float LAYOUT_HORIZONTAL_MENU_ITEM_WIDTH = 250.0f;
+inline constexpr float LAYOUT_HORIZONTAL_MENU_ITEM_IMAGE_SIZE = 150.0f;
+inline constexpr float LAYOUT_SHADOW_OFFSET = 1.0f;
+inline constexpr float LAYOUT_SMALL_POPUP_PADDING = 20.0f;
+inline constexpr float LAYOUT_LARGE_POPUP_PADDING = 30.0f;
+inline constexpr float LAYOUT_LARGE_POPUP_ROUNDING = 40.0f;
+inline constexpr float LAYOUT_WIDGET_FRAME_ROUNDING = 20.0f;
+inline constexpr ImVec2 LAYOUT_CENTER_ALIGN_TEXT = ImVec2(0.5f, 0.0f);
 
 struct ALIGN_TO_CACHE_LINE UIStyles
 {
@@ -170,6 +175,25 @@ ALWAYS_INLINE static std::string_view RemoveHash(std::string_view s)
   const std::string_view::size_type pos = s.find("##");
   return (pos != std::string_view::npos) ? s.substr(0, pos) : s;
 }
+
+/// Localization support.
+#define FSUI_TR_CONTEXT std::string_view("FullscreenUI")
+
+class IconStackString : public SmallStackString<128>
+{
+public:
+  IconStackString(std::string_view icon, std::string_view str);
+  IconStackString(std::string_view icon, std::string_view str, std::string_view suffix);
+};
+
+#define FSUI_ICONSTR(icon, str) fmt::format("{} {}", icon, Host::TranslateToStringView(FSUI_TR_CONTEXT, str))
+#define FSUI_ICONVSTR(icon, str) ::ImGuiFullscreen::IconStackString(icon, str).view()
+#define FSUI_ICONCSTR(icon, str) ::ImGuiFullscreen::IconStackString(icon, str).c_str()
+#define FSUI_STR(str) Host::TranslateToString(FSUI_TR_CONTEXT, std::string_view(str))
+#define FSUI_CSTR(str) Host::TranslateToCString(FSUI_TR_CONTEXT, std::string_view(str))
+#define FSUI_VSTR(str) Host::TranslateToStringView(FSUI_TR_CONTEXT, std::string_view(str))
+#define FSUI_FSTR(str) fmt::runtime(Host::TranslateToStringView(FSUI_TR_CONTEXT, std::string_view(str)))
+#define FSUI_NSTR(str) str
 
 /// Centers an image within the specified bounds, scaling up or down as needed.
 ImRect CenterImage(const ImVec2& fit_size, const ImVec2& image_size);
@@ -299,20 +323,27 @@ void RenderShadowedTextClipped(ImDrawList* draw_list, ImFont* font, float font_s
                                const ImVec2& pos_min, const ImVec2& pos_max, u32 color, std::string_view text,
                                const ImVec2* text_size_if_known, const ImVec2& align, float wrap_width,
                                const ImRect* clip_rect, float shadow_offset);
+void RenderMultiLineShadowedTextClipped(ImDrawList* draw_list, ImFont* font, float font_size, float font_weight,
+                                        const ImVec2& pos_min, const ImVec2& pos_max, u32 color, std::string_view text,
+                                        const ImVec2& align, float wrap_width, const ImRect* clip_rect = nullptr,
+                                        float shadow_offset = LayoutScale(LAYOUT_SHADOW_OFFSET));
 void RenderAutoLabelText(ImDrawList* draw_list, ImFont* font, float font_size, float font_weight, float label_weight,
                          const ImVec2& pos_min, const ImVec2& pos_max, u32 color, std::string_view text,
                          char separator = ':', float shadow_offset = LayoutScale(LAYOUT_SHADOW_OFFSET));
 void TextAlignedMultiLine(float align_x, const char* text, const char* text_end = nullptr, float wrap_width = -1.0f);
+void TextUnformatted(std::string_view text);
 void MenuHeading(std::string_view title, bool draw_line = true);
-bool MenuHeadingButton(std::string_view title, std::string_view value = {}, bool enabled = true, bool draw_line = true);
+bool MenuHeadingButton(std::string_view title, std::string_view value = {}, float font_size = UIStyle.LargeFontSize,
+                       bool enabled = true, bool draw_line = true);
 bool MenuButton(std::string_view title, std::string_view summary, bool enabled = true,
                 const ImVec2& text_align = ImVec2(0.0f, 0.0f));
 bool MenuButtonWithoutSummary(std::string_view title, bool enabled = true,
                               const ImVec2& text_align = ImVec2(0.0f, 0.0f));
 bool MenuButtonWithValue(std::string_view title, std::string_view summary, std::string_view value, bool enabled = true,
                          const ImVec2& text_align = ImVec2(0.0f, 0.0f));
-bool MenuButtonWithVisibilityQuery(std::string_view title, std::string_view summary, std::string_view value,
-                                   bool* visible, bool enabled = true, const ImVec2& text_align = ImVec2(0.0f, 0.0f));
+bool MenuButtonWithVisibilityQuery(std::string_view str_id, std::string_view title, std::string_view summary,
+                                   std::string_view value, bool* visible, bool enabled = true,
+                                   const ImVec2& text_align = ImVec2(0.0f, 0.0f));
 bool MenuImageButton(std::string_view title, std::string_view summary, ImTextureID user_texture_id,
                      const ImVec2& image_size, bool enabled = true, const ImVec2& uv0 = ImVec2(0.0f, 0.0f),
                      const ImVec2& uv1 = ImVec2(1.0f, 1.0f));
@@ -322,9 +353,9 @@ bool ToggleButton(std::string_view title, std::string_view summary, bool* v, boo
 bool ThreeWayToggleButton(std::string_view title, std::string_view summary, std::optional<bool>* v,
                           bool enabled = true);
 bool RangeButton(std::string_view title, std::string_view summary, s32* value, s32 min, s32 max, s32 increment,
-                 const char* format = "%d", bool enabled = true, std::string_view ok_text = "OK");
+                 const char* format = "%d", bool enabled = true, std::string_view ok_text = FSUI_VSTR("OK"));
 bool RangeButton(std::string_view title, std::string_view summary, float* value, float min, float max, float increment,
-                 const char* format = "%f", bool enabled = true, std::string_view ok_text = "OK");
+                 const char* format = "%f", bool enabled = true, std::string_view ok_text = FSUI_VSTR("OK"));
 bool EnumChoiceButtonImpl(std::string_view title, std::string_view summary, s32* value_pointer,
                           const char* (*to_display_name_function)(s32 value, void* opaque), void* opaque, u32 count,
                           bool enabled);
@@ -399,13 +430,15 @@ using InfoMessageDialogCallback = std::function<void()>;
 using MessageDialogCallback = std::function<void(s32)>;
 bool IsMessageBoxDialogOpen();
 void OpenConfirmMessageDialog(std::string_view title, std::string message, ConfirmMessageDialogCallback callback,
-                              std::string yes_button_text = ICON_FA_CHECK " Yes",
-                              std::string no_button_text = ICON_FA_XMARK " No");
+                              std::string yes_button_text = FSUI_ICONSTR(ICON_FA_CHECK, "Yes"),
+                              std::string no_button_text = FSUI_ICONSTR(ICON_FA_XMARK, "No"));
 void OpenInfoMessageDialog(std::string_view title, std::string message, InfoMessageDialogCallback callback = {},
-                           std::string button_text = ICON_FA_SQUARE_XMARK " Close");
+                           std::string button_text = FSUI_ICONSTR(ICON_FA_SQUARE_XMARK, "Close"));
 void OpenMessageDialog(std::string_view title, std::string message, MessageDialogCallback callback,
                        std::string first_button_text, std::string second_button_text, std::string third_button_text);
 void CloseMessageDialog();
+
+std::unique_ptr<ProgressCallback> OpenModalProgressDialog(std::string title, float window_unscaled_width = 500.0f);
 
 float GetNotificationVerticalPosition();
 float GetNotificationVerticalDirection();
@@ -456,7 +489,7 @@ public:
   void ClearState();
 
 protected:
-  enum class State
+  enum class State : u8
   {
     Inactive,
     ClosingTrigger,
@@ -479,6 +512,41 @@ protected:
   std::string m_title;
   float m_animation_time_remaining = 0.0f;
   State m_state = State::Inactive;
+  bool m_user_closeable = true;
+};
+
+// Wrapper for computing menu button bounds.
+struct MenuButtonBounds
+{
+  ImVec2 title_size;
+  ImVec2 value_size;
+  ImVec2 summary_size;
+
+  ImRect frame_bb;
+  ImRect title_bb;
+  ImRect value_bb;
+  ImRect summary_bb;
+
+  float available_width = CalcAvailWidth();
+  float available_non_value_width;
+
+  MenuButtonBounds(const std::string_view& title, const std::string_view& value, const std::string_view& summary);
+  MenuButtonBounds(const std::string_view& title, const std::string_view& value, const std::string_view& summary,
+                   float left_margin, float title_value_size = UIStyle.LargeFontSize,
+                   float summary_size = UIStyle.MediumFontSize);
+  MenuButtonBounds(const std::string_view& title, const ImVec2& value_size, const std::string_view& summary);
+  MenuButtonBounds(const ImVec2& title_size, const ImVec2& value_size, const ImVec2& summary_size);
+
+  static float CalcAvailWidth();
+
+  static float GetSingleLineHeight(float y_padding = LAYOUT_MENU_BUTTON_Y_PADDING);
+  static float GetSummaryLineHeight(float y_padding = LAYOUT_MENU_BUTTON_Y_PADDING);
+
+  void CalcBB();
+  void CalcTitleSize(const std::string_view& title, float font_size);
+  void SetValueSize(const ImVec2& value_size);
+  void CalcValueSize(const std::string_view& value, float font_size);
+  void CalcSummarySize(const std::string_view& summary, float font_size);
 };
 
 } // namespace ImGuiFullscreen

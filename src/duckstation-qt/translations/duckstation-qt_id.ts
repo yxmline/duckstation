@@ -7220,7 +7220,7 @@ Please check your username and password, and try again.</source>
     </message>
     <message>
         <location filename="../../core/fullscreen_ui.cpp" line="9632"/>
-        <source>Saved {:%c}</source>
+        <source>Saved {}</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -14106,7 +14106,7 @@ Shift-click to set multiple bindings.</source>
     <message>
         <location filename="../logwindow.cpp" line="248"/>
         <source>Failed to open file for writing.</source>
-        <translation>Gagal membuka file {} untuk penulisan.</translation>
+        <translation>Gagal membuka file untuk penulisan.</translation>
     </message>
     <message>
         <location filename="../logwindow.cpp" line="256"/>

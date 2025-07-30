@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2019-2024 Connor McLaughlin <stenzek@gmail.com>
+// SPDX-FileCopyrightText: 2019-2025 Connor McLaughlin <stenzek@gmail.com>
 // SPDX-License-Identifier: CC-BY-NC-ND-4.0
 
 #include "controllersettingswindow.h"
@@ -22,15 +22,16 @@
 #include <QtWidgets/QTextEdit>
 #include <array>
 
+#include "moc_controllersettingswindow.cpp"
+
 ControllerSettingsWindow::ControllerSettingsWindow(INISettingsInterface* game_sif /* = nullptr */,
                                                    bool edit_profiles /* = false */, QWidget* parent /* = nullptr */)
   : QWidget(parent), m_editing_settings_interface(game_sif), m_editing_input_profiles(edit_profiles)
 {
   m_ui.setupUi(this);
+  m_ui.buttonBox->button(QDialogButtonBox::Close)->setDefault(true);
 
   setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
-
-  m_ui.settingsCategory->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
 
   connect(m_ui.settingsCategory, &QListWidget::currentRowChanged, this,
           &ControllerSettingsWindow::onCategoryCurrentRowChanged);

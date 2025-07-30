@@ -371,6 +371,7 @@ void Settings::Load(const SettingsInterface& si, const SettingsInterface& contro
     std::max(si.GetUIntValue("CDROM", "MaxSeekSpeedupCycles", DEFAULT_CDROM_MAX_SEEK_SPEEDUP_CYCLES), 1u);
   cdrom_max_read_speedup_cycles =
     std::max(si.GetUIntValue("CDROM", "MaxReadSpeedupCycles", DEFAULT_CDROM_MAX_READ_SPEEDUP_CYCLES), 1u);
+  mdec_disable_cdrom_speedup = si.GetBoolValue("CDROM", "DisableSpeedupOnMDEC", false);
 
   audio_backend =
     AudioStream::ParseBackendName(
@@ -510,6 +511,7 @@ void Settings::Load(const SettingsInterface& si, const SettingsInterface& contro
   pio_flash_image_path = si.GetStringValue("PIO", "FlashImagePath");
   pio_flash_write_enable = si.GetBoolValue("PIO", "FlashImageWriteEnable", false);
   pio_switch_active = si.GetBoolValue("PIO", "SwitchActive", true);
+  sio_redirect_to_tty = si.GetBoolValue("SIO", "RedirectToTTY", false);
 
   pcdrv_enable = si.GetBoolValue("PCDrv", "Enabled", false);
   pcdrv_enable_writes = si.GetBoolValue("PCDrv", "EnableWrites", false);
@@ -685,6 +687,7 @@ void Settings::Save(SettingsInterface& si, bool ignore_base) const
   si.SetUIntValue("CDROM", "SeekSpeedup", cdrom_seek_speedup);
   si.SetUIntValue("CDROM", "MaxReadSpeedupCycles", cdrom_max_seek_speedup_cycles);
   si.SetUIntValue("CDROM", "MaxSeekSpeedupCycles", cdrom_max_read_speedup_cycles);
+  si.SetBoolValue("CDROM", "DisableSpeedupOnMDEC", mdec_disable_cdrom_speedup);
 
   si.SetStringValue("Audio", "Backend", AudioStream::GetBackendName(audio_backend));
   si.SetStringValue("Audio", "Driver", audio_driver.c_str());
@@ -797,6 +800,7 @@ void Settings::Save(SettingsInterface& si, bool ignore_base) const
   si.SetStringValue("PIO", "FlashImagePath", pio_flash_image_path.c_str());
   si.SetBoolValue("PIO", "FlashImageWriteEnable", pio_flash_write_enable);
   si.SetBoolValue("PIO", "SwitchActive", pio_switch_active);
+  si.SetBoolValue("SIO", "RedirectToTTY", sio_redirect_to_tty);
 
   si.SetBoolValue("PCDrv", "Enabled", pcdrv_enable);
   si.SetBoolValue("PCDrv", "EnableWrites", pcdrv_enable_writes);
@@ -1164,6 +1168,7 @@ void Settings::SetDefaultLogConfig(SettingsInterface& si)
   si.SetBoolValue("Logging", "LogToDebug", false);
   si.SetBoolValue("Logging", "LogToWindow", false);
   si.SetBoolValue("Logging", "LogToFile", false);
+  si.SetBoolValue("Logging", "LogFileTimestamps", false);
 
   for (const char* channel_name : Log::GetChannelNames())
     si.SetBoolValue("Logging", channel_name, true);
@@ -1179,6 +1184,7 @@ void Settings::UpdateLogConfig(const SettingsInterface& si)
   const bool log_to_debug = si.GetBoolValue("Logging", "LogToDebug", false);
   const bool log_to_window = si.GetBoolValue("Logging", "LogToWindow", false);
   const bool log_to_file = si.GetBoolValue("Logging", "LogToFile", false);
+  const bool log_file_timestamps = si.GetBoolValue("Logging", "LogFileTimestamps", false);
 
   const bool any_logs_enabled = (log_to_console || log_to_debug || log_to_window || log_to_file);
   Log::SetLogLevel(any_logs_enabled ? log_level : Log::Level::None);
@@ -1189,7 +1195,7 @@ void Settings::UpdateLogConfig(const SettingsInterface& si)
   if (log_to_file)
   {
     Log::SetFileOutputParams(log_to_file, Path::Combine(EmuFolders::DataRoot, "duckstation.log").c_str(),
-                             log_timestamps);
+                             log_file_timestamps);
   }
   else
   {

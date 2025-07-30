@@ -14,7 +14,7 @@
     <ClCompile Include="controllerbindingwidgets.cpp" />
     <ClCompile Include="controllerglobalsettingswidget.cpp" />
     <ClCompile Include="controllersettingswindow.cpp" />
-    <ClCompile Include="coverdownloaddialog.cpp" />
+    <ClCompile Include="coverdownloadwindow.cpp" />
     <ClCompile Include="emulationsettingswidget.cpp" />
     <ClCompile Include="debuggermodels.cpp" />
     <ClCompile Include="debuggerwindow.cpp" />
@@ -43,7 +43,6 @@
     </ClCompile>
     <ClCompile Include="postprocessingsettingswidget.cpp" />
     <ClCompile Include="qtthemes.cpp" />
-    <ClCompile Include="qttranslations.cpp" />
     <ClCompile Include="qthost.cpp" />
     <ClCompile Include="qtkeycodes.cpp" />
     <ClCompile Include="qtprogresscallback.cpp" />
@@ -58,7 +57,7 @@
     <QtMoc Include="aboutdialog.h" />
     <QtMoc Include="audiosettingswidget.h" />
     <QtMoc Include="biossettingswidget.h" />
-    <QtMoc Include="coverdownloaddialog.h" />
+    <QtMoc Include="coverdownloadwindow.h" />
     <QtMoc Include="memorycardsettingswidget.h" />
     <QtMoc Include="memorycardeditorwindow.h" />
     <QtMoc Include="displaywidget.h" />
@@ -202,7 +201,7 @@
     <QtUi Include="foldersettingswidget.ui">
       <FileType>Document</FileType>
     </QtUi>
-    <QtUi Include="coverdownloaddialog.ui">
+    <QtUi Include="coverdownloadwindow.ui">
       <FileType>Document</FileType>
     </QtUi>
   </ItemGroup>
@@ -210,50 +209,6 @@
     <QtResource Include="resources\duckstation-qt.qrc">
       <FileType>Document</FileType>
     </QtResource>
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="$(IntDir)moc_aboutdialog.cpp" />
-    <ClCompile Include="$(IntDir)moc_achievementlogindialog.cpp" />
-    <ClCompile Include="$(IntDir)moc_achievementsettingswidget.cpp" />
-    <ClCompile Include="$(IntDir)moc_audiosettingswidget.cpp" />
-    <ClCompile Include="$(IntDir)moc_autoupdaterwindow.cpp" />
-    <ClCompile Include="$(IntDir)moc_advancedsettingswidget.cpp" />
-    <ClCompile Include="$(IntDir)moc_biossettingswidget.cpp" />
-    <ClCompile Include="$(IntDir)moc_colorpickerbutton.cpp" />
-    <ClCompile Include="$(IntDir)moc_consolesettingswidget.cpp" />
-    <ClCompile Include="$(IntDir)moc_controllerbindingwidgets.cpp" />
-    <ClCompile Include="$(IntDir)moc_controllerglobalsettingswidget.cpp" />
-    <ClCompile Include="$(IntDir)moc_controllersettingswindow.cpp" />
-    <ClCompile Include="$(IntDir)moc_coverdownloaddialog.cpp" />
-    <ClCompile Include="$(IntDir)moc_displaywidget.cpp" />
-    <ClCompile Include="$(IntDir)moc_emulationsettingswidget.cpp" />
-    <ClCompile Include="$(IntDir)moc_foldersettingswidget.cpp" />
-    <ClCompile Include="$(IntDir)moc_gamecheatsettingswidget.cpp" />
-    <ClCompile Include="$(IntDir)moc_gamelistrefreshthread.cpp" />
-    <ClCompile Include="$(IntDir)moc_gamelistsettingswidget.cpp" />
-    <ClCompile Include="$(IntDir)moc_gamelistwidget.cpp" />
-    <ClCompile Include="$(IntDir)moc_gamepatchsettingswidget.cpp" />
-    <ClCompile Include="$(IntDir)moc_gamesummarywidget.cpp" />
-    <ClCompile Include="$(IntDir)moc_graphicssettingswidget.cpp" />
-    <ClCompile Include="$(IntDir)moc_debuggermodels.cpp" />
-    <ClCompile Include="$(IntDir)moc_debuggerwindow.cpp" />
-    <ClCompile Include="$(IntDir)moc_hotkeysettingswidget.cpp" />
-    <ClCompile Include="$(IntDir)moc_inputbindingdialog.cpp" />
-    <ClCompile Include="$(IntDir)moc_inputbindingwidgets.cpp" />
-    <ClCompile Include="$(IntDir)moc_interfacesettingswidget.cpp" />
-    <ClCompile Include="$(IntDir)moc_isobrowserwindow.cpp" />
-    <ClCompile Include="$(IntDir)moc_logwindow.cpp" />
-    <ClCompile Include="$(IntDir)moc_mainwindow.cpp" />
-    <ClCompile Include="$(IntDir)moc_memorycardsettingswidget.cpp" />
-    <ClCompile Include="$(IntDir)moc_memorycardeditorwindow.cpp" />
-    <ClCompile Include="$(IntDir)moc_memoryscannerwindow.cpp" />
-    <ClCompile Include="$(IntDir)moc_memoryviewwidget.cpp" />
-    <ClCompile Include="$(IntDir)moc_postprocessingsettingswidget.cpp" />
-    <ClCompile Include="$(IntDir)moc_selectdiscdialog.cpp" />
-    <ClCompile Include="$(IntDir)moc_qthost.cpp" />
-    <ClCompile Include="$(IntDir)moc_qtprogresscallback.cpp" />
-    <ClCompile Include="$(IntDir)moc_settingswindow.cpp" />
-    <ClCompile Include="$(IntDir)moc_setupwizarddialog.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="duckstation-qt.rc" />

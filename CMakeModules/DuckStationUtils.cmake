@@ -249,7 +249,26 @@ endfunction()
 function(install_imported_dep_library name)
   get_target_property(SONAME "${name}" IMPORTED_SONAME_RELEASE)
   get_target_property(LOCATION "${name}" IMPORTED_LOCATION_RELEASE)
+
+  # Only install if it's not a system library.
+  foreach(path ${CMAKE_PREFIX_PATH})
+    if (NOT "${LOCATION}" MATCHES "^${path}")
+      message(STATUS "Not installing imported system library ${name}")
+      return()
+    endif()
+  endforeach()
+
+  message(STATUS "Installing imported library ${SONAME}")
   install(FILES "${LOCATION}" RENAME "${SONAME}" DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+endfunction()
+
+function(add_debug_symbol_flag var)
+  # CMake's regex engine is missing so many features...
+  set(value "${${var}}")
+  if (NOT " ${value} " MATCHES " -g[1-3]? ")
+    message(STATUS "Adding -g1 to ${var}.")
+    set(${var} "${value} -g1" PARENT_SCOPE)
+  endif()
 endfunction()
 
 function(check_cpp20_feature MACRO MINIMUM_VALUE)

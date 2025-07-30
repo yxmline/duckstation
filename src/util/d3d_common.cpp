@@ -15,9 +15,11 @@
 #include "fmt/format.h"
 
 #include <d3d11.h>
+#include <d3d12.h>
 #include <d3dcompiler.h>
 #include <dxcapi.h>
 #include <dxgi1_5.h>
+#include <mutex>
 
 LOG_CHANNEL(GPUDevice);
 
@@ -30,6 +32,24 @@ struct FeatureLevelTableEntry
   u16 shader_model_number;
   const char* feature_level_str;
 };
+
+struct Libs
+{
+  std::mutex load_mutex;
+  DynamicLibrary dxgi_library;
+  decltype(&CreateDXGIFactory2) CreateDXGIFactory2;
+  DynamicLibrary d3d11_library;
+  PFN_D3D11_CREATE_DEVICE D3D11CreateDevice;
+  DynamicLibrary d3d12_library;
+  PFN_D3D12_CREATE_DEVICE D3D12CreateDevice;
+  PFN_D3D12_GET_DEBUG_INTERFACE D3D12GetDebugInterface;
+  PFN_D3D12_SERIALIZE_ROOT_SIGNATURE D3D12SerializeRootSignature;
+  DynamicLibrary d3dcompiler_library;
+  pD3DCompile D3DCompile;
+  DynamicLibrary dxcompiler_library;
+  DxcCreateInstanceProc DxcCreateInstance;
+};
+
 } // namespace
 
 static std::optional<DynamicHeapArray<u8>> CompileShaderWithFXC(u32 shader_model, bool debug_device,
@@ -38,10 +58,9 @@ static std::optional<DynamicHeapArray<u8>> CompileShaderWithFXC(u32 shader_model
 static std::optional<DynamicHeapArray<u8>> CompileShaderWithDXC(u32 shader_model, bool debug_device,
                                                                 GPUShaderStage stage, std::string_view source,
                                                                 const char* entry_point, Error* error);
+static bool LoadD3D12Library(Error* error);
+static bool LoadD3DCompilerLibrary(Error* error);
 static bool LoadDXCompilerLibrary(Error* error);
-
-static DynamicLibrary s_dxcompiler_library;
-static DxcCreateInstanceProc s_DxcCreateInstance;
 
 static constexpr std::array<FeatureLevelTableEntry, 11> s_feature_levels = {{
   {D3D_FEATURE_LEVEL_1_0_CORE, 100, 40, "D3D_FEATURE_LEVEL_1_0_CORE"},
@@ -56,6 +75,8 @@ static constexpr std::array<FeatureLevelTableEntry, 11> s_feature_levels = {{
   {D3D_FEATURE_LEVEL_12_1, 1210, 60, "D3D_FEATURE_LEVEL_12_1"},
   {D3D_FEATURE_LEVEL_12_2, 1220, 60, "D3D_FEATURE_LEVEL_12_2"},
 }};
+
+static Libs s_libs;
 } // namespace D3DCommon
 
 const char* D3DCommon::GetFeatureLevelString(u32 render_api_version)
@@ -100,12 +121,12 @@ D3D_FEATURE_LEVEL D3DCommon::GetDeviceMaxFeatureLevel(IDXGIAdapter1* adapter)
     D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0};
 
   D3D_FEATURE_LEVEL max_supported_level;
-  HRESULT hr = D3D11CreateDevice(adapter, adapter ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE, nullptr, 0,
-                                 requested_feature_levels.data(), static_cast<UINT>(requested_feature_levels.size()),
-                                 D3D11_SDK_VERSION, nullptr, &max_supported_level, nullptr);
-  if (FAILED(hr))
+  Error error;
+  if (!CreateD3D11Device(adapter, 0, requested_feature_levels.data(),
+                         static_cast<UINT>(requested_feature_levels.size()), nullptr, &max_supported_level, nullptr,
+                         &error))
   {
-    WARNING_LOG("D3D11CreateDevice() for getting max feature level failed: 0x{:08X}", static_cast<unsigned>(hr));
+    WARNING_LOG("D3D11CreateDevice() for getting max feature level failed: {}", error.GetDescription());
     max_supported_level = requested_feature_levels.back();
   }
 
@@ -114,12 +135,30 @@ D3D_FEATURE_LEVEL D3DCommon::GetDeviceMaxFeatureLevel(IDXGIAdapter1* adapter)
 
 Microsoft::WRL::ComPtr<IDXGIFactory5> D3DCommon::CreateFactory(bool debug, Error* error)
 {
+  if (!s_libs.dxgi_library.IsOpen())
+  {
+    // another thread may have opened it
+    const std::unique_lock lock(s_libs.load_mutex);
+    if (!s_libs.d3d11_library.IsOpen())
+    {
+      if (!s_libs.dxgi_library.Open("dxgi.dll", error))
+        return {};
+
+      if (!s_libs.dxgi_library.GetSymbol("CreateDXGIFactory2", &s_libs.CreateDXGIFactory2))
+      {
+        Error::SetStringView(error, "Failed to load CreateDXGIFactory2 from dxgi.dll");
+        s_libs.dxgi_library.Close();
+        return {};
+      }
+    }
+  }
+
   UINT flags = 0;
   if (debug)
     flags |= DXGI_CREATE_FACTORY_DEBUG;
 
   Microsoft::WRL::ComPtr<IDXGIFactory5> factory;
-  const HRESULT hr = CreateDXGIFactory2(flags, IID_PPV_ARGS(factory.GetAddressOf()));
+  const HRESULT hr = s_libs.CreateDXGIFactory2(flags, IID_PPV_ARGS(factory.GetAddressOf()));
   if (FAILED(hr))
     Error::SetHResult(error, "Failed to create DXGI factory: ", hr);
 
@@ -132,6 +171,114 @@ bool D3DCommon::SupportsAllowTearing(IDXGIFactory5* factory)
   HRESULT hr = factory->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allow_tearing_supported,
                                             sizeof(allow_tearing_supported));
   return (SUCCEEDED(hr) && allow_tearing_supported == TRUE);
+}
+
+bool D3DCommon::CreateD3D11Device(IDXGIAdapter* adapter, UINT create_flags, const D3D_FEATURE_LEVEL* feature_levels,
+                                  UINT num_feature_levels, Microsoft::WRL::ComPtr<ID3D11Device>* device,
+                                  D3D_FEATURE_LEVEL* out_feature_level,
+                                  Microsoft::WRL::ComPtr<ID3D11DeviceContext>* immediate_context, Error* error)
+{
+  if (!s_libs.d3d11_library.IsOpen())
+  {
+    // another thread may have opened it
+    const std::unique_lock lock(s_libs.load_mutex);
+    if (!s_libs.d3d11_library.IsOpen())
+    {
+      if (!s_libs.d3d11_library.Open("d3d11.dll", error))
+        return false;
+
+      if (!s_libs.d3d11_library.GetSymbol("D3D11CreateDevice", &s_libs.D3D11CreateDevice))
+      {
+        Error::SetStringView(error, "Failed to load D3D11CreateDevice from d3d11.dll");
+        s_libs.d3dcompiler_library.Close();
+        return false;
+      }
+    }
+  }
+
+  const HRESULT hr = s_libs.D3D11CreateDevice(
+    adapter, adapter ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE, nullptr, create_flags, feature_levels,
+    num_feature_levels, D3D11_SDK_VERSION, device ? device->ReleaseAndGetAddressOf() : nullptr, out_feature_level,
+    immediate_context ? immediate_context->ReleaseAndGetAddressOf() : nullptr);
+  if (SUCCEEDED(hr))
+    return true;
+
+  Error::SetHResult(error, "D3D11CreateDevice() failed: ", hr);
+  return true;
+}
+
+bool D3DCommon::LoadD3D12Library(Error* error)
+{
+  if (s_libs.d3d12_library.IsOpen())
+    return true;
+
+  // double check, another thread may have opened it
+  const std::unique_lock lock(s_libs.load_mutex);
+  if (s_libs.d3d12_library.IsOpen())
+    return true;
+
+  if (!s_libs.d3d12_library.Open("d3d12.dll", error))
+    return false;
+
+  if (!s_libs.d3d12_library.GetSymbol("D3D12CreateDevice", &s_libs.D3D12CreateDevice) ||
+      !s_libs.d3d12_library.GetSymbol("D3D12GetDebugInterface", &s_libs.D3D12GetDebugInterface) ||
+      !s_libs.d3d12_library.GetSymbol("D3D12SerializeRootSignature", &s_libs.D3D12SerializeRootSignature))
+  {
+    Error::SetStringView(error, "Failed to load one or more required functions from d3d12.dll");
+    s_libs.d3d12_library.Close();
+    return false;
+  }
+
+  return true;
+}
+
+bool D3DCommon::GetD3D12DebugInterface(Microsoft::WRL::ComPtr<ID3D12Debug>* debug, Error* error)
+{
+  if (!LoadD3D12Library(error))
+    return false;
+
+  const HRESULT hr = s_libs.D3D12GetDebugInterface(IID_PPV_ARGS(debug->ReleaseAndGetAddressOf()));
+  if (FAILED(hr))
+  {
+    Error::SetHResult(error, "D3D12GetDebugInterface() failed: ", hr);
+    return false;
+  }
+
+  return true;
+}
+
+bool D3DCommon::CreateD3D12Device(IDXGIAdapter* adapter, D3D_FEATURE_LEVEL feature_level,
+                                  Microsoft::WRL::ComPtr<ID3D12Device1>* device, Error* error)
+{
+  if (!LoadD3D12Library(error))
+    return false;
+
+  const HRESULT hr = s_libs.D3D12CreateDevice(adapter, feature_level, IID_PPV_ARGS(device->ReleaseAndGetAddressOf()));
+  if (FAILED(hr))
+  {
+    Error::SetHResult(error, "D3D12CreateDevice() failed: ", hr);
+    return false;
+  }
+
+  return true;
+}
+
+Microsoft::WRL::ComPtr<ID3DBlob> D3DCommon::SerializeRootSignature(const D3D12_ROOT_SIGNATURE_DESC* desc, Error* error)
+{
+  Microsoft::WRL::ComPtr<ID3DBlob> blob;
+  Microsoft::WRL::ComPtr<ID3DBlob> error_blob;
+  const HRESULT hr = s_libs.D3D12SerializeRootSignature(desc, D3D_ROOT_SIGNATURE_VERSION_1, blob.GetAddressOf(),
+                                                        error_blob.GetAddressOf());
+  if (FAILED(hr)) [[unlikely]]
+  {
+    Error::SetHResult(error, "D3D12SerializeRootSignature() failed: ", hr);
+    if (error_blob)
+      ERROR_LOG(static_cast<const char*>(error_blob->GetBufferPointer()));
+
+    return {};
+  }
+
+  return blob;
 }
 
 static std::string FixupDuplicateAdapterNames(const GPUDevice::AdapterInfoList& adapter_names, std::string adapter_name)
@@ -178,7 +325,7 @@ GPUDevice::AdapterInfoList D3DCommon::GetAdapterInfoList()
     // Unfortunately we can't get any properties such as feature level without creating the device.
     // So just assume a max of the D3D11 max across the board.
     GPUDevice::AdapterInfo ai;
-    ai.name = FixupDuplicateAdapterNames(adapters, GetAdapterName(adapter.Get()));
+    ai.name = FixupDuplicateAdapterNames(adapters, GetAdapterName(adapter.Get(), &ai.driver_type));
     ai.max_texture_size = D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION;
     ai.max_multisamples = 8;
     ai.supports_sample_shading = true;
@@ -352,7 +499,7 @@ Microsoft::WRL::ComPtr<IDXGIAdapter1> D3DCommon::GetChosenOrFirstAdapter(IDXGIFa
   return adapter;
 }
 
-std::string D3DCommon::GetAdapterName(IDXGIAdapter1* adapter)
+std::string D3DCommon::GetAdapterName(IDXGIAdapter1* adapter, GPUDriverType* out_driver_type)
 {
   std::string ret;
 
@@ -361,10 +508,14 @@ std::string D3DCommon::GetAdapterName(IDXGIAdapter1* adapter)
   if (SUCCEEDED(hr))
   {
     ret = StringUtil::WideStringToUTF8String(desc.Description);
+    if (out_driver_type)
+      *out_driver_type = GPUDevice::GuessDriverType(desc.VendorId, {}, ret);
   }
   else
   {
     ERROR_LOG("IDXGIAdapter1::GetDesc() returned {:08X}", static_cast<unsigned>(hr));
+    if (out_driver_type)
+      *out_driver_type = GPUDriverType::Unknown;
   }
 
   if (ret.empty())
@@ -433,6 +584,9 @@ std::optional<DynamicHeapArray<u8>> D3DCommon::CompileShaderWithFXC(u32 shader_m
                                                                     GPUShaderStage stage, std::string_view source,
                                                                     const char* entry_point, Error* error)
 {
+  if (!LoadD3DCompilerLibrary(error))
+    return {};
+
   const char* target;
   switch (shader_model)
   {
@@ -472,8 +626,8 @@ std::optional<DynamicHeapArray<u8>> D3DCommon::CompileShaderWithFXC(u32 shader_m
   Microsoft::WRL::ComPtr<ID3DBlob> blob;
   Microsoft::WRL::ComPtr<ID3DBlob> error_blob;
   const HRESULT hr =
-    D3DCompile(source.data(), source.size(), "0", nullptr, nullptr, entry_point, target,
-               debug_device ? flags_debug : flags_non_debug, 0, blob.GetAddressOf(), error_blob.GetAddressOf());
+    s_libs.D3DCompile(source.data(), source.size(), "0", nullptr, nullptr, entry_point, target,
+                      debug_device ? flags_debug : flags_non_debug, 0, blob.GetAddressOf(), error_blob.GetAddressOf());
 
   std::string_view error_string;
   if (error_blob)
@@ -498,6 +652,29 @@ std::optional<DynamicHeapArray<u8>> D3DCommon::CompileShaderWithFXC(u32 shader_m
   return DynamicHeapArray<u8>(static_cast<const u8*>(blob->GetBufferPointer()), blob->GetBufferSize());
 }
 
+bool D3DCommon::LoadD3DCompilerLibrary(Error* error)
+{
+  if (s_libs.d3dcompiler_library.IsOpen())
+    return true;
+
+  // double check, another thread may have opened it
+  const std::unique_lock lock(s_libs.load_mutex);
+  if (s_libs.d3dcompiler_library.IsOpen())
+    return true;
+
+  if (!s_libs.d3dcompiler_library.Open(D3DCOMPILER_DLL_A, error))
+    return false;
+
+  if (!s_libs.d3dcompiler_library.GetSymbol("D3DCompile", &s_libs.D3DCompile))
+  {
+    Error::SetStringView(error, "Failed to load D3DCompile from d3dcompiler.dll");
+    s_libs.d3dcompiler_library.Close();
+    return false;
+  }
+
+  return true;
+}
+
 std::optional<DynamicHeapArray<u8>> D3DCommon::CompileShaderWithDXC(u32 shader_model, bool debug_device,
                                                                     GPUShaderStage stage, std::string_view source,
                                                                     const char* entry_point, Error* error)
@@ -507,7 +684,7 @@ std::optional<DynamicHeapArray<u8>> D3DCommon::CompileShaderWithDXC(u32 shader_m
 
   HRESULT hr;
   Microsoft::WRL::ComPtr<IDxcUtils> utils;
-  if (FAILED(hr = s_DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(utils.GetAddressOf())))) [[unlikely]]
+  if (FAILED(hr = s_libs.DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(utils.GetAddressOf())))) [[unlikely]]
   {
     Error::SetHResult(error, "DxcCreateInstance(CLSID_DxcUtils) failed: ", hr);
     return {};
@@ -522,7 +699,7 @@ std::optional<DynamicHeapArray<u8>> D3DCommon::CompileShaderWithDXC(u32 shader_m
   }
 
   Microsoft::WRL::ComPtr<IDxcCompiler> compiler;
-  if (FAILED(hr = s_DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(compiler.GetAddressOf())))) [[unlikely]]
+  if (FAILED(hr = s_libs.DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(compiler.GetAddressOf())))) [[unlikely]]
   {
     Error::SetHResult(error, "DxcCreateInstance(CLSID_DxcCompiler) failed: ", hr);
     return {};
@@ -597,13 +774,21 @@ std::optional<DynamicHeapArray<u8>> D3DCommon::CompileShaderWithDXC(u32 shader_m
 
 bool D3DCommon::LoadDXCompilerLibrary(Error* error)
 {
-  if (s_dxcompiler_library.IsOpen())
+  if (s_libs.dxcompiler_library.IsOpen())
     return true;
 
-  if (!s_dxcompiler_library.Open("dxcompiler.dll", error) ||
-      !s_dxcompiler_library.GetSymbol("DxcCreateInstance", &s_DxcCreateInstance))
+  // double check, another thread may have opened it
+  const std::unique_lock lock(s_libs.load_mutex);
+  if (s_libs.dxcompiler_library.IsOpen())
+    return true;
+
+  if (!s_libs.dxcompiler_library.Open("dxcompiler.dll", error))
+    return false;
+
+  if (!s_libs.dxcompiler_library.GetSymbol("DxcCreateInstance", &s_libs.DxcCreateInstance))
   {
-    s_dxcompiler_library.Close();
+    Error::SetStringView(error, "Failed to load DxcCreateInstance from dxcompiler.dll");
+    s_libs.dxcompiler_library.Close();
     return false;
   }
 

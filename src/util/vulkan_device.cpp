@@ -351,16 +351,29 @@ VulkanDevice::GPUList VulkanDevice::EnumerateGPUs(VkInstance instance)
   gpus.reserve(physical_devices.size());
   for (VkPhysicalDevice device : physical_devices)
   {
-    VkPhysicalDeviceProperties props = {};
-    vkGetPhysicalDeviceProperties(device, &props);
+    VkPhysicalDeviceProperties2 props = {};
+    VkPhysicalDeviceDriverProperties driver_props = {};
+
+    if (vkGetPhysicalDeviceProperties2)
+    {
+      driver_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES;
+      Vulkan::AddPointerToChain(&props, &driver_props);
+      vkGetPhysicalDeviceProperties2(device, &props);
+    }
+
+    // just in case the chained version fails
+    props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+    vkGetPhysicalDeviceProperties(device, &props.properties);
 
     VkPhysicalDeviceFeatures available_features = {};
     vkGetPhysicalDeviceFeatures(device, &available_features);
 
     AdapterInfo ai;
-    ai.name = props.deviceName;
-    ai.max_texture_size = std::min(props.limits.maxFramebufferWidth, props.limits.maxImageDimension2D);
-    ai.max_multisamples = GetMaxMultisamples(device, props);
+    ai.name = props.properties.deviceName;
+    ai.max_texture_size =
+      std::min(props.properties.limits.maxFramebufferWidth, props.properties.limits.maxImageDimension2D);
+    ai.max_multisamples = GetMaxMultisamples(device, props.properties);
+    ai.driver_type = GuessDriverType(props.properties, driver_props);
     ai.supports_sample_shading = available_features.sampleRateShading;
 
     // handle duplicate adapter names
@@ -600,6 +613,9 @@ bool VulkanDevice::EnableOptionalDeviceExtensions(VkPhysicalDevice physical_devi
   if (vkGetPhysicalDeviceProperties2 && properties2.pNext)
     vkGetPhysicalDeviceProperties2(physical_device, &properties2);
 
+  // set driver type
+  SetDriverType(GuessDriverType(m_device_properties, m_device_driver_properties));
+
   // check we actually support enough
   m_optional_extensions.vk_khr_push_descriptor &= (push_descriptor_properties.maxPushDescriptors >= 1);
 
@@ -607,7 +623,8 @@ bool VulkanDevice::EnableOptionalDeviceExtensions(VkPhysicalDevice physical_devi
   m_optional_extensions.vk_ext_external_memory_host &=
     (external_memory_host_properties.minImportedHostPointerAlignment <= HOST_PAGE_SIZE);
 
-  if (IsBrokenMobileDriver())
+  if (m_driver_type == GPUDriverType::QualcommProprietary || m_driver_type == GPUDriverType::ARMProprietary ||
+      m_driver_type == GPUDriverType::ImaginationProprietary)
   {
     // Push descriptor is broken on Adreno v502.. don't want to think about dynamic rendending.
     if (m_optional_extensions.vk_khr_dynamic_rendering)
@@ -623,7 +640,7 @@ bool VulkanDevice::EnableOptionalDeviceExtensions(VkPhysicalDevice physical_devi
       WARNING_LOG("Disabling VK_KHR_push_descriptor on broken mobile driver.");
     }
   }
-  else if (IsDeviceAMD())
+  else if (m_driver_type == GPUDriverType::AMDProprietary)
   {
     // VK_KHR_dynamic_rendering_local_read appears to be broken on RDNA3, like everything else...
     // Just causes GPU resets when you actually use a feedback loop. Assume Mesa is fine.
@@ -1013,11 +1030,9 @@ bool VulkanDevice::CreateCommandBuffers()
 {
   VkResult res;
 
-  uint32_t frame_index = 0;
+  u32 frame_index = 0;
   for (CommandBuffer& resources : m_frame_resources)
   {
-    resources.needs_fence_wait = false;
-
     VkCommandPoolCreateInfo pool_info = {VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, nullptr, 0,
                                          m_graphics_queue_family_index};
     res = vkCreateCommandPool(m_device, &pool_info, nullptr, &resources.command_pool);
@@ -1299,8 +1314,9 @@ VkCommandBuffer VulkanDevice::GetCurrentInitCommandBuffer()
 
 VkDescriptorSet VulkanDevice::AllocateDescriptorSet(VkDescriptorSetLayout set_layout)
 {
+  CommandBuffer& fres = m_frame_resources[m_current_frame];
   VkDescriptorSetAllocateInfo allocate_info = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, nullptr,
-                                               m_frame_resources[m_current_frame].descriptor_pool, 1, &set_layout};
+                                               fres.descriptor_pool, 1, &set_layout};
 
   VkDescriptorSet descriptor_set;
   VkResult res = vkAllocateDescriptorSets(m_device, &allocate_info, &descriptor_set);
@@ -1311,6 +1327,7 @@ VkDescriptorSet VulkanDevice::AllocateDescriptorSet(VkDescriptorSetLayout set_la
     return VK_NULL_HANDLE;
   }
 
+  fres.needs_descriptor_pool_reset = true;
   return descriptor_set;
 }
 
@@ -1480,9 +1497,6 @@ void VulkanDevice::EndAndSubmitCommandBuffer(VulkanSwapChain* present_swap_chain
     Panic("Failed to end command buffer");
   }
 
-  // This command buffer now has commands, so can't be re-used without waiting.
-  resources.needs_fence_wait = true;
-
   uint32_t wait_bits = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
   VkSubmitInfo submit_info = {VK_STRUCTURE_TYPE_SUBMIT_INFO,
                               nullptr,
@@ -1575,8 +1589,9 @@ void VulkanDevice::BeginCommandBuffer(u32 index)
     LOG_VULKAN_ERROR(res, "vkBeginCommandBuffer failed: ");
 
   // Also can do the same for the descriptor pools
-  if (resources.descriptor_pool != VK_NULL_HANDLE)
+  if (resources.needs_descriptor_pool_reset)
   {
+    resources.needs_descriptor_pool_reset = false;
     res = vkResetDescriptorPool(m_device, resources.descriptor_pool, 0);
     if (res != VK_SUCCESS)
       LOG_VULKAN_ERROR(res, "vkResetDescriptorPool failed: ");
@@ -1758,41 +1773,6 @@ void VulkanDevice::DisableDebugUtils()
   }
 }
 
-bool VulkanDevice::IsDeviceNVIDIA() const
-{
-  return (m_device_properties.vendorID == 0x10DE);
-}
-
-bool VulkanDevice::IsDeviceAMD() const
-{
-  return (m_device_properties.vendorID == 0x1002);
-}
-
-bool VulkanDevice::IsDeviceAdreno() const
-{
-  // Assume turnip is fine...
-  return ((m_device_properties.vendorID == 0x5143 ||
-           m_device_driver_properties.driverID == VK_DRIVER_ID_QUALCOMM_PROPRIETARY) &&
-          m_device_driver_properties.driverID != VK_DRIVER_ID_MESA_TURNIP);
-}
-
-bool VulkanDevice::IsDeviceMali() const
-{
-  return (m_device_properties.vendorID == 0x13B5 ||
-          m_device_driver_properties.driverID == VK_DRIVER_ID_ARM_PROPRIETARY);
-}
-
-bool VulkanDevice::IsDeviceImgTec() const
-{
-  return (m_device_properties.vendorID == 0x1010 ||
-          m_device_driver_properties.driverID == VK_DRIVER_ID_IMAGINATION_PROPRIETARY);
-}
-
-bool VulkanDevice::IsBrokenMobileDriver() const
-{
-  return (IsDeviceAdreno() || IsDeviceMali() || IsDeviceImgTec());
-}
-
 VkRenderPass VulkanDevice::CreateCachedRenderPass(RenderPassCacheKey key)
 {
   std::array<VkAttachmentReference, MAX_RENDER_TARGETS> color_references;
@@ -1957,23 +1937,36 @@ bool VulkanDevice::IsSuitableDefaultRenderer()
   }
 
   // Check the first GPU, should be enough.
-  const std::string& name = gpus.front().second.name;
-  INFO_LOG("Using Vulkan GPU '{}' for automatic renderer check.", name);
+  const AdapterInfo& ainfo = gpus.front().second;
+  INFO_LOG("Using Vulkan GPU '{}' for automatic renderer check.", ainfo.name);
 
   // Any software rendering (LLVMpipe, SwiftShader).
-  if (StringUtil::StartsWithNoCase(name, "llvmpipe") || StringUtil::StartsWithNoCase(name, "SwiftShader"))
+  if ((ainfo.driver_type & GPUDriverType::SoftwareFlag) == GPUDriverType::SoftwareFlag)
   {
     INFO_LOG("Not using Vulkan for software renderer.");
     return false;
   }
 
-  // For Intel, OpenGL usually ends up faster on Linux, because of fbfetch.
-  // Plus, the Ivy Bridge and Haswell drivers are incomplete.
-  if (StringUtil::StartsWithNoCase(name, "Intel"))
+#ifdef __linux__
+  // Intel Ivy Bridge/Haswell/Broadwell drivers are incomplete.
+  if (ainfo.driver_type == GPUDriverType::IntelMesa &&
+      (ainfo.name.find("Ivy Bridge") != std::string::npos || ainfo.name.find("Haswell") != std::string::npos ||
+       ainfo.name.find("Broadwell") != std::string::npos || ainfo.name.find("(IVB") != std::string::npos ||
+       ainfo.name.find("(HSW") != std::string::npos || ainfo.name.find("(BDW") != std::string::npos))
   {
-    INFO_LOG("Not using Vulkan for Intel GPU.");
+    INFO_LOG("Not using Vulkan for Intel GPU with incomplete driver.");
     return false;
   }
+#endif
+
+#if defined(__linux__) || defined(__ANDROID__)
+  // V3D is buggy, image copies with larger textures are broken.
+  if (ainfo.driver_type == GPUDriverType::BroadcomMesa)
+  {
+    INFO_LOG("Not using Vulkan for V3D GPU with buggy driver.");
+    return false;
+  }
+#endif
 
   INFO_LOG("Allowing Vulkan as default renderer.");
   return true;
@@ -2496,7 +2489,7 @@ void VulkanDevice::SetFeatures(FeatureMask disabled_features, VkPhysicalDevice p
                          (VK_API_VERSION_MINOR(store_api_version) * 10u) + (VK_API_VERSION_PATCH(store_api_version));
   m_max_texture_size =
     std::min(m_device_properties.limits.maxImageDimension2D, m_device_properties.limits.maxFramebufferWidth);
-  m_max_multisamples = GetMaxMultisamples(physical_device, m_device_properties);
+  m_max_multisamples = static_cast<u16>(GetMaxMultisamples(physical_device, m_device_properties));
 
   m_features.dual_source_blend = !(disabled_features & FEATURE_MASK_DUAL_SOURCE_BLEND) && vk_features.dualSrcBlend;
   m_features.framebuffer_fetch =
@@ -2545,6 +2538,51 @@ void VulkanDevice::SetFeatures(FeatureMask disabled_features, VkPhysicalDevice p
   // Same feature bit for both.
   m_features.dxt_textures = m_features.bptc_textures =
     (!(disabled_features & FEATURE_MASK_COMPRESSED_TEXTURES) && vk_features.textureCompressionBC);
+}
+
+GPUDriverType VulkanDevice::GuessDriverType(const VkPhysicalDeviceProperties& device_properties,
+                                            const VkPhysicalDeviceDriverProperties& driver_properties)
+{
+  static constexpr const std::pair<VkDriverId, GPUDriverType> table[] = {
+    {VK_DRIVER_ID_NVIDIA_PROPRIETARY, GPUDriverType::NVIDIAProprietary},
+    {VK_DRIVER_ID_AMD_PROPRIETARY, GPUDriverType::AMDProprietary},
+    {VK_DRIVER_ID_AMD_OPEN_SOURCE, GPUDriverType::AMDProprietary},
+    {VK_DRIVER_ID_MESA_RADV, GPUDriverType::AMDMesa},
+    {VK_DRIVER_ID_NVIDIA_PROPRIETARY, GPUDriverType::NVIDIAProprietary},
+    {VK_DRIVER_ID_INTEL_PROPRIETARY_WINDOWS, GPUDriverType::IntelProprietary},
+    {VK_DRIVER_ID_INTEL_OPEN_SOURCE_MESA, GPUDriverType::IntelMesa},
+    {VK_DRIVER_ID_IMAGINATION_PROPRIETARY, GPUDriverType::ImaginationProprietary},
+    {VK_DRIVER_ID_QUALCOMM_PROPRIETARY, GPUDriverType::QualcommProprietary},
+    {VK_DRIVER_ID_ARM_PROPRIETARY, GPUDriverType::ARMProprietary},
+    {VK_DRIVER_ID_GOOGLE_SWIFTSHADER, GPUDriverType::SwiftShader},
+    {VK_DRIVER_ID_GGP_PROPRIETARY, GPUDriverType::Unknown},
+    {VK_DRIVER_ID_BROADCOM_PROPRIETARY, GPUDriverType::BroadcomProprietary},
+    {VK_DRIVER_ID_MESA_LLVMPIPE, GPUDriverType::LLVMPipe},
+    {VK_DRIVER_ID_MOLTENVK, GPUDriverType::AppleProprietary},
+    {VK_DRIVER_ID_COREAVI_PROPRIETARY, GPUDriverType::Unknown},
+    {VK_DRIVER_ID_JUICE_PROPRIETARY, GPUDriverType::Unknown},
+    {VK_DRIVER_ID_VERISILICON_PROPRIETARY, GPUDriverType::Unknown},
+    {VK_DRIVER_ID_MESA_TURNIP, GPUDriverType::QualcommMesa},
+    {VK_DRIVER_ID_MESA_V3DV, GPUDriverType::BroadcomMesa},
+    {VK_DRIVER_ID_MESA_PANVK, GPUDriverType::ARMMesa},
+    {VK_DRIVER_ID_SAMSUNG_PROPRIETARY, GPUDriverType::AMDProprietary},
+    {VK_DRIVER_ID_MESA_VENUS, GPUDriverType::Unknown},
+    {VK_DRIVER_ID_MESA_DOZEN, GPUDriverType::DozenMesa},
+    {VK_DRIVER_ID_MESA_NVK, GPUDriverType::NVIDIAMesa},
+    {VK_DRIVER_ID_IMAGINATION_OPEN_SOURCE_MESA, GPUDriverType::ImaginationMesa},
+    {VK_DRIVER_ID_MESA_AGXV, GPUDriverType::AppleMesa},
+  };
+
+  const auto iter = std::find_if(std::begin(table), std::end(table), [&driver_properties](const auto& it) {
+    return (driver_properties.driverID == it.first);
+  });
+  if (iter != std::end(table))
+    return iter->second;
+
+  return GPUDevice::GuessDriverType(
+    device_properties.vendorID, {},
+    std::string_view(device_properties.deviceName,
+                     StringUtil::Strnlen(device_properties.deviceName, std::size(device_properties.deviceName))));
 }
 
 void VulkanDevice::CopyTextureRegion(GPUTexture* dst, u32 dst_x, u32 dst_y, u32 dst_layer, u32 dst_level,
@@ -2681,7 +2719,7 @@ void VulkanDevice::ClearRenderTarget(GPUTexture* t, u32 c)
     {
       VulkanTexture* T = static_cast<VulkanTexture*>(t);
 
-      if (IsDeviceNVIDIA())
+      if (m_driver_type == GPUDriverType::NVIDIAProprietary)
       {
         EndRenderPass();
       }
@@ -2709,7 +2747,7 @@ void VulkanDevice::ClearDepth(GPUTexture* t, float d)
     // should be failing. Breaking/restarting the render pass isn't enough to work around the bug,
     // it needs an explicit pipeline barrier.
     VulkanTexture* T = static_cast<VulkanTexture*>(t);
-    if (IsDeviceNVIDIA())
+    if (m_driver_type == GPUDriverType::NVIDIAProprietary)
     {
       EndRenderPass();
       T->TransitionSubresourcesToLayout(GetCurrentCommandBuffer(), 0, 1, 0, 1, T->GetLayout(), T->GetLayout());
@@ -3278,7 +3316,7 @@ void VulkanDevice::BeginRenderPass()
 
   // NVIDIA drivers appear to return random garbage when sampling the RT via a feedback loop, if the load op for
   // the render pass is CLEAR. Using vkCmdClearAttachments() doesn't work, so we have to clear the image instead.
-  if (m_current_render_pass_flags & GPUPipeline::ColorFeedbackLoop && IsDeviceNVIDIA())
+  if (m_current_render_pass_flags & GPUPipeline::ColorFeedbackLoop && m_driver_type == GPUDriverType::NVIDIAProprietary)
   {
     for (u32 i = 0; i < m_num_current_render_targets; i++)
     {

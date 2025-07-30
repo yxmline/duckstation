@@ -45,6 +45,7 @@ enum class Trait : u32
   DisableMultitap,
   DisableCDROMReadSpeedup,
   DisableCDROMSeekSpeedup,
+  DisableCDROMSpeedupOnMDEC,
   DisableTrueColor,
   DisableFullTrueColor,
   DisableUpscaling,
@@ -106,7 +107,7 @@ struct Entry
   std::string_view publisher;
   std::string_view compatibility_version_tested;
   std::string_view compatibility_comments;
-  u64 release_date;
+  u64 release_date; ///< Number of seconds since Epoch.
   u8 min_players;
   u8 max_players;
   u8 min_blocks;
@@ -133,8 +134,8 @@ struct Entry
   std::optional<float> gpu_pgxp_depth_threshold;
   std::optional<bool> gpu_pgxp_preserve_proj_fp;
 
-  std::string disc_set_name;
-  std::vector<std::string> disc_set_serials;
+  std::string_view disc_set_name;
+  std::vector<std::string_view> disc_set_serials;
 
   ALWAYS_INLINE bool HasTrait(Trait trait) const { return traits[static_cast<int>(trait)]; }
   ALWAYS_INLINE bool HasLanguage(Language language) const { return languages.test(static_cast<size_t>(language)); }

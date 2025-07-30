@@ -219,9 +219,9 @@ GlobalTicks GetGlobalTickCounter();
 u32 GetFrameNumber();
 u32 GetInternalFrameNumber();
 
-const std::string& GetDiscPath();
-const std::string& GetGameSerial();
 const std::string& GetGameTitle();
+const std::string& GetGameSerial();
+const std::string& GetGamePath();
 const std::string& GetExeOverride();
 const GameDatabase::Entry* GetGameDatabaseEntry();
 GameHash GetGameHash();
@@ -259,6 +259,9 @@ void UpdateControllerSettings();
 bool BootSystem(SystemBootParameters parameters, Error* error);
 void PauseSystem(bool paused);
 void ResetSystem();
+
+/// Returns true if the system can be paused, i.e. not subject to achievement restrictions.
+bool CanPauseSystem(bool display_message);
 
 /// Returns the maximum size of a save state, considering the current configuration.
 size_t GetMaxSaveStateSize();
@@ -422,6 +425,9 @@ void ToggleSoftwareRendering();
 /// Resizes the render window to the display size, with an optional scale.
 /// If the scale is set to 0, the internal resolution will be used, otherwise it is treated as a multiplier to 1x.
 void RequestDisplaySize(float scale = 0.0f);
+
+/// Returns the path to a possible cover image for the current serial.
+std::string GetImageForLoadingScreen(const std::string& game_path);
 
 //////////////////////////////////////////////////////////////////////////
 // Memory Save States (Rewind and Runahead)

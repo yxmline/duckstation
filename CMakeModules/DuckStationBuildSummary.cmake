@@ -27,15 +27,19 @@ if(BUILD_TESTS)
 endif()
 
 if(ALLOW_INSTALL)
-  message(WARNING "Install target is enabled. This will install all DuckStation files into:
-  ${CMAKE_INSTALL_PREFIX}
-It does **not** use the LSB subdirectories of bin, share, etc, so you should disable this option if it is set to /usr or /usr/local.")
+  message(STATUS "Creating self-contained install at ${CMAKE_INSTALL_PREFIX}")
 
-  if(INSTALL_SELF_CONTAINED)
-    message(STATUS "Creating self-contained install at ${CMAKE_INSTALL_PREFIX}")
-  else()
-    message(STATUS "Creating relative install at ${CMAKE_INSTALL_PREFIX}")
-    message(STATUS "  CMAKE_INSTALL_BINDIR: ${CMAKE_INSTALL_BINDIR}")
+  # Stop users being silly.
+  if("${CMAKE_INSTALL_PREFIX}" MATCHES "^/usr")
+    message(FATAL_ERROR "You are trying to install DuckStation into a system directory, this is not supported. Please use a different CMAKE_INSTALL_PREFIX.")
+  endif()
+endif()
+
+# Refuse to build in Arch package environments. My license does not allow for packages, and I'm sick of
+# dealing with people complaining about things broken by packagers. This is why we can't have nice things.
+if(DEFINED ENV{DEBUGINFOD_URLS})
+  if($ENV{DEBUGINFOD_URLS} MATCHES ".*archlinux.*")
+    message(FATAL_ERROR "Unsupported environment.")
   endif()
 endif()
 

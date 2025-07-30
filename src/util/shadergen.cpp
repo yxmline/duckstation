@@ -32,11 +32,14 @@ ShaderGen::ShaderGen(RenderAPI render_api, GPUShaderLanguage shader_language, bo
     {
       m_glsl_version = GetGLSLVersion(render_api);
       m_glsl_version_string = GetGLSLVersionString(m_render_api, m_glsl_version);
+      m_use_glsl_interface_blocks = UseGLSLInterfaceBlocks();
+      m_use_glsl_binding_layout = UseGLSLBindingLayout();
     }
-
-    m_use_glsl_interface_blocks =
-      (shader_language == GPUShaderLanguage::GLSLVK || GLAD_GL_ES_VERSION_3_2 || GLAD_GL_VERSION_3_2);
-    m_use_glsl_binding_layout = (shader_language == GPUShaderLanguage::GLSLVK || UseGLSLBindingLayout());
+    else
+    {
+      m_use_glsl_interface_blocks = (shader_language == GPUShaderLanguage::GLSLVK);
+      m_use_glsl_binding_layout = (shader_language == GPUShaderLanguage::GLSLVK);
+    }
 
 #ifdef _WIN32
     if (m_shader_language == GPUShaderLanguage::GLSL)
@@ -78,6 +81,15 @@ GPUShaderLanguage ShaderGen::GetShaderLanguageForAPI(RenderAPI api)
     default:
       return GPUShaderLanguage::None;
   }
+}
+
+bool ShaderGen::UseGLSLInterfaceBlocks()
+{
+#ifdef ENABLE_OPENGL
+  return (GLAD_GL_ES_VERSION_3_2 || GLAD_GL_VERSION_3_2);
+#else
+  return true;
+#endif
 }
 
 bool ShaderGen::UseGLSLBindingLayout()
@@ -197,17 +209,6 @@ void ShaderGen::WriteHeader(std::stringstream& ss, bool enable_rov /* = false */
         ss << "#extension GL_EXT_blend_func_extended : require\n";
       if (GLAD_GL_ARB_blend_func_extended)
         ss << "#extension GL_ARB_blend_func_extended : require\n";
-    }
-
-    // Test for V3D driver - we have to fudge coordinates slightly.
-    if (std::strstr(reinterpret_cast<const char*>(glGetString(GL_VENDOR)), "Broadcom") &&
-        std::strstr(reinterpret_cast<const char*>(glGetString(GL_RENDERER)), "V3D"))
-    {
-      ss << "#define DRIVER_V3D 1\n";
-    }
-    else if (std::strstr(reinterpret_cast<const char*>(glGetString(GL_RENDERER)), "PowerVR"))
-    {
-      ss << "#define DRIVER_POWERVR 1\n";
     }
   }
   else if (m_shader_language == GPUShaderLanguage::GLSL)
@@ -359,16 +360,17 @@ void ShaderGen::WriteHeader(std::stringstream& ss, bool enable_rov /* = false */
 
   // Pack functions missing from GLSL ES 3.0.
   // We can't rely on __VERSION__ because Adreno is a broken turd and reports 300 even for GLES 3.2.
-  if (!m_glsl || (m_shader_language == GPUShaderLanguage::GLSLES && m_glsl_version < 310))
+  if (!m_glsl || (m_shader_language == GPUShaderLanguage::GLSL && m_glsl_version < 400) ||
+      (m_shader_language == GPUShaderLanguage::GLSLES && m_glsl_version < 310))
   {
     ss << "uint packUnorm4x8(float4 value) {\n"
-          "  uint4 packed = uint4(round(saturate(value) * 255.0));\n"
-          "  return packed.x | (packed.y << 8) | (packed.z << 16) | (packed.w << 24);\n"
+          "  uint4 ret = uint4(round(saturate(value) * 255.0));\n"
+          "  return ret.x | (ret.y << 8) | (ret.z << 16) | (ret.w << 24);\n"
           "}\n"
           "\n"
           "float4 unpackUnorm4x8(uint value) {\n"
-          "  uint4 packed = uint4(value & 0xffu, (value >> 8) & 0xffu, (value >> 16) & 0xffu, value >> 24);\n"
-          "  return float4(packed) / 255.0;\n"
+          "  uint4 ret = uint4(value & 0xffu, (value >> 8) & 0xffu, (value >> 16) & 0xffu, value >> 24);\n"
+          "  return float4(ret) / 255.0;\n"
           "}\n";
   }
 
@@ -546,14 +548,28 @@ void ShaderGen::DeclareVertexEntryPoint(
     {
       const char* qualifier = GetInterpolationQualifier(false, msaa, ssaa, true);
 
+      u32 location = 0;
       for (u32 i = 0; i < num_color_outputs; i++)
+      {
+        if (m_spirv)
+          ss << "layout(location = " << location++ << ") ";
+
         ss << qualifier << (noperspective_color ? "noperspective " : "") << "out float4 v_col" << i << ";\n";
+      }
 
       for (u32 i = 0; i < num_texcoord_outputs; i++)
+      {
+        if (m_spirv)
+          ss << "layout(location = " << location++ << ") ";
+
         ss << qualifier << "out float2 v_tex" << i << ";\n";
+      }
 
       for (const auto& [qualifiers, name] : additional_outputs)
       {
+        if (m_spirv)
+          ss << "layout(location = " << location++ << ") ";
+
         const char* qualifier_to_use = (std::strlen(qualifiers) > 0) ? qualifiers : qualifier;
         ss << qualifier_to_use << " out " << name << ";\n";
       }
@@ -643,14 +659,28 @@ void ShaderGen::DeclareFragmentEntryPoint(
       {
         const char* qualifier = GetInterpolationQualifier(false, msaa, ssaa, false);
 
+        u32 location = 0;
         for (u32 i = 0; i < num_color_inputs; i++)
+        {
+          if (m_spirv)
+            ss << "layout(location = " << location++ << ") ";
+
           ss << qualifier << (noperspective_color ? "noperspective " : "") << "in float4 v_col" << i << ";\n";
+        }
 
         for (u32 i = 0; i < num_texcoord_inputs; i++)
+        {
+          if (m_spirv)
+            ss << "layout(location = " << location++ << ") ";
+
           ss << qualifier << "in float2 v_tex" << i << ";\n";
+        }
 
         for (const auto& [qualifiers, name] : additional_inputs)
         {
+          if (m_spirv)
+            ss << "layout(location = " << location++ << ") ";
+
           const char* qualifier_to_use = (std::strlen(qualifiers) > 0) ? qualifiers : qualifier;
           ss << qualifier_to_use << " in " << name << ";\n";
         }

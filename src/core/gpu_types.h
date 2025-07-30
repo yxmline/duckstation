@@ -205,7 +205,7 @@ union GPUSTAT
   BitField<u32, bool, 25, 1> dma_data_request;
   BitField<u32, bool, 26, 1> gpu_idle;
   BitField<u32, bool, 27, 1> ready_to_send_vram;
-  BitField<u32, bool, 28, 1> ready_to_recieve_dma;
+  BitField<u32, bool, 28, 1> ready_to_receive_dma;
   BitField<u32, GPUDMADirection, 29, 2> dma_direction;
   BitField<u32, bool, 31, 1> display_line_lsb;
 
@@ -550,7 +550,7 @@ ALWAYS_INLINE static constexpr GSVector4i GetPaletteRect(GPUTexturePaletteReg pa
 }
 
 // 4x4 dither matrix.
-static constexpr s32 DITHER_MATRIX[DITHER_MATRIX_SIZE][DITHER_MATRIX_SIZE] = {{-4, +0, -3, +1},  // row 0
+inline constexpr s32 DITHER_MATRIX[DITHER_MATRIX_SIZE][DITHER_MATRIX_SIZE] = {{-4, +0, -3, +1},  // row 0
                                                                               {+2, -2, +3, -1},  // row 1
                                                                               {-3, +1, -4, +0},  // row 2
                                                                               {+3, -1, +2, -2}}; // row 3

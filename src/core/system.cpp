@@ -70,6 +70,7 @@
 
 #include "IconsEmoji.h"
 #include "IconsFontAwesome6.h"
+#include "IconsPromptFont.h"
 
 #include "cpuinfo.h"
 #include "fmt/chrono.h"
@@ -762,18 +763,19 @@ u32 System::GetInternalFrameNumber()
   return s_state.internal_frame_number;
 }
 
-const std::string& System::GetDiscPath()
+const std::string& System::GetGameTitle()
 {
-  return s_state.running_game_path;
+  return s_state.running_game_title;
 }
+
 const std::string& System::GetGameSerial()
 {
   return s_state.running_game_serial;
 }
 
-const std::string& System::GetGameTitle()
+const std::string& System::GetGamePath()
 {
-  return s_state.running_game_title;
+  return s_state.running_game_path;
 }
 
 const std::string& System::GetExeOverride()
@@ -1192,7 +1194,7 @@ void System::RecreateGPU(GPURenderer renderer)
   StopMediaCapture();
 
   Error error;
-  if (!GPUThread::CreateGPUBackend(s_state.running_game_serial, renderer, true, false, false, &error))
+  if (!GPUThread::CreateGPUBackend(renderer, true, false, false, &error))
   {
     ERROR_LOG("Failed to switch to {} renderer: {}", Settings::GetRendererName(renderer), error.GetDescription());
     Panic("Failed to switch renderer.");
@@ -1630,6 +1632,24 @@ void System::PauseSystem(bool paused)
   }
 }
 
+bool System::CanPauseSystem(bool display_message)
+{
+  const u32 frames_until_pause_allowed = Achievements::GetPauseThrottleFrames();
+  if (frames_until_pause_allowed == 0)
+    return true;
+
+  if (display_message)
+  {
+    const float seconds = static_cast<float>(frames_until_pause_allowed) / System::GetVideoFrameRate();
+    Host::AddIconOSDMessage("PauseCooldown", ICON_FA_CLOCK,
+                            TRANSLATE_PLURAL_STR("Hotkeys", "You cannot pause until another %n second(s) have passed.",
+                                                 "", static_cast<int>(std::ceil(seconds))),
+                            std::max(seconds, Host::OSD_QUICK_DURATION));
+  }
+
+  return false;
+}
+
 bool System::SaveResumeState(Error* error)
 {
   if (s_state.running_game_serial.empty())
@@ -1745,6 +1765,7 @@ bool System::BootSystem(SystemBootParameters parameters, Error* error)
     {
       Error::SetStringFmt(error, "File '{}' is not a valid executable to boot.",
                           Path::GetFileName(parameters.override_exe));
+      Host::OnSystemStopping();
       DestroySystem();
       return false;
     }
@@ -1785,6 +1806,7 @@ bool System::BootSystem(SystemBootParameters parameters, Error* error)
       if (cancelled)
       {
         // Technically a failure, but user-initiated. Returning false here would try to display a non-existent error.
+        Host::OnSystemStopping();
         DestroySystem();
         return true;
       }
@@ -1804,6 +1826,7 @@ bool System::BootSystem(SystemBootParameters parameters, Error* error)
                   parameters.override_fullscreen.value_or(ShouldStartFullscreen()), error) ||
       !CheckForRequiredSubQ(error))
   {
+    Host::OnSystemStopping();
     DestroySystem();
     return false;
   }
@@ -1828,6 +1851,7 @@ bool System::BootSystem(SystemBootParameters parameters, Error* error)
   {
     Error::AddPrefixFmt(error, "Failed to load save state file '{}' for booting:\n",
                         Path::GetFileName(parameters.save_state));
+    Host::OnSystemStopping();
     DestroySystem();
     return false;
   }
@@ -1905,23 +1929,22 @@ bool System::Initialize(std::unique_ptr<CDImage> disc, DiscRegion disc_region, b
   // TODO: Drop class
   g_gpu.Initialize();
 
+  // Game info must be set prior to backend creation because of texture replacements.
+  // We don't do it in UpdateRunningGame() when booting because it can fail in a number of locations.
+  GPUThread::UpdateGameInfo(s_state.running_game_title, s_state.running_game_serial, s_state.running_game_path,
+                            s_state.running_game_hash, false);
+
   // This can fail due to the application being closed during startup.
-  if (!GPUThread::CreateGPUBackend(s_state.running_game_serial,
-                                   force_software_renderer ? GPURenderer::Software : g_settings.gpu_renderer, false,
+  if (!GPUThread::CreateGPUBackend(force_software_renderer ? GPURenderer::Software : g_settings.gpu_renderer, false,
                                    fullscreen, false, error))
   {
+    // Game info has to be manually cleared since the backend won't shutdown naturally.
+    GPUThread::ClearGameInfo();
     return false;
   }
 
   if (g_settings.gpu_pgxp_enable)
     CPU::PGXP::Initialize();
-
-  // Was startup cancelled? (e.g. shading compilers took too long and the user closed the application)
-  if (IsStartupCancelled())
-  {
-    Error::SetStringView(error, TRANSLATE_SV("System", "Startup was cancelled."));
-    return false;
-  }
 
   DMA::Initialize();
   Pad::Initialize();
@@ -2019,6 +2042,7 @@ void System::AbnormalShutdown(const std::string_view reason)
   // Immediately switch to destroying and exit execution to get out of here.
   s_state.state = State::Stopping;
   std::atomic_thread_fence(std::memory_order_release);
+  Host::OnSystemStopping();
   if (s_state.system_executing)
     InterruptExecution();
   else
@@ -2036,7 +2060,7 @@ void System::ClearRunningGame()
   s_state.running_game_hash = 0;
 
   Host::OnSystemGameChanged(s_state.running_game_path, s_state.running_game_serial, s_state.running_game_title,
-                      s_state.running_game_hash);
+                            s_state.running_game_hash);
 
   UpdateRichPresence(true);
 }
@@ -2083,6 +2107,8 @@ void System::FrameDone()
   // TODO: when running ahead, we can skip this (and the flush above)
   if (!IsReplayingGPUDump()) [[likely]]
   {
+    MDEC::EndFrame();
+
     SPU::GeneratePendingSamples();
 
     Cheats::ApplyFrameEndCodes();
@@ -2191,8 +2217,10 @@ void System::FrameDone()
   {
     Host::PumpMessagesOnCPUThread();
     InputManager::PollSources();
-    CheckForAndExitExecution();
   }
+
+  // Frame step can still trigger exit
+  CheckForAndExitExecution();
 
   // Update input OSD if we're running
   if (g_settings.display_show_inputs)
@@ -2872,7 +2900,7 @@ bool System::LoadState(const char* path, Error* error, bool save_undo_state, boo
   INFO_LOG("Loading state from '{}'...", path);
 
   Host::AddIconOSDMessage(
-    "LoadState", ICON_EMOJI_OPEN_THE_FOLDER,
+    "LoadState", ICON_EMOJI_FILE_FOLDER_OPEN,
     fmt::format(TRANSLATE_FS("OSDMessage", "Loading state from '{}'..."), Path::GetFileName(path)),
     Host::OSD_QUICK_DURATION);
 
@@ -3773,7 +3801,7 @@ std::unique_ptr<MemoryCard> System::GetMemoryCardForSlot(u32 slot, MemoryCardTyp
       if (s_state.running_game_serial.empty())
       {
         Host::AddIconOSDMessage(
-          std::move(message_key), ICON_FA_SD_CARD,
+          std::move(message_key), ICON_PF_MEMORY_CARD,
           fmt::format(TRANSLATE_FS("System", "Per-game memory card cannot be used for slot {} as the running "
                                              "game has no code. Using shared card instead."),
                       slot + 1u),
@@ -3792,7 +3820,7 @@ std::unique_ptr<MemoryCard> System::GetMemoryCardForSlot(u32 slot, MemoryCardTyp
       if (s_state.running_game_title.empty())
       {
         Host::AddIconOSDMessage(
-          std::move(message_key), ICON_FA_SD_CARD,
+          std::move(message_key), ICON_PF_MEMORY_CARD,
           fmt::format(TRANSLATE_FS("System", "Per-game memory card cannot be used for slot {} as the running "
                                              "game has no title. Using shared card instead."),
                       slot + 1u),
@@ -3830,7 +3858,7 @@ std::unique_ptr<MemoryCard> System::GetMemoryCardForSlot(u32 slot, MemoryCardTyp
             if (g_settings.memory_card_use_playlist_title && !card_path.empty())
             {
               Host::AddIconOSDMessage(
-                fmt::format("DiscSpecificMC{}", slot), ICON_FA_SD_CARD,
+                fmt::format("DiscSpecificMC{}", slot), ICON_PF_MEMORY_CARD,
                 fmt::format(TRANSLATE_FS("System", "Using disc-specific memory card '{}' instead of per-game card."),
                             Path::GetFileName(disc_card_path)),
                 Host::OSD_INFO_DURATION);
@@ -3852,7 +3880,7 @@ std::unique_ptr<MemoryCard> System::GetMemoryCardForSlot(u32 slot, MemoryCardTyp
       if (file_title.empty())
       {
         Host::AddIconOSDMessage(
-          std::move(message_key), ICON_FA_SD_CARD,
+          std::move(message_key), ICON_PF_MEMORY_CARD,
           fmt::format(TRANSLATE_FS("System", "Per-game memory card cannot be used for slot {} as the running "
                                              "game has no path. Using shared card instead."),
                       slot + 1u));
@@ -4091,7 +4119,7 @@ bool System::InsertMedia(const char* path)
 
   if (g_settings.HasAnyPerGameMemoryCards())
   {
-    Host::AddIconOSDMessage("ReloadMemoryCardsFromGameChange", ICON_FA_SD_CARD,
+    Host::AddIconOSDMessage("ReloadMemoryCardsFromGameChange", ICON_PF_MEMORY_CARD,
                             TRANSLATE_STR("System", "Game changed, reloading memory cards."), Host::OSD_INFO_DURATION);
     UpdatePerGameMemoryCards();
   }
@@ -4213,18 +4241,18 @@ void System::UpdateRunningGame(const std::string& path, CDImage* image, bool boo
   }
 
   if (s_state.running_game_serial != prev_serial)
-  {
-    GPUThread::SetGameSerial(s_state.running_game_serial);
     UpdateSessionTime(prev_serial);
-  }
 
   UpdateRichPresence(booting);
 
-  FullscreenUI::OnRunningGameChanged(s_state.running_game_path, s_state.running_game_serial, s_state.running_game_title,
-                                     s_state.running_game_hash);
+  if (!booting)
+  {
+    GPUThread::UpdateGameInfo(s_state.running_game_title, s_state.running_game_serial, s_state.running_game_path,
+                              s_state.running_game_hash);
+  }
 
   Host::OnSystemGameChanged(s_state.running_game_path, s_state.running_game_serial, s_state.running_game_title,
-                      s_state.running_game_hash);
+                            s_state.running_game_hash);
 }
 
 bool System::CheckForRequiredSubQ(Error* error)
@@ -5253,6 +5281,7 @@ void System::ShutdownSystem(bool save_resume_state)
     }
   }
 
+  Host::OnSystemStopping();
   s_state.state = State::Stopping;
   std::atomic_thread_fence(std::memory_order_release);
   if (!s_state.system_executing)
@@ -5463,8 +5492,7 @@ bool System::StartMediaCapture(std::string path)
         const GSVector2i video_size = backend->GetPresenter().CalculateScreenshotSize(mode);
         u32 video_width = static_cast<u32>(video_size.x);
         u32 video_height = static_cast<u32>(video_size.y);
-        if (mode != DisplayScreenshotMode::ScreenResolution)
-          MediaCapture::AdjustVideoSize(&video_width, &video_height);
+        MediaCapture::AdjustVideoSize(&video_width, &video_height);
 
         // fire back to the CPU thread to actually start the capture
         Host::RunOnCPUThread([path = std::move(path), capture_audio, video_width, video_height]() mutable {
@@ -5998,6 +6026,22 @@ bool System::ChangeGPUDump(std::string new_path)
   return true;
 }
 
+std::string System::GetImageForLoadingScreen(const std::string& game_path)
+{
+  std::string ret;
+
+  const auto lock = GameList::GetLock();
+  const GameList::Entry* entry = GameList::GetEntryForPath(game_path);
+
+  if (entry)
+    ret = GameList::GetCoverImagePathForEntry(entry);
+
+  if (ret.empty())
+    ret = ImGuiManager::LOGO_IMAGE_NAME;
+
+  return ret;
+}
+
 void System::UpdateSessionTime(const std::string& prev_serial)
 {
   const Timer::Value ctime = Timer::GetCurrentValue();
@@ -6163,20 +6207,25 @@ void System::UpdateRichPresence(bool update_session_time)
   rp.largeImageKey = "duckstation_logo";
   rp.largeImageText = "DuckStation PS1/PSX Emulator";
   rp.startTimestamp = s_state.discord_presence_time_epoch;
-  rp.details = "No Game Running";
+
+  TinyString game_details = "No Game Running";
   if (IsValidOrInitializing())
   {
     // Use disc set name if it's not a custom title.
     if (s_state.running_game_entry && !s_state.running_game_entry->disc_set_name.empty() &&
         s_state.running_game_title == s_state.running_game_entry->title)
     {
-      rp.details = s_state.running_game_entry->disc_set_name.c_str();
+      game_details = s_state.running_game_entry->disc_set_name;
     }
     else
     {
-      rp.details = s_state.running_game_title.empty() ? "Unknown Game" : s_state.running_game_title.c_str();
+      if (s_state.running_game_title.empty())
+        game_details = "Unknown Game";
+      else
+        game_details = std::string_view(s_state.running_game_title);
     }
   }
+  rp.details = game_details.c_str();
 
   const auto lock = Achievements::GetLock();
 

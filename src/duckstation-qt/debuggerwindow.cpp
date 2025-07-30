@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2019-2024 Connor McLaughlin <stenzek@gmail.com>
+// SPDX-FileCopyrightText: 2019-2025 Connor McLaughlin <stenzek@gmail.com>
 // SPDX-License-Identifier: CC-BY-NC-ND-4.0
 
 #include "debuggerwindow.h"
@@ -18,6 +18,8 @@
 #include <QtWidgets/QAbstractScrollArea>
 #include <QtWidgets/QFileDialog>
 #include <QtWidgets/QMessageBox>
+
+#include "moc_debuggerwindow.cpp"
 
 static constexpr int TIMER_REFRESH_INTERVAL_MS = 100;
 
@@ -542,10 +544,10 @@ void DebuggerWindow::createModels()
 
   // set default column width in code view
   m_ui.codeView->setColumnWidth(0, 40);
-  m_ui.codeView->setColumnWidth(1, 80);
-  m_ui.codeView->setColumnWidth(2, 80);
+  m_ui.codeView->setColumnWidth(1, 100);
+  m_ui.codeView->setColumnWidth(2, 90);
   m_ui.codeView->setColumnWidth(3, 250);
-  m_ui.codeView->setColumnWidth(4, m_ui.codeView->width() - (40 + 80 + 80 + 250));
+  m_ui.codeView->setColumnWidth(4, m_ui.codeView->width() - (40 + 100 + 90 + 250));
 
   m_registers_model = std::make_unique<DebuggerRegistersModel>();
   m_ui.registerView->setModel(m_registers_model.get());

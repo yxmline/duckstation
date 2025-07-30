@@ -90,6 +90,7 @@ public:
   bool getShowGameIcons() const { return m_show_game_icons; }
   void setShowGameIcons(bool enabled);
   QIcon getIconForGame(const QString& path);
+  void refreshIcons();
 
   float getCoverScale() const { return m_cover_scale; }
   void setCoverScale(float scale);
@@ -101,10 +102,8 @@ public:
 Q_SIGNALS:
   void coverScaleChanged(float scale);
 
-private Q_SLOTS:
-  void rowsChanged(const QList<int>& rows);
-
 private:
+  void rowsChanged(const QList<int>& rows);
   QVariant data(const QModelIndex& index, int role, const GameList::Entry* ge) const;
 
   void loadCommonImages();
@@ -164,11 +163,10 @@ public:
 protected:
   void resizeEvent(QResizeEvent* e) override;
 
-private Q_SLOTS:
+private:
   void onHeaderSortIndicatorChanged(int, Qt::SortOrder);
   void onHeaderContextMenuRequested(const QPoint& point);
 
-private:
   void loadColumnVisibilitySettings();
   void loadColumnSortSettings();
   void saveColumnSortSettings();
@@ -198,10 +196,8 @@ protected:
   void wheelEvent(QWheelEvent* e) override;
   void resizeEvent(QResizeEvent* e) override;
 
-private Q_SLOTS:
-  void onCoverScaleChanged(float scale);
-
 private:
+  void onCoverScaleChanged(float scale);
   void adjustZoom(float delta);
 
   GameListModel* m_model = nullptr;
@@ -214,27 +210,24 @@ class GameListWidget final : public QWidget
   Q_OBJECT
 
 public:
-  GameListWidget(QWidget* parent = nullptr);
+  explicit GameListWidget(QWidget* parent = nullptr);
   ~GameListWidget();
 
   ALWAYS_INLINE GameListModel* getModel() const { return m_model; }
   ALWAYS_INLINE GameListListView* getListView() const { return m_list_view; }
   ALWAYS_INLINE GameListGridView* getGridView() const { return m_grid_view; }
 
-  void initialize();
+  void initialize(QAction* actionGameList, QAction* actionGameGrid, QAction* actionMergeDiscSets,
+                  QAction* actionListShowIcons, QAction* actionGridShowTitles);
   void resizeListViewColumnsToFit();
 
   void refresh(bool invalidate_cache);
-  void refreshModel();
   void cancelRefresh();
   void reloadThemeSpecificImages();
   void updateBackground(bool reload_image);
 
   bool isShowingGameList() const;
   bool isShowingGameGrid() const;
-  bool isShowingGridCoverTitles() const;
-  bool isMergingDiscSets() const;
-  bool isShowingGameIcons() const;
 
   const GameList::Entry* getSelectedEntry() const;
 
@@ -247,7 +240,6 @@ Q_SIGNALS:
   void entryContextMenuRequested(const QPoint& point);
 
   void addGameDirectoryRequested();
-  void layoutChanged();
 
 private Q_SLOTS:
   void onRefreshProgress(const QString& status, int current, int total, float time);
@@ -265,9 +257,9 @@ private Q_SLOTS:
 public Q_SLOTS:
   void showGameList();
   void showGameGrid();
-  void setShowCoverTitles(bool enabled);
   void setMergeDiscSets(bool enabled);
   void setShowGameIcons(bool enabled);
+  void setShowCoverTitles(bool enabled);
   void refreshGridCovers();
   void focusSearchWidget();
 
@@ -275,7 +267,8 @@ protected:
   void resizeEvent(QResizeEvent* event);
 
 private:
-  void updateToolbar();
+  void updateView(bool grid_view);
+  void updateToolbar(bool grid_view);
 
   Ui::GameListWidget m_ui;
 

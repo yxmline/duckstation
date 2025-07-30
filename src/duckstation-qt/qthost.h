@@ -32,8 +32,8 @@
 #include <optional>
 #include <string>
 #include <utility>
-#include <vector>
 #include <variant>
+#include <vector>
 
 class QActionGroup;
 class QEventLoop;
@@ -88,16 +88,15 @@ public:
   };
 
 public:
-  explicit EmuThread(QThread* ui_thread);
+  EmuThread();
   ~EmuThread();
 
-  static void start();
-  static void stop();
+  void start();
+  void stop();
 
   ALWAYS_INLINE QEventLoop* getEventLoop() const { return m_event_loop; }
 
   ALWAYS_INLINE bool isFullscreen() const { return m_is_fullscreen; }
-  ALWAYS_INLINE bool isRenderingToMain() const { return m_is_rendering_to_main; }
   ALWAYS_INLINE bool isSurfaceless() const { return m_is_surfaceless; }
 
   ALWAYS_INLINE InputDeviceListModel* getInputDeviceListModel() const { return m_input_device_list_model.get(); }
@@ -110,8 +109,6 @@ public:
   void startBackgroundControllerPollTimer();
   void stopBackgroundControllerPollTimer();
   void wakeThread();
-
-  void checkForSettingsChanges(const Settings& old_settings);
 
   void bootOrLoadState(std::string path);
 
@@ -137,6 +134,7 @@ Q_SIGNALS:
   void settingsResetToDefault(bool system, bool controller);
   void systemStarting();
   void systemStarted();
+  void systemStopping();
   void systemDestroyed();
   void systemPaused();
   void systemResumed();
@@ -145,8 +143,7 @@ Q_SIGNALS:
   void gameListRefreshed();
   void gameListRowsChanged(const QList<int>& rows_changed);
   std::optional<WindowInfo> onAcquireRenderWindowRequested(RenderAPI render_api, bool fullscreen,
-                                                           bool exclusive_fullscreen, bool render_to_main,
-                                                           bool surfaceless, bool use_main_window_pos, Error* error);
+                                                           bool exclusive_fullscreen, bool surfaceless, Error* error);
   void onResizeRenderWindowRequested(qint32 width, qint32 height);
   void onReleaseRenderWindowRequested();
   void focusDisplayWidgetRequested();
@@ -159,7 +156,6 @@ Q_SIGNALS:
   void achievementsActiveChanged(bool active);
   void achievementsHardcoreModeChanged(bool enabled);
   void achievementsAllProgressRefreshed();
-  void cheatEnabled(quint32 index, bool enabled);
   void mediaCaptureStarted();
   void mediaCaptureStopped();
 
@@ -209,8 +205,9 @@ public Q_SLOTS:
   void saveScreenshot();
   void redrawDisplayWindow();
   void toggleFullscreen();
-  void setFullscreen(bool fullscreen, bool allow_render_to_main);
+  void setFullscreen(bool fullscreen);
   void setSurfaceless(bool surfaceless);
+  void updateDisplayWindow();
   void requestDisplaySize(float scale);
   void applyCheat(const QString& name);
   void reloadPostProcessingShaders();
@@ -252,7 +249,6 @@ private:
   std::unique_ptr<InputDeviceListModel> m_input_device_list_model;
 
   bool m_shutdown_flag = false;
-  bool m_is_rendering_to_main = false;
   bool m_is_fullscreen = false;
   bool m_is_fullscreen_ui_started = false;
   bool m_gpu_thread_run_idle = false;
@@ -284,7 +280,7 @@ public:
 
   using DeviceList = QList<Device>;
 
-  InputDeviceListModel(QObject* parent = nullptr);
+  explicit InputDeviceListModel(QObject* parent = nullptr);
   ~InputDeviceListModel() override;
 
   // Safe to access on UI thread.
@@ -328,7 +324,7 @@ Q_SIGNALS:
   void completed(QtAsyncTask* self);
 
 private:
-  QtAsyncTask(WorkCallback callback);
+  explicit QtAsyncTask(WorkCallback callback);
 
   std::variant<WorkCallback, CompletionCallback> m_callback;
 };
@@ -336,11 +332,11 @@ private:
 extern EmuThread* g_emu_thread;
 
 namespace QtHost {
+/// Returns the locale to use for date/time formatting, etc.
+const QLocale& GetApplicationLocale();
+
 /// Default theme name for the platform.
 const char* GetDefaultThemeName();
-
-/// Default language for the platform.
-const char* GetDefaultLanguage();
 
 /// Sets application theme according to settings.
 void UpdateApplicationTheme();
@@ -363,8 +359,8 @@ bool IsRunningOnWayland();
 /// Returns true if rendering to the main window should be allowed.
 bool CanRenderToMainWindow();
 
-/// Default language for the platform.
-const char* GetDefaultLanguage();
+/// Returns true if the separate-window display widget should use the main window coordinates.
+bool UseMainWindowGeometryForDisplayWindow();
 
 /// Call when the language changes.
 void UpdateApplicationLanguage(QWidget* dialog_parent);
@@ -390,6 +386,10 @@ INISettingsInterface* GetBaseSettingsInterface();
 /// Saves a game settings interface.
 bool SaveGameSettings(SettingsInterface* sif, bool delete_if_empty);
 
+/// Formats a number according to the current locale.
+QString FormatNumber(Host::NumberFormatType type, s64 value);
+QString FormatNumber(Host::NumberFormatType type, double value);
+
 /// Downloads the specified URL to the provided path.
 bool DownloadFile(QWidget* parent, const QString& title, std::string url, const char* path);
 
@@ -401,6 +401,7 @@ bool ShouldShowDebugOptions();
 
 /// VM state, safe to access on UI thread.
 bool IsSystemValid();
+bool IsSystemValidOrStarting();
 bool IsSystemPaused();
 
 /// Returns true if fullscreen UI is requested.

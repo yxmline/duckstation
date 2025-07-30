@@ -33,6 +33,7 @@ class AutoUpdaterWindow;
 class MemoryCardEditorWindow;
 class DebuggerWindow;
 class MemoryScannerWindow;
+class CoverDownloadWindow;
 
 struct SystemBootParameters;
 
@@ -95,6 +96,9 @@ public:
   /// Force quits the application.
   void quit();
 
+  /// Returns true if there is any display widget, main or otherwise.
+  bool hasDisplayWidget() const;
+
   /// Accessors for the status bar widgets, updated by the emulation thread.
   ALWAYS_INLINE QLabel* getStatusRendererWidget() const { return m_status_renderer_widget; }
   ALWAYS_INLINE QLabel* getStatusResolutionWidget() const { return m_status_resolution_widget; }
@@ -118,7 +122,8 @@ public Q_SLOTS:
   void cancelGameListRefresh();
 
   void runOnUIThread(const std::function<void()>& func);
-  bool requestShutdown(bool allow_confirm, bool allow_save_to_state, bool save_state, bool check_memcard_busy);
+  void requestShutdown(bool allow_confirm, bool allow_save_to_state, bool save_state, bool check_safety,
+                       bool exit_fullscreen_ui, bool quit_afterwards);
   void requestExit(bool allow_confirm = true);
   void checkForSettingChanges();
   std::optional<WindowInfo> getWindowInfo();
@@ -134,8 +139,7 @@ private Q_SLOTS:
   void onStatusMessage(const QString& message);
 
   std::optional<WindowInfo> acquireRenderWindow(RenderAPI render_api, bool fullscreen, bool exclusive_fullscreen,
-                                                bool render_to_main, bool surfaceless, bool use_main_window_pos,
-                                                Error* error);
+                                                bool surfaceless, Error* error);
   void displayResizeRequested(qint32 width, qint32 height);
   void releaseRenderWindow();
   void focusDisplayWidget();
@@ -144,6 +148,7 @@ private Q_SLOTS:
   void onSettingsResetToDefault(bool system, bool controller);
   void onSystemStarting();
   void onSystemStarted();
+  void onSystemStopping();
   void onSystemDestroyed();
   void onSystemPaused();
   void onSystemResumed();
@@ -165,6 +170,7 @@ private Q_SLOTS:
   void onApplicationStateChanged(Qt::ApplicationState state);
 
   void onToolbarContextMenuRequested(const QPoint& pos);
+  void onToolbarTopLevelChanged(bool top_level);
 
   void onStartFileActionTriggered();
   void onStartDiscActionTriggered();
@@ -178,6 +184,7 @@ private Q_SLOTS:
   void onCheatsActionTriggered();
   void onCheatsMenuAboutToShow();
   void onStartFullscreenUITriggered();
+  void onPauseActionToggled(bool checked);
   void onFullscreenUIStartedOrStopped(bool running);
   void onRemoveDiscActionTriggered();
   void onScanForNewGamesTriggered();
@@ -209,7 +216,6 @@ private Q_SLOTS:
 
   void onGameListRefreshComplete();
   void onGameListRefreshProgress(const QString& status, int current, int total);
-  void onGameListLayoutChanged();
   void onGameListSelectionChanged();
   void onGameListEntryActivated();
   void onGameListEntryContextMenuRequested(const QPoint& point);
@@ -242,11 +248,12 @@ private:
 
   void updateToolbarActions();
   void updateToolbarIconStyle();
+  void updateToolbarArea();
   void updateEmulationActions(bool starting, bool running, bool cheevos_challenge_mode);
   void updateShortcutActions(bool starting);
   void updateStatusBarWidgetVisibility();
   void updateWindowTitle();
-  void updateWindowState(bool force_visible = false);
+  void updateWindowState();
 
   void setProgressBar(int current, int total);
   void clearProgressBar();
@@ -260,14 +267,14 @@ private:
 
   void switchToGameListView();
   void switchToEmulationView();
-  void saveStateToConfig();
-  void restoreStateFromConfig();
   void saveDisplayWindowGeometryToConfig();
   void restoreDisplayWindowGeometryFromConfig();
-  void createDisplayWidget(bool fullscreen, bool render_to_main, bool use_main_window_pos);
+  bool wantsDisplayWidget() const;
+  void createDisplayWidget(bool fullscreen, bool render_to_main);
   void destroyDisplayWidget(bool show_game_list);
   void updateDisplayWidgetCursor();
-  void updateDisplayRelatedActions(bool has_surface, bool render_to_main, bool fullscreen);
+  void updateDisplayRelatedActions(bool has_surface, bool fullscreen);
+  void exitFullscreen(bool wait_for_completion);
 
   void doSettings(const char* category = nullptr);
   void openGamePropertiesForCurrentGame(const char* category = nullptr);
@@ -301,8 +308,6 @@ private:
   void startFileOrChangeDisc(const QString& path);
   void promptForDiscChange(const QString& path);
 
-  static QString formatTimestampForSaveStateMenu(u64 timestamp);
-
   Ui::MainWindow m_ui;
 
   GameListWidget* m_game_list_widget = nullptr;
@@ -335,12 +340,12 @@ private:
   MemoryCardEditorWindow* m_memory_card_editor_window = nullptr;
   DebuggerWindow* m_debugger_window = nullptr;
   MemoryScannerWindow* m_memory_scanner_window = nullptr;
+  CoverDownloadWindow* m_cover_download_window = nullptr;
 
   bool m_was_paused_by_focus_loss = false;
   bool m_relative_mouse_mode = false;
   bool m_hide_mouse_cursor = false;
 
-  bool m_display_created = false;
   bool m_exclusive_fullscreen_requested = false;
   bool m_save_states_invalidated = false;
   bool m_was_paused_on_surface_loss = false;

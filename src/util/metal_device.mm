@@ -140,7 +140,7 @@ MetalDevice::MetalDevice() : m_current_viewport(0, 0, 1, 1), m_current_scissor(0
 
 MetalDevice::~MetalDevice()
 {
-  Assert(m_pipeline_archive == nil && m_layer_drawable == nil && m_device == nil);
+  Assert(m_layer_drawable == nil && m_device == nil);
 }
 
 MetalSwapChain::MetalSwapChain(const WindowInfo& wi, GPUVSyncMode vsync_mode, bool allow_present_throttle,
@@ -163,7 +163,7 @@ void MetalSwapChain::Destroy(bool wait_for_gpu)
     MetalDevice::GetInstance().WaitForGPUIdle();
 
   RunOnMainThread([this]() {
-    NSView* view = (__bridge NSView*)m_window_info.window_handle;
+    NSView* view = (NSView*)m_window_info.window_handle;
     [view setLayer:nil];
     [view setWantsLayer:FALSE];
     [m_layer release];
@@ -219,7 +219,7 @@ std::unique_ptr<GPUSwapChain> MetalDevice::CreateSwapChain(const WindowInfo& wi,
       @autoreleasepool
       {
         INFO_LOG("Creating a {}x{} Metal layer.", wi_copy.surface_width, wi_copy.surface_height);
-        layer = [CAMetalLayer layer]; // TODO: Does this need retain??
+        layer = [[CAMetalLayer layer] retain];
         if (layer == nil)
         {
           Error::SetStringView(error, "Failed to create metal layer.");
@@ -242,7 +242,7 @@ std::unique_ptr<GPUSwapChain> MetalDevice::CreateSwapChain(const WindowInfo& wi,
 
         VERBOSE_LOG("Metal layer pixel format is {}.", GPUTexture::GetFormatName(wi_copy.surface_format));
 
-        NSView* view = (__bridge NSView*)wi_copy.window_handle;
+        NSView* view = (NSView*)wi_copy.window_handle;
         [view setWantsLayer:TRUE];
         [view setLayer:layer];
       }
@@ -329,8 +329,11 @@ bool MetalDevice::CreateDeviceAndMainSwapChain(std::string_view adapter, Feature
 
     m_device = [device retain];
     m_queue = [queue retain];
-    INFO_LOG("Metal Device: {}", [[m_device name] UTF8String]);
 
+    const char* device_name = [[m_device name] UTF8String];
+    INFO_LOG("Metal Device: {}", device_name);
+
+    SetDriverType(GuessDriverType(0, {}, device_name));
     SetFeatures(disabled_features);
     CreateCommandBuffer();
 
@@ -389,19 +392,12 @@ void MetalDevice::SetFeatures(FeatureMask disabled_features)
   m_features.explicit_present = false;
   m_features.timed_present = true;
   m_features.shader_cache = true;
-  m_features.pipeline_cache = true;
+  m_features.pipeline_cache = false;
   m_features.prefer_unused_textures = true;
 
   // Same feature bit for both.
   m_features.dxt_textures = m_features.bptc_textures =
     !(disabled_features & FEATURE_MASK_COMPRESSED_TEXTURES) && m_device.supportsBCTextureCompression;
-
-  // Disable pipeline cache on Intel, apparently it's buggy.
-  if ([[m_device name] containsString:@"Intel"])
-  {
-    WARNING_LOG("Disabling Metal pipeline cache on Intel GPU.");
-    m_features.pipeline_cache = false;
-  }
 }
 
 bool MetalDevice::LoadShaders()
@@ -429,76 +425,6 @@ bool MetalDevice::LoadShaders()
     if (!(m_shaders = try_lib(@"Metal23")) && !(m_shaders = try_lib(@"Metal22")) &&
         !(m_shaders = try_lib(@"Metal21")) && !(m_shaders = try_lib(@"default")))
     {
-      return false;
-    }
-
-    return true;
-  }
-}
-
-bool MetalDevice::OpenPipelineCache(const std::string& path, Error* error)
-{
-  @autoreleasepool
-  {
-    MTLBinaryArchiveDescriptor* archiveDescriptor = [[[MTLBinaryArchiveDescriptor alloc] init] autorelease];
-    archiveDescriptor.url = [NSURL fileURLWithPath:CocoaTools::StringViewToNSString(path)];
-
-    NSError* nserror = nil;
-    m_pipeline_archive = [m_device newBinaryArchiveWithDescriptor:archiveDescriptor error:&nserror];
-    if (m_pipeline_archive == nil)
-    {
-      CocoaTools::NSErrorToErrorObject(error, "newBinaryArchiveWithDescriptor failed: ", nserror);
-      return false;
-    }
-
-    m_pipeline_cache_modified = false;
-    return true;
-  }
-}
-
-bool MetalDevice::CreatePipelineCache(const std::string& path, Error* error)
-{
-  @autoreleasepool
-  {
-    MTLBinaryArchiveDescriptor* archiveDescriptor = [[[MTLBinaryArchiveDescriptor alloc] init] autorelease];
-    archiveDescriptor.url = nil;
-
-    NSError* nserror = nil;
-    m_pipeline_archive = [m_device newBinaryArchiveWithDescriptor:archiveDescriptor error:&nserror];
-    if (m_pipeline_archive == nil)
-    {
-      CocoaTools::NSErrorToErrorObject(error, "newBinaryArchiveWithDescriptor failed: ", nserror);
-      return false;
-    }
-
-    m_pipeline_cache_modified = false;
-    return true;
-  }
-}
-
-bool MetalDevice::ClosePipelineCache(const std::string& path, Error* error)
-{
-  if (!m_pipeline_archive)
-    return false;
-
-  const ScopedGuard closer = [this]() {
-    [m_pipeline_archive release];
-    m_pipeline_archive = nil;
-  };
-
-  if (!m_pipeline_cache_modified)
-  {
-    INFO_LOG("Not saving pipeline cache, it has not been modified.");
-    return true;
-  }
-
-  @autoreleasepool
-  {
-    NSURL* url = [NSURL fileURLWithPath:CocoaTools::StringViewToNSString(path)];
-    NSError* nserror = nil;
-    if (![m_pipeline_archive serializeToURL:url error:&nserror])
-    {
-      CocoaTools::NSErrorToErrorObject(error, "serializeToURL failed: ", nserror);
       return false;
     }
 
@@ -935,38 +861,12 @@ std::unique_ptr<GPUPipeline> MetalDevice::CreatePipeline(const GPUPipeline::Grap
     NSError* nserror = nil;
 
     // Try cached first.
-    id<MTLRenderPipelineState> pipeline = nil;
-    if (m_pipeline_archive != nil)
-    {
-      desc.binaryArchives = [NSArray arrayWithObjects:m_pipeline_archive, nil];
-      pipeline = [m_device newRenderPipelineStateWithDescriptor:desc
-                                                        options:MTLPipelineOptionFailOnBinaryArchiveMiss
-                                                     reflection:nil
-                                                          error:&nserror];
-      if (pipeline == nil)
-      {
-        // Add it to the cache.
-        if (![m_pipeline_archive addRenderPipelineFunctionsWithDescriptor:desc error:&nserror])
-        {
-          LogNSError(nserror, "Failed to add render pipeline to binary archive");
-          desc.binaryArchives = nil;
-        }
-        else
-        {
-          m_pipeline_cache_modified = true;
-        }
-      }
-    }
-
+    id<MTLRenderPipelineState> pipeline = [m_device newRenderPipelineStateWithDescriptor:desc error:&nserror];
     if (pipeline == nil)
     {
-      pipeline = [m_device newRenderPipelineStateWithDescriptor:desc error:&nserror];
-      if (pipeline == nil)
-      {
-        LogNSError(nserror, "Failed to create render pipeline state");
-        CocoaTools::NSErrorToErrorObject(error, "newRenderPipelineStateWithDescriptor failed: ", nserror);
-        return {};
-      }
+      LogNSError(nserror, "Failed to create render pipeline state");
+      CocoaTools::NSErrorToErrorObject(error, "newRenderPipelineStateWithDescriptor failed: ", nserror);
+      return {};
     }
 
     return std::unique_ptr<GPUPipeline>(new MetalPipeline(pipeline, depth, cull_mode, primitive));
@@ -2797,11 +2697,13 @@ GPUDevice::AdapterInfoList GPUDevice::WrapGetMetalAdapterList()
     ret.reserve(count);
     for (u32 i = 0; i < count; i++)
     {
+      const char* device_name = [devices[i].name UTF8String];
       AdapterInfo ai;
-      ai.name = [devices[i].name UTF8String];
+      ai.name = device_name;
       ai.max_texture_size = GetMetalMaxTextureSize(devices[i]);
       ai.max_multisamples = GetMetalMaxMultisamples(devices[i]);
       ai.supports_sample_shading = true;
+      ai.driver_type = GuessDriverType(0, {}, device_name);
       ret.push_back(std::move(ai));
     }
   }

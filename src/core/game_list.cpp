@@ -732,7 +732,7 @@ void GameList::ApplyCustomAttributes(const std::string& path, Entry* entry,
     }
     else
     {
-      WARNING_LOG("Invalid language '{}' in custom attributes for '{}'", custom_region_str.value(), path);
+      WARNING_LOG("Invalid language '{}' in custom attributes for '{}'", custom_language_str.value(), path);
     }
   }
 }
@@ -1084,7 +1084,7 @@ void GameList::CreateDiscSetEntries(const std::vector<std::string>& excluded_pat
 
     // already have a disc set by this name?
     const std::string& disc_set_name = entry.disc_set_name;
-    if (GetEntryForPath(disc_set_name.c_str()))
+    if (GetEntryForPath(disc_set_name))
       continue;
 
     const GameDatabase::Entry* dbentry = GameDatabase::GetEntryForSerial(entry.serial);
@@ -1129,7 +1129,7 @@ void GameList::CreateDiscSetEntries(const std::vector<std::string>& excluded_pat
 
     // figure out play time for all discs, and sum it
     // we do this via lookups, rather than the other entries, because of duplicates
-    for (const std::string& set_serial : dbentry->disc_set_serials)
+    for (const std::string_view& set_serial : dbentry->disc_set_serials)
     {
       const auto it = played_time_map.find(set_serial);
       if (it == played_time_map.end())
@@ -1182,36 +1182,46 @@ static std::string GetFullCoverPath(std::string_view filename, std::string_view 
 std::string GameList::GetCoverImagePath(const std::string& path, const std::string& serial, const std::string& title)
 {
   static constexpr const std::array extensions = {"jpg", "jpeg", "png", "webp"};
+  std::string ret;
 
   for (const char* extension : extensions)
   {
     // Prioritize lookup by serial (Most specific)
     if (!serial.empty())
     {
-      const std::string cover_path(GetFullCoverPath(serial, extension));
+      std::string cover_path(GetFullCoverPath(serial, extension));
       if (FileSystem::FileExists(cover_path.c_str()))
-        return cover_path;
+      {
+        ret = std::move(cover_path);
+        return ret;
+      }
     }
 
     // Try file title (for modded games or specific like above)
     const std::string_view file_title(Path::GetFileTitle(path));
     if (!file_title.empty() && title != file_title)
     {
-      const std::string cover_path(GetFullCoverPath(file_title, extension));
+      std::string cover_path(GetFullCoverPath(file_title, extension));
       if (FileSystem::FileExists(cover_path.c_str()))
-        return cover_path;
+      {
+        ret = std::move(cover_path);
+        return ret;
+      }
     }
 
     // Last resort, check the game title
     if (!title.empty())
     {
-      const std::string cover_path(GetFullCoverPath(title, extension));
+      std::string cover_path(GetFullCoverPath(title, extension));
       if (FileSystem::FileExists(cover_path.c_str()))
-        return cover_path;
+      {
+        ret = std::move(cover_path);
+        return ret;
+      }
     }
   }
 
-  return {};
+  return ret;
 }
 
 std::string GameList::GetNewCoverImagePathForEntry(const Entry* entry, const char* new_filename, bool use_serial)
@@ -1265,27 +1275,14 @@ TinyString GameList::Entry::GetCompatibilityIconFileName() const
     static_cast<u32>(dbentry ? dbentry->compatibility : GameDatabase::CompatibilityRating::Unknown));
 }
 
-TinyString GameList::Entry::GetReleaseDateString() const
+std::string GameList::Entry::GetReleaseDateString() const
 {
-  TinyString ret;
+  std::string ret;
 
   if (!dbentry || dbentry->release_date == 0)
-  {
-    ret.append(TRANSLATE_SV("GameList", "Unknown"));
-  }
+    ret = TRANSLATE_STR("GameList", "Unknown");
   else
-  {
-    std::time_t date_as_time = static_cast<std::time_t>(dbentry->release_date);
-#ifdef _WIN32
-    tm date_tm = {};
-    gmtime_s(&date_tm, &date_as_time);
-#else
-    tm date_tm = {};
-    gmtime_r(&date_as_time, &date_tm);
-#endif
-
-    ret.set_size(static_cast<u32>(std::strftime(ret.data(), ret.buffer_size(), "%d %B %Y", &date_tm)));
-  }
+    ret = Host::FormatNumber(Host::NumberFormatType::LongDate, static_cast<s64>(dbentry->release_date));
 
   return ret;
 }
@@ -1538,13 +1535,13 @@ std::time_t GameList::GetCachedPlayedTimeForSerial(const std::string& serial)
   return 0;
 }
 
-TinyString GameList::FormatTimestamp(std::time_t timestamp)
+std::string GameList::FormatTimestamp(std::time_t timestamp)
 {
-  TinyString ret;
+  std::string ret;
 
   if (timestamp == 0)
   {
-    ret = TRANSLATE("GameList", "Never");
+    ret = TRANSLATE_STR("GameList", "Never");
   }
   else
   {
@@ -1561,18 +1558,16 @@ TinyString GameList::FormatTimestamp(std::time_t timestamp)
 
     if (ctime.tm_year == ttime.tm_year && ctime.tm_yday == ttime.tm_yday)
     {
-      ret = TRANSLATE("GameList", "Today");
+      ret = TRANSLATE_STR("GameList", "Today");
     }
     else if ((ctime.tm_year == ttime.tm_year && ctime.tm_yday == (ttime.tm_yday + 1)) ||
              (ctime.tm_yday == 0 && (ctime.tm_year - 1) == ttime.tm_year))
     {
-      ret = TRANSLATE("GameList", "Yesterday");
+      ret = TRANSLATE_STR("GameList", "Yesterday");
     }
     else
     {
-      char buf[128];
-      std::strftime(buf, std::size(buf), "%x", &ttime);
-      ret.assign(buf);
+      ret = Host::FormatNumber(Host::NumberFormatType::ShortDate, static_cast<s64>(timestamp));
     }
   }
 
@@ -1612,13 +1607,13 @@ TinyString GameList::FormatTimespan(std::time_t timespan, bool long_format)
   return ret;
 }
 
-std::vector<std::pair<std::string, const GameList::Entry*>>
-GameList::GetMatchingEntriesForSerial(const std::span<const std::string> serials)
+std::vector<std::pair<std::string_view, const GameList::Entry*>>
+GameList::GetMatchingEntriesForSerial(const std::span<const std::string_view> serials)
 {
-  std::vector<std::pair<std::string, const GameList::Entry*>> ret;
+  std::vector<std::pair<std::string_view, const GameList::Entry*>> ret;
   ret.reserve(serials.size());
 
-  for (const std::string& serial : serials)
+  for (const std::string_view& serial : serials)
   {
     const Entry* matching_entry = nullptr;
     bool has_multiple_entries = false;
@@ -1738,7 +1733,7 @@ bool GameList::DownloadCovers(const std::vector<std::string>& url_templates, boo
         continue;
       }
 
-      progress->FormatStatusText("Downloading cover for {}...", entry->title);
+      progress->SetStatusText(entry->title);
     }
 
     // we could actually do a few in parallel here...

@@ -14,6 +14,8 @@
 #include <QtWidgets/QMenuBar>
 #include <QtWidgets/QScrollBar>
 
+#include "moc_logwindow.cpp"
+
 // TODO: Since log callbacks are synchronized, no mutex is needed here.
 // But once I get rid of that, there will be.
 LogWindow* g_log_window;
@@ -411,7 +413,7 @@ void LogWindow::realAppendMessage(const QLatin1StringView& channel, quint32 cat,
     const size_t dark = static_cast<size_t>(m_is_dark_theme);
 
     temp_cursor.beginEditBlock();
-    if (Log::AreTimestampsEnabled())
+    if (Log::AreConsoleOutputTimestampsEnabled())
     {
       const float message_time = Log::GetCurrentMessageTime();
       const QString qtimestamp = QStringLiteral("[%1] ").arg(message_time, 10, 'f', 4);

@@ -6,6 +6,7 @@
 #include "file_system.h"
 #include "string_util.h"
 #include <cinttypes>
+#include <csignal>
 #include <cstdio>
 #include <ctime>
 
@@ -195,6 +196,21 @@ static void PureCallHandler()
   __fastfail(FAST_FAIL_INVALID_ARG);
 }
 
+static void AbortSignalHandler(int signal)
+{
+  // if the debugger is attached, or we're recursively crashing, let it take care of it.
+  if (!s_in_crash_handler && !IsDebuggerPresent())
+  {
+    s_in_crash_handler = true;
+    if (s_cleanup_handler)
+      s_cleanup_handler();
+
+    WriteMinidumpAndCallstack(nullptr, "Pure call handler invoked");
+  }
+
+  TerminateProcess(GetCurrentProcess(), 0xFAFAFAFAu);
+}
+
 bool CrashHandler::Install(CleanupHandler cleanup_handler)
 {
   // load dbghelp at install/startup, that way we're not LoadLibrary()'ing after a crash
@@ -208,6 +224,12 @@ bool CrashHandler::Install(CleanupHandler cleanup_handler)
   SetUnhandledExceptionFilter(ExceptionHandler);
   _set_invalid_parameter_handler(InvalidParameterHandler);
   _set_purecall_handler(PureCallHandler);
+#ifdef _DEBUG
+  _set_abort_behavior(_WRITE_ABORT_MSG, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+#else
+  _set_abort_behavior(_WRITE_ABORT_MSG | _CALL_REPORTFAULT, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+#endif
+  signal(SIGABRT, AbortSignalHandler);
   return true;
 }
 
@@ -263,6 +285,7 @@ const char* CrashHandler::GetSignalName(int signal_no)
       // clang-format off
     case SIGSEGV: return "SIGSEGV";
     case SIGBUS: return "SIGBUS";
+    case SIGABRT: return "SIGABRT";
     default: return "UNKNOWN";
       // clang-format on
   }
@@ -369,9 +392,13 @@ void CrashHandler::CrashSignalHandler(int signal, siginfo_t* siginfo, void* ctx)
   lock.unlock();
 
   // We can't continue from here. Just bail out and dump core.
-  std::fputs("Aborting application.\n", stderr);
-  std::fflush(stderr);
-  std::abort();
+  static const char abort_message[] = "Aborting application.\n";
+  write(STDERR_FILENO, abort_message, sizeof(abort_message) - 1);
+
+  // Call default abort signal handler, regardless of whether this was SIGSEGV or SIGABRT.
+  lock.lock();
+  std::signal(SIGABRT, SIG_DFL);
+  raise(SIGABRT);
 }
 
 bool CrashHandler::Install(CleanupHandler cleanup_handler)
@@ -389,6 +416,8 @@ bool CrashHandler::Install(CleanupHandler cleanup_handler)
   if (sigaction(SIGBUS, &sa, nullptr) != 0)
     return false;
   if (sigaction(SIGSEGV, &sa, nullptr) != 0)
+    return false;
+  if (sigaction(SIGABRT, &sa, nullptr) != 0)
     return false;
 
   s_cleanup_handler = cleanup_handler;

@@ -17,6 +17,8 @@
 #include <QtWidgets/QMessageBox>
 #include <QtWidgets/QScrollArea>
 
+#include "moc_hotkeysettingswidget.cpp"
+
 HotkeySettingsWidget::HotkeySettingsWidget(QWidget* parent, ControllerSettingsWindow* dialog)
   : QWidget(parent), m_dialog(dialog)
 {
@@ -86,7 +88,8 @@ void HotkeySettingsWidget::createButtons()
       CategoryWidgets cw;
       cw.label = new QLabel(category, m_container);
       QFont label_font(cw.label->font());
-      label_font.setPointSizeF(14.0f);
+      label_font.setPixelSize(19);
+      label_font.setBold(true);
       cw.label->setFont(label_font);
       m_layout->addWidget(cw.label);
 

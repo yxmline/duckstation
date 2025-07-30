@@ -24,6 +24,8 @@
 #include <QtWidgets/QInputDialog>
 #include <algorithm>
 
+#include "moc_graphicssettingswidget.cpp"
+
 static QVariant GetMSAAModeValue(uint multisamples, bool ssaa)
 {
   const uint userdata = (multisamples & 0x7FFFFFFFu) | (static_cast<uint>(ssaa) << 31);
@@ -110,7 +112,8 @@ GraphicsSettingsWidget::GraphicsSettingsWidget(SettingsWindow* dialog, QWidget* 
   SettingWidgetBinder::SetAvailability(m_ui.textureFiltering,
                                        !m_dialog->hasGameTrait(GameDatabase::Trait::DisableTextureFiltering));
   SettingWidgetBinder::SetAvailability(m_ui.spriteTextureFiltering,
-                                       !m_dialog->hasGameTrait(GameDatabase::Trait::DisableTextureFiltering));
+                                       !m_dialog->hasGameTrait(GameDatabase::Trait::DisableTextureFiltering) ||
+                                         !m_dialog->hasGameTrait(GameDatabase::Trait::DisableSpriteTextureFiltering));
   SettingWidgetBinder::SetAvailability(m_ui.pgxpEnable, !m_dialog->hasGameTrait(GameDatabase::Trait::DisablePGXP));
   SettingWidgetBinder::SetAvailability(m_ui.widescreenHack,
                                        !m_dialog->hasGameTrait(GameDatabase::Trait::DisableWidescreen));
@@ -828,9 +831,11 @@ void GraphicsSettingsWidget::updateRendererDependentOptions()
   m_ui.textureFilteringLabel->setEnabled(is_hardware &&
                                          !m_dialog->hasGameTrait(GameDatabase::Trait::DisableTextureFiltering));
   m_ui.spriteTextureFiltering->setEnabled(is_hardware &&
-                                          !m_dialog->hasGameTrait(GameDatabase::Trait::DisableTextureFiltering));
-  m_ui.spriteTextureFilteringLabel->setEnabled(is_hardware &&
-                                               !m_dialog->hasGameTrait(GameDatabase::Trait::DisableTextureFiltering));
+                                          !m_dialog->hasGameTrait(GameDatabase::Trait::DisableTextureFiltering) &&
+                                          !m_dialog->hasGameTrait(GameDatabase::Trait::DisableSpriteTextureFiltering));
+  m_ui.spriteTextureFilteringLabel->setEnabled(
+    is_hardware && !m_dialog->hasGameTrait(GameDatabase::Trait::DisableTextureFiltering) &&
+    !m_dialog->hasGameTrait(GameDatabase::Trait::DisableSpriteTextureFiltering));
   m_ui.gpuDownsampleLabel->setEnabled(is_hardware);
   m_ui.gpuDownsampleMode->setEnabled(is_hardware);
   m_ui.gpuDownsampleScale->setEnabled(is_hardware);
@@ -850,12 +855,8 @@ void GraphicsSettingsWidget::updateRendererDependentOptions()
   m_ui.tabs->setTabEnabled(TAB_INDEX_TEXTURE_REPLACEMENTS, is_hardware);
 
 #ifdef _WIN32
-  m_ui.blitSwapChain->setEnabled(render_api == RenderAPI::D3D11);
+  m_ui.blitSwapChain->setVisible(render_api == RenderAPI::D3D11);
 #endif
-
-  m_ui.exclusiveFullscreenLabel->setEnabled(render_api == RenderAPI::D3D11 || render_api == RenderAPI::D3D12 ||
-                                            render_api == RenderAPI::Vulkan);
-  m_ui.exclusiveFullscreenControl->setEnabled(render_api == RenderAPI::Vulkan);
 
   populateGPUAdaptersAndResolutions(render_api);
   updatePGXPSettingsEnabled();
@@ -874,7 +875,7 @@ void GraphicsSettingsWidget::populateGPUAdaptersAndResolutions(RenderAPI render_
   SettingsInterface* const sif = m_dialog->getSettingsInterface();
 
   {
-    m_ui.adapter->disconnect();
+    SettingWidgetBinder::DisconnectWidget(m_ui.adapter);
     m_ui.adapter->clear();
     m_ui.adapter->addItem(tr("Default"), QVariant(QString()));
 
@@ -910,7 +911,7 @@ void GraphicsSettingsWidget::populateGPUAdaptersAndResolutions(RenderAPI render_
   }
 
   {
-    m_ui.fullscreenMode->disconnect();
+    SettingWidgetBinder::DisconnectWidget(m_ui.fullscreenMode);
     m_ui.fullscreenMode->clear();
 
     m_ui.fullscreenMode->addItem(tr("Borderless Fullscreen"), QVariant(QString()));
@@ -930,20 +931,25 @@ void GraphicsSettingsWidget::populateGPUAdaptersAndResolutions(RenderAPI render_
     }
 
     // if the current mode is not valid (e.g. adapter change), ensure it's in the list so the user isn't confused
-    if (!current_fullscreen_mode_found)
+    if (!current_fullscreen_mode_found && !current_fullscreen_mode.empty())
     {
       const QString qmodename = QtUtils::StringViewToQString(current_fullscreen_mode);
       m_ui.fullscreenMode->addItem(qmodename, QVariant(qmodename));
     }
 
     // disable it if we don't have a choice
-    m_ui.fullscreenMode->setEnabled(m_ui.fullscreenMode->count() > 1);
-    SettingWidgetBinder::BindWidgetToStringSetting(sif, m_ui.fullscreenMode, "GPU", "FullscreenMode");
+    const bool has_fullscreen_modes = (current_adapter && !current_adapter->fullscreen_modes.empty());
+    const bool has_exclusive_fullscreen_control = (render_api == RenderAPI::Vulkan);
+    m_ui.fullscreenMode->setVisible(has_fullscreen_modes);
+    if (has_fullscreen_modes)
+      SettingWidgetBinder::BindWidgetToStringSetting(sif, m_ui.fullscreenMode, "GPU", "FullscreenMode");
+    m_ui.exclusiveFullscreenControl->setVisible(has_exclusive_fullscreen_control);
+    m_ui.exclusiveFullscreenLabel->setVisible(has_fullscreen_modes || has_exclusive_fullscreen_control);
   }
 
   if (!m_dialog->hasGameTrait(GameDatabase::Trait::DisableUpscaling))
   {
-    m_ui.resolutionScale->disconnect();
+    SettingWidgetBinder::DisconnectWidget(m_ui.resolutionScale);
     m_ui.resolutionScale->clear();
 
     const int max_scale =
@@ -956,7 +962,7 @@ void GraphicsSettingsWidget::populateGPUAdaptersAndResolutions(RenderAPI render_
   }
 
   {
-    m_ui.msaaMode->disconnect();
+    SettingWidgetBinder::DisconnectWidget(m_ui.msaaMode);
     m_ui.msaaMode->clear();
 
     if (m_dialog->isPerGameSettings())
@@ -1114,7 +1120,7 @@ void GraphicsSettingsWidget::onMediaCaptureBackendChanged()
       .value_or(Settings::DEFAULT_MEDIA_CAPTURE_BACKEND);
 
   {
-    m_ui.captureContainer->disconnect();
+    SettingWidgetBinder::DisconnectWidget(m_ui.captureContainer);
     m_ui.captureContainer->clear();
 
     for (const auto& [name, display_name] : MediaCapture::GetContainerList(backend))
@@ -1145,7 +1151,7 @@ void GraphicsSettingsWidget::onMediaCaptureContainerChanged()
   const std::string container = m_dialog->getEffectiveStringValue("MediaCapture", "Container", "mp4");
 
   {
-    m_ui.videoCaptureCodec->disconnect();
+    SettingWidgetBinder::DisconnectWidget(m_ui.videoCaptureCodec);
     m_ui.videoCaptureCodec->clear();
     m_ui.videoCaptureCodec->addItem(tr("Default"), QVariant(QString()));
 
@@ -1159,7 +1165,7 @@ void GraphicsSettingsWidget::onMediaCaptureContainerChanged()
   }
 
   {
-    m_ui.audioCaptureCodec->disconnect();
+    SettingWidgetBinder::DisconnectWidget(m_ui.audioCaptureCodec);
     m_ui.audioCaptureCodec->clear();
     m_ui.audioCaptureCodec->addItem(tr("Default"), QVariant(QString()));
 

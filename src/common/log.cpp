@@ -149,9 +149,9 @@ float Log::GetCurrentMessageTime()
   return static_cast<float>(Timer::ConvertValueToSeconds(Timer::GetCurrentValue() - s_state.start_timestamp));
 }
 
-bool Log::AreTimestampsEnabled()
+bool Log::AreConsoleOutputTimestampsEnabled()
 {
-  return s_state.console_output_timestamps || s_state.file_output_timestamp;
+  return s_state.console_output_timestamps;
 }
 
 bool Log::IsConsoleOutputCurrentlyAvailable()
@@ -491,15 +491,19 @@ void Log::FileOutputLogCallback(void* pUserParam, MessageCategory cat, const cha
   if (!s_state.file_output_enabled)
     return;
 
-  FormatLogMessageAndPrint(cat, functionName, message, true, false, [](std::string_view message) {
-    std::fwrite(message.data(), 1, message.size(), s_state.file_handle.get());
-    std::fflush(s_state.file_handle.get());
-  });
+  FormatLogMessageAndPrint(cat, functionName, message, s_state.file_output_timestamp, false,
+                           [](std::string_view message) {
+                             std::fwrite(message.data(), 1, message.size(), s_state.file_handle.get());
+                             std::fflush(s_state.file_handle.get());
+                           });
 }
 
 void Log::SetFileOutputParams(bool enabled, const char* filename, bool timestamps /* = true */)
 {
   std::unique_lock lock(s_state.callbacks_mutex);
+
+  s_state.file_output_timestamp = timestamps;
+
   if (s_state.file_output_enabled == enabled)
     return;
 
@@ -522,7 +526,6 @@ void Log::SetFileOutputParams(bool enabled, const char* filename, bool timestamp
   }
 
   s_state.file_output_enabled = enabled;
-  s_state.file_output_timestamp = timestamps;
 }
 
 Log::Level Log::GetLogLevel()

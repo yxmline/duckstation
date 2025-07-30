@@ -35,9 +35,9 @@
 #include <type_traits>
 
 namespace SettingWidgetBinder {
-static constexpr const char* NULLABLE_PROPERTY = "SettingWidgetBinder_isNullable";
-static constexpr const char* IS_NULL_PROPERTY = "SettingWidgetBinder_isNull";
-static constexpr const char* GLOBAL_VALUE_PROPERTY = "SettingWidgetBinder_globalValue";
+inline constexpr const char* NULLABLE_PROPERTY = "SettingWidgetBinder_isNullable";
+inline constexpr const char* IS_NULL_PROPERTY = "SettingWidgetBinder_isNull";
+inline constexpr const char* GLOBAL_VALUE_PROPERTY = "SettingWidgetBinder_globalValue";
 
 template<typename T>
 struct SettingAccessor
@@ -70,6 +70,8 @@ struct SettingAccessor
 
   template<typename F>
   static void connectValueChanged(T* widget, F func);
+
+  static void disconnect(T* widget);
 };
 
 template<>
@@ -121,6 +123,8 @@ struct SettingAccessor<QLineEdit>
   {
     widget->connect(widget, &QLineEdit::textChanged, func);
   }
+
+  static void disconnect(QLineEdit* widget) { QObject::disconnect(widget, &QLineEdit::textChanged, nullptr, nullptr); }
 };
 
 template<>
@@ -210,6 +214,12 @@ struct SettingAccessor<QComboBox>
   {
     widget->connect(widget, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), func);
   }
+
+  static void disconnect(QComboBox* widget)
+  {
+    QObject::disconnect(widget, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), nullptr,
+                        nullptr);
+  }
 };
 
 template<>
@@ -279,6 +289,11 @@ struct SettingAccessor<QCheckBox>
   static void connectValueChanged(QCheckBox* widget, F func)
   {
     widget->connect(widget, &QCheckBox::checkStateChanged, func);
+  }
+
+  static void disconnect(QCheckBox* widget)
+  {
+    QObject::disconnect(widget, &QCheckBox::checkStateChanged, nullptr, nullptr);
   }
 };
 
@@ -388,6 +403,13 @@ struct SettingAccessor<QSlider>
         func();
       });
     }
+  }
+
+  static void disconnect(QSlider* widget)
+  {
+    QObject::disconnect(widget, &QSlider::valueChanged, nullptr, nullptr);
+    if (isNullable(widget))
+      QObject::disconnect(widget, &QSlider::customContextMenuRequested, nullptr, nullptr);
   }
 };
 
@@ -520,6 +542,13 @@ struct SettingAccessor<QSpinBox>
         func();
       });
     }
+  }
+
+  static void disconnect(QSpinBox* widget)
+  {
+    QObject::disconnect(widget, QOverload<int>::of(&QSpinBox::valueChanged), nullptr, nullptr);
+    if (isNullable(widget))
+      QObject::disconnect(widget, &QSpinBox::customContextMenuRequested, nullptr, nullptr);
   }
 };
 
@@ -654,6 +683,13 @@ struct SettingAccessor<QDoubleSpinBox>
                       });
     }
   }
+
+  static void disconnect(QDoubleSpinBox* widget)
+  {
+    QObject::disconnect(widget, QOverload<double>::of(&QDoubleSpinBox::valueChanged), nullptr, nullptr);
+    if (isNullable(widget))
+      QObject::disconnect(widget, &QDoubleSpinBox::customContextMenuRequested, nullptr, nullptr);
+  }
 };
 
 template<>
@@ -702,6 +738,8 @@ struct SettingAccessor<QAction>
   {
     widget->connect(widget, &QAction::toggled, func);
   }
+
+  static void disconnect(QAction* widget) { QObject::disconnect(widget, &QAction::toggled, nullptr, nullptr); }
 };
 
 /// Binds a widget's value to a setting, updating it when the value changes.
@@ -1367,10 +1405,20 @@ static inline void BindWidgetToFolderSetting(SettingsInterface* sif, QLineEdit* 
     current_path = Path::Canonicalize(Path::Combine(EmuFolders::DataRoot, current_path));
   const QString value(QString::fromStdString(current_path));
   Accessor::setStringValue(widget, value);
-  // if we're doing per-game settings, disable the widget, we only allow folder changes in the base config
+
+  if (open_button)
+  {
+    QObject::connect(open_button, &QAbstractButton::clicked, open_button, [widget]() {
+      QString path(Accessor::getStringValue(widget));
+      if (!path.isEmpty())
+        QtUtils::OpenURL(QtUtils::GetRootWidget(widget), QUrl::fromLocalFile(path));
+    });
+  }
+
+  // if we're doing per-game settings, disable editing, we only allow folder changes in the base config
   if (sif)
   {
-    widget->setEnabled(false);
+    widget->setReadOnly(true);
     if (browse_button)
       browse_button->setEnabled(false);
     if (reset_button)
@@ -1436,14 +1484,6 @@ static inline void BindWidgetToFolderSetting(SettingsInterface* sif, QLineEdit* 
                        value_changed();
                      });
   }
-  if (open_button)
-  {
-    QObject::connect(open_button, &QAbstractButton::clicked, open_button, [widget]() {
-      QString path(Accessor::getStringValue(widget));
-      if (!path.isEmpty())
-        QtUtils::OpenURL(QtUtils::GetRootWidget(widget), QUrl::fromLocalFile(path));
-    });
-  }
   if (reset_button)
   {
     QObject::connect(reset_button, &QAbstractButton::clicked, reset_button,
@@ -1457,12 +1497,22 @@ static inline void BindWidgetToFolderSetting(SettingsInterface* sif, QLineEdit* 
 }
 
 template<typename WidgetType>
-static inline void SetAvailability(WidgetType* widget, bool available)
+static inline void DisconnectWidget(WidgetType* widget)
+{
+  using Accessor = SettingAccessor<WidgetType>;
+  Accessor::disconnect(widget);
+}
+
+template<typename WidgetType>
+static inline void SetAvailability(WidgetType* widget, bool available, QLabel* widget_label = nullptr)
 {
   if (available)
     return;
 
-  widget->disconnect();
+  if (widget_label)
+    widget_label->setEnabled(false);
+
+  DisconnectWidget(widget);
 
   if constexpr (std::is_same_v<WidgetType, QComboBox>)
   {
