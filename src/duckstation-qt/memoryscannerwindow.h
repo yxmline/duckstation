@@ -27,9 +27,7 @@ Q_SIGNALS:
   void closed();
 
 protected:
-  void showEvent(QShowEvent* event);
   void closeEvent(QCloseEvent* event);
-  void resizeEvent(QResizeEvent* event);
 
 private Q_SLOTS:
   void onSystemStarted();
@@ -57,9 +55,9 @@ private:
     SCAN_INTERVAL = 100,
   };
 
+  void setupAdditionalUi();
   void connectUi();
   void enableUi(bool enabled);
-  void resizeColumns();
   void updateResults();
   void updateResultsValues();
   void updateWatch();
@@ -70,10 +68,18 @@ private:
   int getSelectedWatchIndexFirst() const;
   int getSelectedWatchIndexLast() const;
 
+  QTableWidgetItem* createValueItem(MemoryAccessSize size, u32 value, bool is_signed, bool editable) const;
+
+  std::string getWatchSavePath(bool saving);
+  void saveWatches();
+  void reloadWatches();
+  void clearWatches();
+
   Ui::MemoryScannerWindow m_ui;
 
   MemoryScan m_scanner;
   MemoryWatchList m_watch;
 
   QTimer* m_update_timer = nullptr;
+  std::string m_watch_save_filename;
 };

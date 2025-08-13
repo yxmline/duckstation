@@ -112,6 +112,7 @@ struct AchievementChallengeIndicator
 {
   const rc_client_achievement_t* achievement;
   std::string badge_path;
+  float time_remaining;
   float opacity;
   bool active;
 };
@@ -729,6 +730,12 @@ void Achievements::UpdateSettings(const Settings& old_config)
     if (g_settings.achievements_unofficial_test_mode != old_config.achievements_unofficial_test_mode)
       rc_client_set_unofficial_enabled(s_state.client, g_settings.achievements_unofficial_test_mode);
   }
+
+  if (!g_settings.achievements_leaderboard_trackers)
+    s_state.active_leaderboard_trackers.clear();
+
+  if (!g_settings.achievements_progress_indicators)
+    s_state.active_progress_indicator.reset();
 }
 
 void Achievements::Shutdown()
@@ -1614,6 +1621,9 @@ void Achievements::HandleLeaderboardTrackerShowEvent(const rc_client_event_t* ev
 {
   DEV_LOG("Showing leaderboard tracker: {}: {}", event->leaderboard_tracker->id, event->leaderboard_tracker->display);
 
+  if (!g_settings.achievements_leaderboard_trackers)
+    return;
+
   const u32 id = event->leaderboard_tracker->id;
   auto it = std::find_if(s_state.active_leaderboard_trackers.begin(), s_state.active_leaderboard_trackers.end(),
                          [id](const auto& it) { return it.tracker_id == id; });
@@ -1636,24 +1646,25 @@ void Achievements::HandleLeaderboardTrackerShowEvent(const rc_client_event_t* ev
 void Achievements::HandleLeaderboardTrackerHideEvent(const rc_client_event_t* event)
 {
   const u32 id = event->leaderboard_tracker->id;
+  DEV_LOG("Hiding leaderboard tracker: {}", id);
+
   auto it = std::find_if(s_state.active_leaderboard_trackers.begin(), s_state.active_leaderboard_trackers.end(),
                          [id](const auto& it) { return it.tracker_id == id; });
   if (it == s_state.active_leaderboard_trackers.end())
     return;
 
-  DEV_LOG("Hiding leaderboard tracker: {}", id);
   it->active = false;
 }
 
 void Achievements::HandleLeaderboardTrackerUpdateEvent(const rc_client_event_t* event)
 {
   const u32 id = event->leaderboard_tracker->id;
+  DEV_LOG("Updating leaderboard tracker: {}: {}", id, event->leaderboard_tracker->display);
+
   auto it = std::find_if(s_state.active_leaderboard_trackers.begin(), s_state.active_leaderboard_trackers.end(),
                          [id](const auto& it) { return it.tracker_id == id; });
   if (it == s_state.active_leaderboard_trackers.end())
     return;
-
-  DEV_LOG("Updating leaderboard tracker: {}: {}", event->leaderboard_tracker->id, event->leaderboard_tracker->display);
 
   it->text = event->leaderboard_tracker->display;
   it->active = true;
@@ -1670,9 +1681,27 @@ void Achievements::HandleAchievementChallengeIndicatorShowEvent(const rc_client_
     return;
   }
 
+  std::string badge_path = GetAchievementBadgePath(event->achievement, false);
+
+  // we still track these even if the option is disabled, so that they can be displayed in the pause menu
+  if (g_settings.achievements_challenge_indicator_mode == AchievementChallengeIndicatorMode::Notification)
+  {
+    std::string description = fmt::format(TRANSLATE_FS("Achievements", "Challenge Started: {}"),
+                                          event->achievement->description ? event->achievement->description : "");
+    GPUThread::RunOnThread([title = std::string(event->achievement->title), description = std::move(description),
+                            badge_path, id = event->achievement->id]() mutable {
+      if (!FullscreenUI::Initialize())
+        return;
+
+      ImGuiFullscreen::AddNotification(fmt::format("AchievementChallenge{}", id), LEADERBOARD_STARTED_NOTIFICATION_TIME,
+                                       std::move(title), std::move(description), std::move(badge_path));
+    });
+  }
+
   s_state.active_challenge_indicators.push_back(
     AchievementChallengeIndicator{.achievement = event->achievement,
-                                  .badge_path = GetAchievementBadgePath(event->achievement, false),
+                                  .badge_path = std::move(badge_path),
+                                  .time_remaining = LEADERBOARD_STARTED_NOTIFICATION_TIME,
                                   .opacity = 0.0f,
                                   .active = true});
 
@@ -1688,6 +1717,15 @@ void Achievements::HandleAchievementChallengeIndicatorHideEvent(const rc_client_
     return;
 
   DEV_LOG("Hide challenge indicator for {} ({})", event->achievement->id, event->achievement->title);
+
+  if (g_settings.achievements_challenge_indicator_mode == AchievementChallengeIndicatorMode::Notification ||
+      g_settings.achievements_challenge_indicator_mode == AchievementChallengeIndicatorMode::Disabled)
+  {
+    // remove it here, because it won't naturally decay
+    s_state.active_challenge_indicators.erase(it);
+    return;
+  }
+
   it->active = false;
 }
 
@@ -1695,6 +1733,9 @@ void Achievements::HandleAchievementProgressIndicatorShowEvent(const rc_client_e
 {
   DEV_LOG("Showing progress indicator: {} ({}): {}", event->achievement->id, event->achievement->title,
           event->achievement->measured_progress);
+
+  if (!g_settings.achievements_progress_indicators)
+    return;
 
   if (!s_state.active_progress_indicator.has_value())
     s_state.active_progress_indicator.emplace();
@@ -1711,6 +1752,13 @@ void Achievements::HandleAchievementProgressIndicatorHideEvent(const rc_client_e
     return;
 
   DEV_LOG("Hiding progress indicator");
+
+  if (!g_settings.achievements_progress_indicators)
+  {
+    s_state.active_progress_indicator.reset();
+    return;
+  }
+
   s_state.active_progress_indicator->active = false;
 }
 
@@ -1718,6 +1766,9 @@ void Achievements::HandleAchievementProgressIndicatorUpdateEvent(const rc_client
 {
   DEV_LOG("Updating progress indicator: {} ({}): {}", event->achievement->id, event->achievement->title,
           event->achievement->measured_progress);
+  if (!s_state.active_progress_indicator.has_value())
+    return;
+
   s_state.active_progress_indicator->achievement = event->achievement;
   s_state.active_progress_indicator->active = true;
 }
@@ -2286,11 +2337,10 @@ void Achievements::ClearUIState()
   s_state.achievement_nearest_completion.reset();
 }
 
-template<typename T>
-static float IndicatorOpacity(float delta_time, T& i)
+static float IndicatorOpacity(float delta_time, bool active, float& opacity)
 {
   float target, rate;
-  if (i.active)
+  if (active)
   {
     target = 1.0f;
     rate = Achievements::INDICATOR_FADE_IN_TIME;
@@ -2301,10 +2351,10 @@ static float IndicatorOpacity(float delta_time, T& i)
     rate = -Achievements::INDICATOR_FADE_OUT_TIME;
   }
 
-  if (i.opacity != target)
-    i.opacity = ImSaturate(i.opacity + (delta_time / rate));
+  if (opacity != target)
+    opacity = ImSaturate(opacity + (delta_time / rate));
 
-  return i.opacity;
+  return opacity;
 }
 
 void Achievements::DrawGameOverlays()
@@ -2314,7 +2364,7 @@ void Achievements::DrawGameOverlays()
   using ImGuiFullscreen::RenderShadowedTextClipped;
   using ImGuiFullscreen::UIStyle;
 
-  if (!HasActiveGame() || !g_settings.achievements_overlays)
+  if (!HasActiveGame())
     return;
 
   const auto lock = GetLock();
@@ -2331,15 +2381,26 @@ void Achievements::DrawGameOverlays()
   ImVec2 position = ImVec2(io.DisplaySize.x - margin, io.DisplaySize.y - margin);
   ImDrawList* dl = ImGui::GetBackgroundDrawList();
 
-  if (!s_state.active_challenge_indicators.empty())
+  if (!s_state.active_challenge_indicators.empty() &&
+      (g_settings.achievements_challenge_indicator_mode == AchievementChallengeIndicatorMode::PersistentIcon ||
+       g_settings.achievements_challenge_indicator_mode == AchievementChallengeIndicatorMode::TemporaryIcon))
   {
+    const bool use_time_remaining =
+      (g_settings.achievements_challenge_indicator_mode == AchievementChallengeIndicatorMode::TemporaryIcon);
     const float x_advance = image_size.x + spacing;
     ImVec2 current_position = ImVec2(position.x - image_size.x, position.y - image_size.y);
 
     for (auto it = s_state.active_challenge_indicators.begin(); it != s_state.active_challenge_indicators.end();)
     {
       AchievementChallengeIndicator& indicator = *it;
-      const float opacity = IndicatorOpacity(io.DeltaTime, indicator);
+      bool active = indicator.active;
+      if (use_time_remaining)
+      {
+        indicator.time_remaining = std::max(indicator.time_remaining - io.DeltaTime, 0.0f);
+        active = (indicator.time_remaining > 0.0f);
+      }
+
+      const float opacity = IndicatorOpacity(io.DeltaTime, active, indicator.opacity);
 
       GPUTexture* badge = ImGuiFullscreen::GetCachedTextureAsync(indicator.badge_path);
       if (badge)
@@ -2366,7 +2427,7 @@ void Achievements::DrawGameOverlays()
   if (s_state.active_progress_indicator.has_value())
   {
     AchievementProgressIndicator& indicator = s_state.active_progress_indicator.value();
-    const float opacity = IndicatorOpacity(io.DeltaTime, indicator);
+    const float opacity = IndicatorOpacity(io.DeltaTime, indicator.active, indicator.opacity);
 
     const std::string_view text = s_state.active_progress_indicator->achievement->measured_progress;
     const ImVec2 text_size = UIStyle.Font->CalcTextSizeA(UIStyle.MediumFontSize, UIStyle.NormalFontWeight, FLT_MAX,
@@ -2408,7 +2469,7 @@ void Achievements::DrawGameOverlays()
     for (auto it = s_state.active_leaderboard_trackers.begin(); it != s_state.active_leaderboard_trackers.end();)
     {
       LeaderboardTrackerIndicator& indicator = *it;
-      const float opacity = IndicatorOpacity(io.DeltaTime, indicator);
+      const float opacity = IndicatorOpacity(io.DeltaTime, indicator.active, indicator.opacity);
 
       TinyString width_string;
       width_string.append(ICON_FA_STOPWATCH);
@@ -2708,7 +2769,8 @@ void Achievements::DrawAchievementsWindow()
 
   static constexpr float alpha = 0.8f;
   static constexpr float heading_alpha = 0.95f;
-  static constexpr float heading_height_unscaled = 110.0f;
+  const float heading_height_unscaled =
+    (s_state.game_summary.beaten_time > 0 || s_state.game_summary.completed_time) ? 122.0f : 102.0f;
 
   const ImVec4 background = ImGuiFullscreen::ModAlpha(UIStyle.BackgroundColor, alpha);
   const ImVec4 heading_background = ImGuiFullscreen::ModAlpha(UIStyle.BackgroundColor, heading_alpha);
@@ -2722,8 +2784,8 @@ void Achievements::DrawAchievementsWindow()
                                                ImGuiWindowFlags_NoScrollWithMouse))
   {
     const ImVec2 pos = ImGui::GetCursorScreenPos() + ImGui::GetStyle().FramePadding;
-    const float spacing = LayoutScale(10.0f);
-    const float image_size = LayoutScale(85.0f);
+    const float spacing = ImGuiFullscreen::LayoutScale(ImGuiFullscreen::LAYOUT_MENU_ITEM_TITLE_SUMMARY_SPACING);
+    const float image_size = LayoutScale(75.0f);
 
     if (!s_state.game_icon.empty())
     {
@@ -2735,7 +2797,7 @@ void Achievements::DrawAchievementsWindow()
       }
     }
 
-    float left = pos.x + image_size + spacing;
+    float left = pos.x + image_size + LayoutScale(10.0f);
     float right = pos.x + ImGuiFullscreen::GetMenuButtonAvailableWidth();
     float top = pos.y;
     ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -2783,6 +2845,41 @@ void Achievements::DrawAchievementsWindow()
                               summary_bb.Max,
                               ImGui::GetColorU32(ImGuiFullscreen::DarkerColor(ImGui::GetStyle().Colors[ImGuiCol_Text])),
                               text, nullptr, ImVec2(0.0f, 0.0f), 0.0f, &summary_bb);
+
+    if (s_state.game_summary.beaten_time > 0 || s_state.game_summary.completed_time > 0)
+    {
+      text.clear();
+      if (s_state.game_summary.beaten_time > 0)
+      {
+        const std::string beaten_time =
+          Host::FormatNumber(Host::NumberFormatType::ShortDate, static_cast<s64>(s_state.game_summary.beaten_time));
+        if (s_state.game_summary.completed_time > 0)
+        {
+          const std::string completion_time =
+            Host::FormatNumber(Host::NumberFormatType::ShortDate, static_cast<s64>(s_state.game_summary.beaten_time));
+          text.format(TRANSLATE_FS("Achievements", "Game was beaten on {0}, and completed on {1}."), beaten_time,
+                      completion_time);
+        }
+        else
+        {
+          text.format(TRANSLATE_FS("Achievements", "Game was beaten on {0}."), beaten_time);
+        }
+      }
+      else
+      {
+        const std::string completion_time =
+          Host::FormatNumber(Host::NumberFormatType::ShortDate, static_cast<s64>(s_state.game_summary.completed_time));
+        text.format(TRANSLATE_FS("Achievements", "Game was completed on {0}."), completion_time);
+      }
+
+      const ImRect beaten_bb(ImVec2(left, top), ImVec2(right, top + UIStyle.MediumFontSize));
+      RenderShadowedTextClipped(
+        UIStyle.Font, UIStyle.MediumFontSize, UIStyle.BoldFontWeight, beaten_bb.Min, beaten_bb.Max,
+        ImGui::GetColorU32(ImGuiFullscreen::DarkerColor(ImGui::GetStyle().Colors[ImGuiCol_Text])), text, nullptr,
+        ImVec2(0.0f, 0.0f), 0.0f, &beaten_bb);
+
+      top += UIStyle.MediumFontSize + spacing;
+    }
 
     if (s_state.game_summary.num_core_achievements > 0)
     {

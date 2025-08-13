@@ -27,10 +27,13 @@ Q_DECLARE_METATYPE(const GameList::Entry*);
 
 class GameListSortModel;
 class GameListRefreshThread;
+class GameListWidget;
 
 class GameListModel final : public QAbstractTableModel
 {
   Q_OBJECT
+
+  friend GameListWidget;
 
 public:
   enum Column : int
@@ -158,14 +161,13 @@ public:
 
   void setAndSaveColumnHidden(int column, bool hidden);
 
-  void resizeColumnsToFit();
-
-protected:
-  void resizeEvent(QResizeEvent* e) override;
-
 private:
   void onHeaderSortIndicatorChanged(int, Qt::SortOrder);
   void onHeaderContextMenuRequested(const QPoint& point);
+
+  void setFixedColumnWidth(int column, int width);
+  void setFixedColumnWidth(const QFontMetrics& fm, int column, int str_width);
+  void setFixedColumnWidths();
 
   void loadColumnVisibilitySettings();
   void loadColumnSortSettings();
@@ -219,7 +221,6 @@ public:
 
   void initialize(QAction* actionGameList, QAction* actionGameGrid, QAction* actionMergeDiscSets,
                   QAction* actionListShowIcons, QAction* actionGridShowTitles);
-  void resizeListViewColumnsToFit();
 
   void refresh(bool invalidate_cache);
   void cancelRefresh();
@@ -242,7 +243,7 @@ Q_SIGNALS:
   void addGameDirectoryRequested();
 
 private Q_SLOTS:
-  void onRefreshProgress(const QString& status, int current, int total, float time);
+  void onRefreshProgress(const QString& status, int current, int total, int entry_count, float time);
   void onRefreshComplete();
 
   void onCoverScaleChanged(float scale);
@@ -280,7 +281,8 @@ private:
   QWidget* m_empty_widget = nullptr;
   Ui::EmptyGameListWidget m_empty_ui;
 
-  GameListRefreshThread* m_refresh_thread = nullptr;
-
   QImage m_background_image;
+
+  GameListRefreshThread* m_refresh_thread = nullptr;
+  int m_refresh_last_entry_count = 0;
 };

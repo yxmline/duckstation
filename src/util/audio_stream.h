@@ -143,6 +143,9 @@ public:
 
   void SetStretchMode(AudioStretchMode mode);
 
+  /// Wipes out the time stretching buffer, call when reducing target speed.
+  void EmptyStretchBuffers();
+
   static std::vector<std::pair<std::string, std::string>> GetDriverNames(AudioBackend backend);
   static std::vector<DeviceInfo> GetOutputDevices(AudioBackend backend, const char* driver, u32 sample_rate);
   static std::unique_ptr<AudioStream> CreateStream(AudioBackend backend, u32 sample_rate,
@@ -165,9 +168,7 @@ protected:
 
 private:
   static constexpr u32 AVERAGING_BUFFER_SIZE = 256;
-  static constexpr u32 AVERAGING_WINDOW = 50;
   static constexpr u32 STRETCH_RESET_THRESHOLD = 5;
-  static constexpr u32 TARGET_IPS = 691;
 
 #ifndef __ANDROID__
   static std::vector<std::pair<std::string, std::string>> GetCubebDriverNames();
@@ -210,6 +211,7 @@ private:
 
   u32 m_target_buffer_size = 0;
   u32 m_stretch_reset = STRETCH_RESET_THRESHOLD;
+  u64 m_stretch_reset_time = 0;
 
   u32 m_stretch_ok_count = 0;
   float m_nominal_rate = 1.0f;

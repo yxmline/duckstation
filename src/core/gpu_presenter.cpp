@@ -1066,11 +1066,6 @@ bool GPUPresenter::PresentFrame(GPUPresenter* presenter, GPUBackend* backend, bo
       }
     }
   }
-  else
-  {
-    // transitions still need to be updated otherwise the fade timer breaks
-    FullscreenUI::UpdateTransitionState();
-  }
 
   GPUSwapChain* const swap_chain = g_gpu_device->GetMainSwapChain();
   const GPUDevice::PresentResult pres = skip_present ?
@@ -1110,6 +1105,8 @@ bool GPUPresenter::PresentFrame(GPUPresenter* presenter, GPUBackend* backend, bo
       SleepUntilPresentTime(present_time);
       g_gpu_device->SubmitPresent(swap_chain);
     }
+
+    ImGuiManager::NewFrame();
   }
   else
   {
@@ -1133,10 +1130,13 @@ bool GPUPresenter::PresentFrame(GPUPresenter* presenter, GPUBackend* backend, bo
       g_gpu_device->FlushCommands();
 
     // Still need to kick ImGui or it gets cranky.
-    ImGui::EndFrame();
+    if (!skip_present)
+    {
+      ImGui::EndFrame();
+      ImGuiManager::NewFrame();
+    }
   }
 
-  ImGuiManager::NewFrame();
   return true;
 }
 
@@ -1199,16 +1199,19 @@ bool GPUPresenter::RenderScreenshotToBuffer(u32 width, u32 height, bool postfx, 
 
 GSVector2i GPUPresenter::CalculateScreenshotSize(DisplayScreenshotMode mode) const
 {
-  const bool internal_resolution = (mode != DisplayScreenshotMode::ScreenResolution || g_gpu_settings.gpu_show_vram);
-  if (internal_resolution && m_display_texture_view_width != 0 && m_display_texture_view_height != 0)
+  if (m_display_texture_view_width != 0 && m_display_texture_view_height != 0)
   {
-    if (mode == DisplayScreenshotMode::InternalResolution)
+    if (g_gpu_settings.gpu_show_vram)
+    {
+      return GSVector2i(m_display_texture_view_width, m_display_texture_view_height);
+    }
+    else if (mode != DisplayScreenshotMode::ScreenResolution)
     {
       float f_width =
         m_display_width * (static_cast<float>(m_display_texture_view_width) / static_cast<float>(m_display_vram_width));
       float f_height = m_display_height *
                        (static_cast<float>(m_display_texture_view_height) / static_cast<float>(m_display_vram_height));
-      if (!g_gpu_settings.gpu_show_vram)
+      if (mode != DisplayScreenshotMode::UncorrectedInternalResolution)
         GPU::ApplyPixelAspectRatioToSize(m_display_pixel_aspect_ratio, &f_width, &f_height);
 
       // DX11 won't go past 16K texture size.
@@ -1226,15 +1229,9 @@ GSVector2i GPUPresenter::CalculateScreenshotSize(DisplayScreenshotMode mode) con
 
       return GSVector2i(static_cast<s32>(std::ceil(f_width)), static_cast<s32>(std::ceil(f_height)));
     }
-    else // if (mode == DisplayScreenshotMode::UncorrectedInternalResolution)
-    {
-      return GSVector2i(m_display_texture_view_width, m_display_texture_view_height);
-    }
   }
-  else
-  {
-    return g_gpu_device->HasMainSwapChain() ? g_gpu_device->GetMainSwapChain()->GetSizeVec() : GSVector2i(1, 1);
-  }
+
+  return g_gpu_device->HasMainSwapChain() ? g_gpu_device->GetMainSwapChain()->GetSizeVec() : GSVector2i(1, 1);
 }
 
 void GPUPresenter::LoadPostProcessingSettings(bool force_load)

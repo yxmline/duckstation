@@ -50,7 +50,9 @@ namespace QtUtils {
 
 bool TryMigrateWindowGeometry(SettingsInterface* si, std::string_view window_name, QWidget* widget);
 
-}
+static constexpr const char* WINDOW_GEOMETRY_CONFIG_SECTION = "UI";
+
+} // namespace QtUtils
 
 QFrame* QtUtils::CreateHorizontalLine(QWidget* parent)
 {
@@ -95,64 +97,36 @@ void QtUtils::ShowOrRaiseWindow(QWidget* window)
   }
 }
 
-template<typename T>
-ALWAYS_INLINE_RELEASE static void ResizeColumnsForView(T* view, const std::initializer_list<int>& widths)
+template<class T>
+static void SetColumnWidthForView(T* const view, QHeaderView* const header, const std::initializer_list<int>& widths)
 {
-  QHeaderView* header;
-  if constexpr (std::is_same_v<T, QTableView>)
-    header = view->horizontalHeader();
-  else
-    header = view->header();
-
-  const int min_column_width = header->minimumSectionSize();
-  const int scrollbar_width = ((view->verticalScrollBar() && view->verticalScrollBar()->isVisible()) ||
-                               view->verticalScrollBarPolicy() == Qt::ScrollBarAlwaysOn) ?
-                                view->verticalScrollBar()->width() :
-                                0;
-  int num_flex_items = 0;
-  int total_width = 0;
   int column_index = 0;
-  for (const int spec_width : widths)
+  for (const int width : widths)
   {
-    if (!view->isColumnHidden(column_index))
+    if (width <= 0)
     {
-      if (spec_width < 0)
-        num_flex_items++;
-      else
-        total_width += std::max(spec_width, min_column_width);
+      header->setSectionResizeMode(column_index, (width < 0) ? QHeaderView::Stretch : QHeaderView::ResizeToContents);
+    }
+    else
+    {
+      header->setSectionResizeMode(column_index, QHeaderView::Fixed);
+      view->setColumnWidth(column_index, width);
     }
 
     column_index++;
   }
 
-  const int flex_width =
-    (num_flex_items > 0) ?
-      std::max((view->contentsRect().width() - total_width - scrollbar_width) / num_flex_items, 1) :
-      0;
-
-  column_index = 0;
-  for (const int spec_width : widths)
-  {
-    if (view->isColumnHidden(column_index))
-    {
-      column_index++;
-      continue;
-    }
-
-    const int width = spec_width < 0 ? flex_width : (std::max(spec_width, min_column_width));
-    view->setColumnWidth(column_index, width);
-    column_index++;
-  }
+  header->setStretchLastSection(false);
 }
 
-void QtUtils::ResizeColumnsForTableView(QTableView* view, const std::initializer_list<int>& widths)
+void QtUtils::SetColumnWidthsForTableView(QTableView* view, const std::initializer_list<int>& widths)
 {
-  ResizeColumnsForView(view, widths);
+  SetColumnWidthForView(view, view->horizontalHeader(), widths);
 }
 
-void QtUtils::ResizeColumnsForTreeView(QTreeView* view, const std::initializer_list<int>& widths)
+void QtUtils::SetColumnWidthsForTreeView(QTreeView* view, const std::initializer_list<int>& widths)
 {
-  ResizeColumnsForView(view, widths);
+  SetColumnWidthForView(view, view->header(), widths);
 }
 
 void QtUtils::OpenURL(QWidget* parent, const QUrl& qurl)
@@ -431,10 +405,17 @@ std::optional<WindowInfo> QtUtils::GetWindowInfoForWidget(QWidget* widget, Rende
   return wi;
 }
 
-bool QtUtils::SaveWindowGeometry(std::string_view window_name, QWidget* widget, bool auto_commit_changes)
+void QtUtils::SaveWindowGeometry(std::string_view window_name, QWidget* widget, bool auto_commit_changes)
 {
-  const QRect geometry = widget->geometry();
+  // don't touch minimized/fullscreen windows
+  if (widget->windowState() & (Qt::WindowMinimized | Qt::WindowFullScreen))
+    return;
 
+  // save the unmaximized geometry if maximized
+  const bool maximized = (widget->windowState() & Qt::WindowMaximized);
+  const QRect geometry = maximized ? widget->normalGeometry() : widget->geometry();
+
+  const TinyString maxkey = TinyString::from_format("{}Maximized", window_name);
   const TinyString xkey = TinyString::from_format("{}X", window_name);
   const TinyString ykey = TinyString::from_format("{}Y", window_name);
   const TinyString wkey = TinyString::from_format("{}Width", window_name);
@@ -442,35 +423,44 @@ bool QtUtils::SaveWindowGeometry(std::string_view window_name, QWidget* widget, 
 
   const auto lock = Host::GetSettingsLock();
   SettingsInterface* si = Host::Internal::GetBaseSettingsLayer();
+
   bool changed = false;
-  if (si->GetIntValue("UI", xkey.c_str(), std::numeric_limits<s32>::min()) != geometry.x())
+  if (si->GetBoolValue(WINDOW_GEOMETRY_CONFIG_SECTION, maxkey.c_str(), false) != maximized)
   {
-    si->SetIntValue("UI", xkey.c_str(), geometry.x());
+    si->SetBoolValue(WINDOW_GEOMETRY_CONFIG_SECTION, maxkey.c_str(), maximized);
     changed = true;
   }
 
-  if (si->GetIntValue("UI", ykey.c_str(), std::numeric_limits<s32>::min()) != geometry.y())
+  if (si->GetIntValue(WINDOW_GEOMETRY_CONFIG_SECTION, xkey.c_str(), std::numeric_limits<s32>::min()) != geometry.x())
   {
-    si->SetIntValue("UI", ykey.c_str(), geometry.y());
+    si->SetIntValue(WINDOW_GEOMETRY_CONFIG_SECTION, xkey.c_str(), geometry.x());
     changed = true;
   }
 
-  if (si->GetIntValue("UI", wkey.c_str(), std::numeric_limits<s32>::min()) != geometry.width())
+  if (si->GetIntValue(WINDOW_GEOMETRY_CONFIG_SECTION, ykey.c_str(), std::numeric_limits<s32>::min()) != geometry.y())
   {
-    si->SetIntValue("UI", wkey.c_str(), geometry.width());
+    si->SetIntValue(WINDOW_GEOMETRY_CONFIG_SECTION, ykey.c_str(), geometry.y());
     changed = true;
   }
 
-  if (si->GetIntValue("UI", hkey.c_str(), std::numeric_limits<s32>::min()) != geometry.height())
+  // only save position if maxi
+
+  if (si->GetIntValue(WINDOW_GEOMETRY_CONFIG_SECTION, wkey.c_str(), std::numeric_limits<s32>::min()) !=
+      geometry.width())
   {
-    si->SetIntValue("UI", hkey.c_str(), geometry.height());
+    si->SetIntValue(WINDOW_GEOMETRY_CONFIG_SECTION, wkey.c_str(), geometry.width());
+    changed = true;
+  }
+
+  if (si->GetIntValue(WINDOW_GEOMETRY_CONFIG_SECTION, hkey.c_str(), std::numeric_limits<s32>::min()) !=
+      geometry.height())
+  {
+    si->SetIntValue(WINDOW_GEOMETRY_CONFIG_SECTION, hkey.c_str(), geometry.height());
     changed = true;
   }
 
   if (changed && auto_commit_changes)
     Host::CommitBaseSettingChanges();
-
-  return true;
 }
 
 bool QtUtils::RestoreWindowGeometry(std::string_view window_name, QWidget* widget)
@@ -479,15 +469,20 @@ bool QtUtils::RestoreWindowGeometry(std::string_view window_name, QWidget* widge
   SettingsInterface* si = Host::Internal::GetBaseSettingsLayer();
 
   s32 x = 0, y = 0, w = 0, h = 0;
-  if (!si->GetIntValue("UI", TinyString::from_format("{}X", window_name).c_str(), &x) ||
-      !si->GetIntValue("UI", TinyString::from_format("{}Y", window_name).c_str(), &y) ||
-      !si->GetIntValue("UI", TinyString::from_format("{}Width", window_name).c_str(), &w) ||
-      !si->GetIntValue("UI", TinyString::from_format("{}Height", window_name).c_str(), &h))
+  const bool maximized = si->GetBoolValue(WINDOW_GEOMETRY_CONFIG_SECTION,
+                                          TinyString::from_format("{}Maximized", window_name).c_str(), false);
+  if (!si->GetIntValue(WINDOW_GEOMETRY_CONFIG_SECTION, TinyString::from_format("{}X", window_name).c_str(), &x) ||
+      !si->GetIntValue(WINDOW_GEOMETRY_CONFIG_SECTION, TinyString::from_format("{}Y", window_name).c_str(), &y) ||
+      !si->GetIntValue(WINDOW_GEOMETRY_CONFIG_SECTION, TinyString::from_format("{}Width", window_name).c_str(), &w) ||
+      !si->GetIntValue(WINDOW_GEOMETRY_CONFIG_SECTION, TinyString::from_format("{}Height", window_name).c_str(), &h))
   {
     return TryMigrateWindowGeometry(si, window_name, widget);
   }
 
   widget->setGeometry(x, y, w, h);
+  if (maximized)
+    widget->setWindowState(widget->windowState() | Qt::WindowMaximized);
+
   return true;
 }
 
@@ -496,7 +491,7 @@ bool QtUtils::TryMigrateWindowGeometry(SettingsInterface* si, std::string_view w
   // can we migrate old configuration?
   const TinyString config_key = TinyString::from_format("{}Geometry", window_name);
   std::string config_value;
-  if (!si->GetStringValue("UI", config_key.c_str(), &config_value))
+  if (!si->GetStringValue(WINDOW_GEOMETRY_CONFIG_SECTION, config_key.c_str(), &config_value))
     return false;
 
   widget->restoreGeometry(QByteArray::fromBase64(QByteArray::fromStdString(config_value)));
@@ -505,12 +500,17 @@ bool QtUtils::TryMigrateWindowGeometry(SettingsInterface* si, std::string_view w
   widget->setWindowState(widget->windowState() & ~(Qt::WindowFullScreen | Qt::WindowActive));
 
   // save the new values, delete the old key
-  const QRect geometry = widget->geometry();
-  si->SetIntValue("UI", TinyString::from_format("{}X", window_name).c_str(), geometry.x());
-  si->SetIntValue("UI", TinyString::from_format("{}Y", window_name).c_str(), geometry.y());
-  si->SetIntValue("UI", TinyString::from_format("{}Width", window_name).c_str(), geometry.width());
-  si->SetIntValue("UI", TinyString::from_format("{}Height", window_name).c_str(), geometry.height());
-  si->DeleteValue("UI", config_key.c_str());
+  const bool maximized = (widget->windowState() & Qt::WindowMaximized);
+  const QRect geometry = maximized ? widget->normalGeometry() : widget->geometry();
+  si->SetIntValue(WINDOW_GEOMETRY_CONFIG_SECTION, TinyString::from_format("{}X", window_name).c_str(), geometry.x());
+  si->SetIntValue(WINDOW_GEOMETRY_CONFIG_SECTION, TinyString::from_format("{}Y", window_name).c_str(), geometry.y());
+  si->SetIntValue(WINDOW_GEOMETRY_CONFIG_SECTION, TinyString::from_format("{}Width", window_name).c_str(),
+                  geometry.width());
+  si->SetIntValue(WINDOW_GEOMETRY_CONFIG_SECTION, TinyString::from_format("{}Height", window_name).c_str(),
+                  geometry.height());
+  si->SetBoolValue(WINDOW_GEOMETRY_CONFIG_SECTION, TinyString::from_format("{}Maximized", window_name).c_str(),
+                   maximized);
+  si->DeleteValue(WINDOW_GEOMETRY_CONFIG_SECTION, config_key.c_str());
   Host::CommitBaseSettingChanges();
   return true;
 }

@@ -356,8 +356,7 @@ void AudioStream::ReadFrames(SampleType* samples, u32 num_frames)
       const u32 increment =
         static_cast<u32>(65536.0f * (static_cast<float>(frames_to_read) / static_cast<float>(num_frames)));
 
-      SampleType* resample_ptr =
-        static_cast<SampleType*>(alloca(frames_to_read * NUM_CHANNELS * sizeof(SampleType)));
+      SampleType* resample_ptr = static_cast<SampleType*>(alloca(frames_to_read * NUM_CHANNELS * sizeof(SampleType)));
       std::memcpy(resample_ptr, samples, frames_to_read * NUM_CHANNELS * sizeof(SampleType));
 
       SampleType* out_ptr = samples;
@@ -468,8 +467,8 @@ void AudioStream::BaseInitialize()
 
 void AudioStream::AllocateBuffer()
 {
-  // use a larger buffer when time stretching, since we need more input
-  // TODO: do we really? it's more the output...
+  // Stretcher can produce a large amount of samples from few samples when running slow, so allocate a larger buffer.
+  // In most cases it's not going to be used, but better to have a larger buffer and not need it than overrun.
   const u32 multiplier = (m_parameters.stretch_mode == AudioStretchMode::TimeStretch) ?
                            16 :
                            ((m_parameters.stretch_mode == AudioStretchMode::Off) ? 1 : 2);
@@ -511,7 +510,7 @@ void AudioStream::SetNominalRate(float tempo)
   m_nominal_rate = tempo;
   if (m_parameters.stretch_mode == AudioStretchMode::Resample)
     soundtouch_setRate(m_soundtouch, tempo);
-  else if (m_parameters.stretch_mode == AudioStretchMode::TimeStretch && m_stretch_inactive)
+  else if (m_parameters.stretch_mode == AudioStretchMode::TimeStretch && !m_stretch_inactive)
     soundtouch_setTempo(m_soundtouch, tempo);
 }
 
@@ -697,21 +696,49 @@ void AudioStream::StretchWriteBlock(const float* block)
 
 float AudioStream::AddAndGetAverageTempo(float val)
 {
-  if (m_stretch_reset >= STRETCH_RESET_THRESHOLD)
-    m_average_available = 0;
+  static constexpr u32 AVERAGING_WINDOW = 50;
+
+  // Build up a circular buffer for tempo averaging to prevent rapid tempo oscillations.
   if (m_average_available < AVERAGING_BUFFER_SIZE)
     m_average_available++;
 
   m_average_fullness[m_average_position] = val;
   m_average_position = (m_average_position + 1U) % AVERAGING_BUFFER_SIZE;
 
+  // The + AVERAGING_BUFFER_SIZE ensures we don't go negative when using modulo arithmetic.
   const u32 actual_window = std::min<u32>(m_average_available, AVERAGING_WINDOW);
-  const u32 first_index = (m_average_position - actual_window + AVERAGING_BUFFER_SIZE) % AVERAGING_BUFFER_SIZE;
+  u32 index = (m_average_position - actual_window + AVERAGING_BUFFER_SIZE) % AVERAGING_BUFFER_SIZE;
+  float sum = 0.0f;
+  u32 count = 0;
 
-  float sum = 0;
-  for (u32 i = first_index; i < first_index + actual_window; i++)
-    sum += m_average_fullness[i % AVERAGING_BUFFER_SIZE];
-  sum = sum / actual_window;
+#ifdef CPU_ARCH_SIMD
+  GSVector4 vsum = GSVector4::zero();
+  const u32 vcount = Common::AlignDownPow2(actual_window, 4);
+  for (; count < vcount; count += 4)
+  {
+    if ((index + 4) > AVERAGING_BUFFER_SIZE)
+    {
+      // wraparound
+      for (u32 i = 0; i < 4; i++)
+      {
+        sum += m_average_fullness[index];
+        index = (index + 1) % AVERAGING_BUFFER_SIZE;
+      }
+    }
+    else
+    {
+      vsum += GSVector4::load<false>(&m_average_fullness[index]);
+      index = (index + 4) % AVERAGING_BUFFER_SIZE;
+    }
+  }
+  sum += vsum.addv();
+#endif
+  for (; count < actual_window; count++)
+  {
+    sum += m_average_fullness[index];
+    index = (index + 1) % AVERAGING_BUFFER_SIZE;
+  }
+  sum /= static_cast<float>(actual_window);
 
   return (sum != 0.0f) ? sum : 1.0f;
 }
@@ -719,31 +746,54 @@ float AudioStream::AddAndGetAverageTempo(float val)
 void AudioStream::UpdateStretchTempo()
 {
   static constexpr float MIN_TEMPO = 0.05f;
-  static constexpr float MAX_TEMPO = 50.0f;
+  static constexpr float MAX_TEMPO = 500.0f;
 
-  // Which range we will run in 1:1 mode for.
+  // Hysteresis thresholds to prevent stretcher from constantly toggling on/off.
+  // i.e. this is the range we will run in 1:1 mode for.
   static constexpr float INACTIVE_GOOD_FACTOR = 1.04f;
   static constexpr float INACTIVE_BAD_FACTOR = 1.2f;
+
+  // Require sustained good performance before deactivating.
   static constexpr u32 INACTIVE_MIN_OK_COUNT = 50;
   static constexpr u32 COMPENSATION_DIVIDER = 100;
 
-  float base_target_usage = static_cast<float>(m_target_buffer_size) * m_nominal_rate;
+  // Controls how aggressively we adjust the dynamic target. We want to keep the same target size regardless
+  // of the target speed, but need additional buffering when intentionally running below 100%.
+  float base_target_usage = static_cast<float>(m_target_buffer_size) / std::min(m_nominal_rate, 1.0f);
 
-  // state vars
+  // tempo = current_buffer / target_buffer.
+  const u32 ibuffer_usage = GetBufferedFramesRelaxed();
+  float buffer_usage = static_cast<float>(ibuffer_usage);
+  float tempo = buffer_usage / m_dynamic_target_usage;
+
+  // Prevents the system from getting stuck in a bad state due to accumulated errors.
   if (m_stretch_reset >= STRETCH_RESET_THRESHOLD)
   {
     VERBOSE_LOG("___ Stretcher is being reset.");
     m_stretch_inactive = false;
     m_stretch_ok_count = 0;
     m_dynamic_target_usage = base_target_usage;
+    m_average_available = 0;
+    m_average_position = 0;
+    m_stretch_reset = 0;
+    tempo = m_nominal_rate;
+  }
+  else if (m_stretch_reset > 0)
+  {
+    // Back off resets if enough time has passed. That way a very occasional lag/overflow
+    // doesn't cascade into unnecessary tempo adjustment.
+    const u64 now = Timer::GetCurrentValue();
+    if (Timer::ConvertValueToSeconds(now - m_stretch_reset_time) >= 2.0f)
+    {
+      m_stretch_reset--;
+      m_stretch_reset_time = now;
+    }
   }
 
-  const u32 ibuffer_usage = GetBufferedFramesRelaxed();
-  float buffer_usage = static_cast<float>(ibuffer_usage);
-  float tempo = buffer_usage / m_dynamic_target_usage;
+  // Apply temporal smoothing to prevent rapid tempo changes that cause artifacts.
   tempo = AddAndGetAverageTempo(tempo);
 
-  // Dampening when we get close to target.
+  // Apply non-linear dampening when close to target to reduce oscillation.
   if (tempo < 2.0f)
     tempo = std::sqrt(tempo);
 
@@ -752,14 +802,18 @@ void AudioStream::UpdateStretchTempo()
   if (tempo < 1.0f)
     base_target_usage /= std::sqrt(tempo);
 
+  // Gradually adjust our dynamic target toward what would give us the desired tempo.
   m_dynamic_target_usage +=
     static_cast<float>(base_target_usage / tempo - m_dynamic_target_usage) / static_cast<float>(COMPENSATION_DIVIDER);
+
+  // Snap back to baseline if we're very close.
   if (IsInRange(tempo, 0.9f, 1.1f) &&
       IsInRange(m_dynamic_target_usage, base_target_usage * 0.9f, base_target_usage * 1.1f))
   {
     m_dynamic_target_usage = base_target_usage;
   }
 
+  // Are we changing the active state?
   if (!m_stretch_inactive)
   {
     if (IsInRange(tempo, 1.0f / INACTIVE_GOOD_FACTOR, INACTIVE_GOOD_FACTOR))
@@ -780,11 +834,21 @@ void AudioStream::UpdateStretchTempo()
     m_stretch_ok_count = 0;
   }
 
+  // If we're inactive, we don't want to change the tempo.
   if (m_stretch_inactive)
     tempo = m_nominal_rate;
 
   if constexpr (LOG_TIMESTRETCH_STATS)
   {
+    static float min_tempo = 0.0f;
+    static float max_tempo = 0.0f;
+    static float acc_tempo = 0.0f;
+    static u32 acc_cnt = 0;
+    acc_tempo += tempo;
+    acc_cnt++;
+    min_tempo = std::min(min_tempo, tempo);
+    max_tempo = std::max(max_tempo, tempo);
+
     static int iterations = 0;
     static u64 last_log_time = 0;
 
@@ -792,35 +856,57 @@ void AudioStream::UpdateStretchTempo()
 
     if (Timer::ConvertValueToSeconds(now - last_log_time) > 1.0f)
     {
-      VERBOSE_LOG("buffers: {:4d} ms ({:3.0f}%), tempo: {}, comp: {:2.3f}, iters: {}, reset:{}",
-                  (ibuffer_usage * 1000u) / m_sample_rate, 100.0f * buffer_usage / base_target_usage, tempo,
-                  m_dynamic_target_usage / base_target_usage, iterations, m_stretch_reset);
+      const float avg_tempo = (acc_cnt > 0) ? (acc_tempo / static_cast<float>(acc_cnt)) : 0.0f;
+
+      VERBOSE_LOG("{:3d} ms ({:3.0f}%), tempo: avg={:.2f} min={:.2f} max={:.2f}, comp: {:2.3f}, iters: {}, reset:{}",
+                  (ibuffer_usage * 1000u) / m_sample_rate, 100.0f * buffer_usage / base_target_usage, avg_tempo,
+                  min_tempo, max_tempo, m_dynamic_target_usage / base_target_usage, iterations, m_stretch_reset);
 
       last_log_time = now;
       iterations = 0;
+
+      min_tempo = std::numeric_limits<float>::max();
+      max_tempo = std::numeric_limits<float>::min();
+      acc_tempo = 0.0f;
+      acc_cnt = 0;
     }
 
     iterations++;
   }
 
   soundtouch_setTempo(m_soundtouch, tempo);
-
-  if (m_stretch_reset >= STRETCH_RESET_THRESHOLD)
-    m_stretch_reset = 0;
 }
 
 void AudioStream::StretchUnderrun()
 {
   // Didn't produce enough frames in time.
   m_stretch_reset++;
+  if (m_stretch_reset < STRETCH_RESET_THRESHOLD)
+    m_stretch_reset_time = Timer::GetCurrentValue();
 }
 
 void AudioStream::StretchOverrun()
 {
   // Produced more frames than can fit in the buffer.
   m_stretch_reset++;
+  if (m_stretch_reset < STRETCH_RESET_THRESHOLD)
+    m_stretch_reset_time = Timer::GetCurrentValue();
 
   // Drop two packets to give the time stretcher a bit more time to slow things down.
+  // This prevents a cascading overrun situation where each overrun makes the next one more likely.
   const u32 discard = CHUNK_SIZE * 2;
   m_rpos.store((m_rpos.load(std::memory_order_acquire) + discard) % m_buffer_size, std::memory_order_release);
+}
+
+void AudioStream::EmptyStretchBuffers()
+{
+  if (!IsStretchEnabled())
+    return;
+
+  m_stretch_reset = STRETCH_RESET_THRESHOLD;
+
+  // Wipe soundtouch samples. If we don't do this and we're switching from a high tempo to low,
+  // we'll still have quite a large buffer of samples that will be played back at a low tempo,
+  // resulting in a long delay before the audio starts playing at the new tempo.
+  soundtouch_clear(m_soundtouch);
 }

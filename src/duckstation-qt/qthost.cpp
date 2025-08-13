@@ -537,7 +537,6 @@ bool QtHost::SetCriticalFolders()
       || StringUtil::StartsWithNoCase(EmuFolders::AppRoot, "/usr/lib")
 #endif
   )
-
   {
     QMessageBox::critical(nullptr, QStringLiteral("Error"),
                           QStringLiteral("Resources are missing, your installation is incomplete."));
@@ -1926,6 +1925,13 @@ void EmuThread::stop()
 
   QMetaObject::invokeMethod(g_emu_thread, &EmuThread::stopInThread, Qt::QueuedConnection);
   QtUtils::ProcessEventsWithSleep(QEventLoop::ExcludeUserInputEvents, []() { return (g_emu_thread->isRunning()); });
+
+  // Ensure settings are saved.
+  if (s_settings_save_timer)
+  {
+    s_settings_save_timer.reset();
+    QtHost::SaveSettings();
+  }
 }
 
 void EmuThread::stopInThread()
@@ -1934,13 +1940,6 @@ void EmuThread::stopInThread()
 
   m_shutdown_flag = true;
   m_event_loop->quit();
-
-  // Ensure settings are saved.
-  if (s_settings_save_timer)
-  {
-    s_settings_save_timer.reset();
-    QtHost::SaveSettings();
-  }
 }
 
 void EmuThread::run()
@@ -2943,7 +2942,7 @@ void Host::RequestSystemShutdown(bool allow_confirm, bool save_state, bool check
 
   QMetaObject::invokeMethod(g_main_window, "requestShutdown", Qt::QueuedConnection, Q_ARG(bool, allow_confirm),
                             Q_ARG(bool, true), Q_ARG(bool, save_state), Q_ARG(bool, check_memcard_busy),
-                            Q_ARG(bool, false), Q_ARG(bool, false));
+                            Q_ARG(bool, true), Q_ARG(bool, false), Q_ARG(bool, false));
 }
 
 void Host::RequestResetSettings(bool system, bool controller)
@@ -3395,7 +3394,6 @@ int main(int argc, char* argv[])
   // Always kick off update check. It'll take over if the user is booting a game fullscreen.
   g_main_window->startupUpdateCheck();
 
-  // Skip the update check if we're booting a game directly.
   if (autoboot)
     g_emu_thread->bootSystem(std::move(autoboot));
 

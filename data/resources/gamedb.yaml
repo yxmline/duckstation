@@ -2334,6 +2334,7 @@ SCES-00699:
     versionTested: "0.1-4416-g24b4be51"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -2354,6 +2355,7 @@ SCES-00901:
   name: "Ace Combat 2 (France)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -2374,6 +2376,7 @@ SCES-00902:
   name: "Ace Combat 2 (Germany)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -2394,6 +2397,7 @@ SLPS-00830:
   name: "Ace Combat 2 (Japan)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -2419,6 +2423,7 @@ SLUS-00404:
       \ on Git."
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -2442,6 +2447,7 @@ SCES-02066:
     versionTested: "0.1-4416-g24b4be51"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -2472,9 +2478,9 @@ SLPS-02020:
   compatibility:
     rating: NoIssues
     versionTested: "0.1-884-g096ed21"
-    comments: "Works only on Interpreter Mode"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   codes:
@@ -2504,9 +2510,9 @@ SLPS-02021:
   compatibility:
     rating: NoIssues
     versionTested: "0.1-884-g096ed21"
-    comments: "Works only on Interpreter Mode"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   codes:
@@ -2533,6 +2539,7 @@ SLUS-00972:
     versionTested: "0.1-1391-g5f9481dd"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -4649,6 +4656,8 @@ SLES-02913:
     - AnalogController
     - DigitalController
     - PlayStationMouse
+  traits:
+    - ForcePGXPCPUMode # Fixes gaps in geometry.
   metadata:
     publisher: "Acclaim"
     developer: "Argonaut Games"
@@ -4676,6 +4685,8 @@ SLUS-00633:
     - AnalogController
     - DigitalController
     - PlayStationMouse
+  traits:
+    - ForcePGXPCPUMode # Fixes gaps in geometry.
   metadata:
     publisher: "Fox Interactive"
     developer: "Argonaut Games"
@@ -7463,6 +7474,7 @@ SCES-01564:
   name: "Ape Escape (Europe)"
   controllers:
     - AnalogController
+    - AnalogJoystick
   libcrypt: true
   metadata:
     publisher: "Sony"
@@ -7486,6 +7498,7 @@ SCES-02028:
   name: "Ape Escape (France)"
   controllers:
     - AnalogController
+    - AnalogJoystick
   libcrypt: true
   metadata:
     publisher: "Sony"
@@ -7505,6 +7518,7 @@ SCES-02029:
   name: "Ape Escape (Germany)"
   controllers:
     - AnalogController
+    - AnalogJoystick
   libcrypt: true
   metadata:
     publisher: "Sony"
@@ -7524,6 +7538,7 @@ SCES-02030:
   name: "Ape Escape (Italy)"
   controllers:
     - AnalogController
+    - AnalogJoystick
   libcrypt: true
   metadata:
     publisher: "Sony"
@@ -7546,6 +7561,7 @@ SCUS-94423:
     versionTested: "0.1-986-gfc911de1"
   controllers:
     - AnalogController
+    - AnalogJoystick
   metadata:
     publisher: "Sony"
     developer: "Sony"
@@ -7575,6 +7591,7 @@ SCES-02031:
   name: "Ape Escape - La Invasion de los Monos (Spain)"
   controllers:
     - AnalogController
+    - AnalogJoystick
   libcrypt: true
   metadata:
     publisher: "Sony"
@@ -7594,6 +7611,7 @@ SLES-00460:
   name: "Apocalypse (Europe)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Activision"
@@ -7617,6 +7635,7 @@ SLES-00834:
   name: "Apocalypse (France)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Activision"
@@ -7636,6 +7655,7 @@ SLES-00835:
   name: "Apocalypse (Germany)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Activision"
@@ -7655,6 +7675,7 @@ SLES-01463:
   name: "Apocalypse (Italy)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Activision"
@@ -7674,6 +7695,7 @@ SLPM-86879:
   name: "Apocalypse (Japan)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Success"
@@ -7696,6 +7718,7 @@ SLUS-00373:
     versionTested: "0.1-1391-g5f9481dd"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Activision"
@@ -7715,6 +7738,7 @@ SLPM-86271:
   name: "Apocalypse (aka Apocalypse - Starring Bruce Willis / Bruce Willis' Apocalypse)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Success"
@@ -8041,6 +8065,8 @@ SLUS-01252:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - DisableWidescreen # Breaks sprite placement.
   metadata:
     publisher: "Working Designs"
     developer: "G-Craft"
@@ -8631,6 +8657,9 @@ SLES-00466:
   name: "Arcade's Greatest Hits - The Atari Collection 1 (Europe)"
   controllers:
     - DigitalController
+    - AnalogJoystick
+  traits:
+    - DisableAutoAnalogMode # Avoid unsupported games.
   metadata:
     publisher: "GT Interactive"
     developer: "Digital Eclipse Software, Inc"
@@ -8652,6 +8681,9 @@ SLUS-00399:
     versionTested: "0.1-1313-g10cd00c"
   controllers:
     - DigitalController
+    - AnalogJoystick
+  traits:
+    - DisableAutoAnalogMode # Avoid unsupported games.
   metadata:
     publisher: "Midway Home Entertainment"
     developer: "Digital Eclipse Software, Inc"
@@ -8711,7 +8743,10 @@ SLES-00739:
   name: "Arcade's Greatest Hits - The Midway Collection 2 (Europe)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
+  traits:
+    - DisableAutoAnalogMode # Avoid unsupported games.
   metadata:
     publisher: "GT Interactive"
     developer: "Digital Eclipse Software, Inc"
@@ -8733,7 +8768,10 @@ SLUS-00450:
     versionTested: "0.1-1323-ga6acd33"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
+  traits:
+    - DisableAutoAnalogMode # Avoid unsupported games.
   metadata:
     publisher: "Midway Home Entertainment"
     developer: "Digital Eclipse Software, Inc"
@@ -13927,6 +13965,7 @@ SLES-02874:
   name: "Batman - Gotham City Racer (Europe) (En,Fr,De,Es,It,Nl)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "UBI Soft Entertainment"
@@ -13954,6 +13993,7 @@ SLUS-01141:
     versionTested: "0.1-1323-ga6acd33"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "UBI Soft Entertainment"
@@ -18060,6 +18100,7 @@ SLES-01712:
   name: "Bomberman Fantasy Race (Europe) (En,Fr,De,Es)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -18086,6 +18127,7 @@ SLPM-87102:
     versionTested: "0.1-1064-g73cdd676"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   codes:
@@ -18113,6 +18155,7 @@ SLUS-00823:
     versionTested: "0.1-1391-g5f9481dd"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -23162,6 +23205,7 @@ SLES-01182:
     comments: "Intro logos require the software renderer to display correctly."
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   settings:
@@ -23194,6 +23238,7 @@ SLUS-00882:
     dmaHaltTicks: 250
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -25958,6 +26003,7 @@ SCPS-45447:
     - AnalogController
     - DigitalController
   traits:
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking.
     - DisableWidescreen
   codes:
     - SCPS-45447
@@ -25990,6 +26036,7 @@ SLPM-87395:
     - DigitalController
   traits:
     - ForceRecompilerICache
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking.
     - DisableWidescreen
   settings:
     dmaMaxSliceTicks: 30 # Very sensitive to DMA timing, otherwise polygon flicker.
@@ -26003,7 +26050,7 @@ SLPM-87395:
     publisher: "Squaresoft"
     developer: "Squaresoft"
     releaseDate: "1999-10-21"
-    genre: "Tactical RPG"
+    genre: "RPG"
     languages:
       - Japanese
     minPlayers: 1
@@ -26025,6 +26072,7 @@ SLPM-87396:
     - DigitalController
   traits:
     - ForceRecompilerICache
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking.
     - DisableWidescreen
   settings:
     dmaMaxSliceTicks: 30 # Very sensitive to DMA timing, otherwise polygon flicker.
@@ -26038,7 +26086,7 @@ SLPM-87396:
     publisher: "Squaresoft"
     developer: "Squaresoft"
     releaseDate: "1999-10-21"
-    genre: "Tactical RPG"
+    genre: "RPG"
     languages:
       - Japanese
     minPlayers: 1
@@ -26063,6 +26111,7 @@ SLUS-01041:
     - DigitalController
   traits:
     - ForceRecompilerICache
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking.
     - DisableWidescreen
   settings:
     dmaMaxSliceTicks: 30 # Very sensitive to DMA timing, otherwise polygon flicker.
@@ -26095,6 +26144,7 @@ SLUS-01080:
     - DigitalController
   traits:
     - ForceRecompilerICache
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking.
     - DisableWidescreen
   settings:
     dmaMaxSliceTicks: 30 # Very sensitive to DMA timing, otherwise polygon flicker.
@@ -30590,6 +30640,7 @@ SCUS-94244:
     versionTested: "0.1-2499-g770dd5a6"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForceRoundTextureCoordinates # Fixes alignment of flipped textures when upscaling.
@@ -30700,6 +30751,7 @@ SCPS-10073:
     rating: NoIssues
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForceRoundTextureCoordinates # Fixes alignment of flipped textures when upscaling.
@@ -30729,6 +30781,7 @@ SCPS-45350:
   name: "Crash Bandicoot 3 - Buttobi! Sekai Isshuu (aka Crash Bandicoot 3 - Buttobi! Sekai Isshuu / Crash Bandicoot 3 - Warped)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForceRoundTextureCoordinates # Fixes alignment of flipped textures when upscaling.
@@ -30754,6 +30807,7 @@ SCES-01420:
     rating: NoIssues
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForceRoundTextureCoordinates # Fixes alignment of flipped textures when upscaling.
@@ -36841,6 +36895,10 @@ SLES-00055:
   name: "Descent (Europe)"
   controllers:
     - DigitalController
+    - AnalogJoystick
+  traits:
+    - DisablePGXP # Vertices transformed without GTE.
+    - DisableWidescreen # No effect.
   metadata:
     publisher: "Interplay"
     developer: "Parallax Software Corporation"
@@ -36859,6 +36917,10 @@ SLPS-00212:
   name: "Descent (Japan)"
   controllers:
     - DigitalController
+    - AnalogJoystick
+  traits:
+    - DisablePGXP # Vertices transformed without GTE.
+    - DisableWidescreen # No effect.
   metadata:
     publisher: "Interplay"
     developer: "Parallax Software Corporation"
@@ -36880,6 +36942,10 @@ SLUS-00037:
     versionTested: "0.1-1308-g622e50fa"
   controllers:
     - DigitalController
+    - AnalogJoystick
+  traits:
+    - DisablePGXP # Vertices transformed without GTE.
+    - DisableWidescreen # No effect.
   metadata:
     publisher: "Interplay"
     developer: "Parallax Software Corporation"
@@ -36898,6 +36964,7 @@ SLES-00558:
   name: "Descent II (Europe)"
   controllers:
     - DigitalController
+    - AnalogJoystick
   metadata:
     publisher: "Interplay"
     developer: "Parallax Software Corporation"
@@ -36916,6 +36983,7 @@ SLUS-00460:
   name: "Descent Maximum (USA)"
   controllers:
     - DigitalController
+    - AnalogJoystick
   metadata:
     publisher: "Interplay"
     developer: "Parallax Software Corporation"
@@ -48093,6 +48161,7 @@ SLES-02373:
   name: "EA Sports Supercross 2000 (Europe) (En,Fr,De,Es,It,Nl,Sv)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -48119,6 +48188,7 @@ SLUS-01005:
   name: "EA Sports Supercross 2000 (USA)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -56703,6 +56773,9 @@ SLPS-03430:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - DisablePGXP # 2D, PGXP is not beneficial.
+    - DisableWidescreen # Stops position glitches in battles.
   metadata:
     publisher: "Squaresoft"
     developer: "Squaresoft"
@@ -56722,6 +56795,9 @@ SLPS-03500:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - DisablePGXP # 2D, PGXP is not beneficial.
+    - DisableWidescreen # Stops position glitches in battles.
   metadata:
     publisher: "Squaresoft"
     developer: "Squaresoft"
@@ -56740,6 +56816,9 @@ SCES-03840:
   name: "Final Fantasy Anthology - European Edition - Final Fantasy IV (Europe, Australia)"
   controllers:
     - DigitalController
+  traits:
+    - DisablePGXP # 2D, PGXP is not beneficial.
+    - DisableWidescreen # Stops position glitches in battles.
   metadata:
     publisher: "Sony"
     developer: "Squaresoft"
@@ -56758,6 +56837,9 @@ SCES-13840:
   name: "Final Fantasy Anthology - European Edition - Final Fantasy V (Europe, Australia)"
   controllers:
     - DigitalController
+  traits:
+    - DisablePGXP # 2D, PGXP is not beneficial.
+    - DisableWidescreen # Stops position glitches in battles.
   metadata:
     publisher: "Sony"
     developer: "Squaresoft"
@@ -56779,6 +56861,9 @@ SLUS-00879:
     versionTested: "0.1-4599-ga542fa85"
   controllers:
     - DigitalController
+  traits:
+    - DisablePGXP # 2D, PGXP is not beneficial.
+    - DisableWidescreen # Stops position glitches in battles.
   metadata:
     publisher: "Squaresoft"
     developer: "Squaresoft"
@@ -56800,6 +56885,9 @@ SLUS-00900:
     versionTested: "0.1-1580-g136a9d60"
   controllers:
     - DigitalController
+  traits:
+    - DisablePGXP # 2D, PGXP is not beneficial.
+    - DisableWidescreen # Stops position glitches in battles.
   metadata:
     publisher: "Squaresoft"
     developer: "Squaresoft"
@@ -56838,6 +56926,9 @@ SLUS-01360:
   name: "Final Fantasy Chronicles - Final Fantasy IV (USA)"
   controllers:
     - DigitalController
+  traits:
+    - DisablePGXP # 2D, PGXP is not beneficial.
+    - DisableWidescreen # Stops position glitches in battles.
   metadata:
     publisher: "Squaresoft"
     developer: "Squaresoft"
@@ -56903,6 +56994,9 @@ SLPS-03502:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - DisablePGXP # 2D, PGXP is not beneficial.
+    - DisableWidescreen # Stops position glitches in battles.
   metadata:
     publisher: "Squaresoft"
     developer: "Squaresoft"
@@ -56922,6 +57016,9 @@ SLPS-03501:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - DisablePGXP # 2D, PGXP is not beneficial.
+    - DisableWidescreen # Stops position glitches in battles.
   metadata:
     publisher: "Squaresoft"
     developer: "Squaresoft"
@@ -56943,6 +57040,9 @@ SLPM-86028:
   codes:
     - SLPM-86028
     - SLPS-01948
+  traits:
+    - DisablePGXP # 2D, PGXP is not beneficial.
+    - DisableWidescreen # Stops position glitches in battles.
   metadata:
     publisher: "Squaresoft"
     developer: "Squaresoft"
@@ -56961,6 +57061,9 @@ SCPS-45029:
   name: "Final Fantasy IV (aka Final Fantasy IV / Final Fantasy 4 / FF4)"
   controllers:
     - DigitalController
+  traits:
+    - DisablePGXP # 2D, PGXP is not beneficial.
+    - DisableWidescreen # Stops position glitches in battles.
   metadata:
     publisher: "Squaresoft"
     developer: "Squaresoft"
@@ -57850,6 +57953,9 @@ SLUS-01541:
     versionTested: "0.1-4599-ga542fa85"
   controllers:
     - DigitalController
+  traits:
+    - DisablePGXP # 2D, PGXP is not beneficial.
+    - DisableWidescreen # Stops position glitches in battles.
   metadata:
     publisher: "Squaresoft"
     developer: "Squaresoft"
@@ -57868,6 +57974,9 @@ SLES-04034:
   name: "Final Fantasy Origins - Final Fantasy (Europe)"
   controllers:
     - DigitalController
+  traits:
+    - DisablePGXP # 2D, PGXP is not beneficial.
+    - DisableWidescreen # Stops position glitches in battles.
   metadata:
     publisher: "Infogrames / Squaresoft"
     developer: "Squaresoft"
@@ -57886,6 +57995,9 @@ SLES-14034:
   name: "Final Fantasy Origins - Final Fantasy II (Europe)"
   controllers:
     - DigitalController
+  traits:
+    - DisablePGXP # 2D, PGXP is not beneficial.
+    - DisableWidescreen # Stops position glitches in battles.
   metadata:
     publisher: "Infogrames / Squaresoft"
     developer: "Squaresoft"
@@ -61113,6 +61225,7 @@ SLES-01421:
   name: "Formula 1 98 (Europe) (En,Fr,De,Es,It,Fi)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -61138,6 +61251,7 @@ SLUS-00744:
   name: "Formula 1 98 (USA) (En,Fr,De,Es,It,Fi)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -67713,6 +67827,7 @@ SCES-00984:
     versionTested: "0.1-986-gfc911de1"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -67752,6 +67867,7 @@ SCPS-10045:
   name: "Gran Turismo (Japan, Asia)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   codes:
@@ -67780,6 +67896,7 @@ SCUS-94194:
     versionTested: "0.1-1336-gd711baa"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -67812,6 +67929,7 @@ SCES-02380:
     versionTested: "0.1-1448-g472f1c1c"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -67844,6 +67962,7 @@ SCES-12380:
     versionTested: "0.1-1448-g472f1c1c"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -67874,6 +67993,7 @@ SCPS-91327:
   name: "Gran Turismo 2 (Japan) (Disc 2) (Gran Turismo) (Rev 1)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -67899,6 +68019,7 @@ SCPS-10116:
       - SCPS-10117
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   codes:
@@ -67928,6 +68049,7 @@ SCPS-10117:
       - SCPS-10117
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   codes:
@@ -67954,6 +68076,7 @@ SCUS-94455:
     versionTested: "0.1-986-gfc911de1"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -67977,6 +68100,7 @@ SCUS-94488:
     versionTested: "0.1-986-gfc911de1"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -67999,6 +68123,7 @@ SCAJ-01001:
   name: "Gran Turismo 2 - The Real Driving Simulator [PSOne Books]"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   codes:
     - SCAJ-01001
@@ -79638,6 +79763,7 @@ SLES-01981:
   name: "Jeremy McGrath Supercross 2000 (Europe) (En,Fr,De)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -79660,6 +79786,7 @@ SLUS-00832:
   name: "Jeremy McGrath Supercross 2000 (USA)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -95422,6 +95549,7 @@ SLES-00599:
   name: "MDK (Europe) (En,Fr,De,Es,It)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Interplay"
@@ -95449,6 +95577,7 @@ SCPS-10052:
   name: "MDK (Japan)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Sony"
@@ -95471,6 +95600,7 @@ SLUS-00426:
     versionTested: "0.1-1443-g7ab521f7"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Playmates Interactive"
@@ -99657,6 +99787,7 @@ SLES-00340:
   name: "MechWarrior 2 - 31st Century Combat - Arcade Combat Edition (Europe)"
   controllers:
     - DigitalController
+    - AnalogJoystick
   metadata:
     publisher: "Activision"
     developer: "Quantum Factory, Inc"
@@ -99675,6 +99806,7 @@ SLUS-00401:
   name: "MechWarrior 2 - 31st Century Combat - Arcade Combat Edition (USA)"
   controllers:
     - DigitalController
+    - AnalogJoystick
   metadata:
     publisher: "Activision"
     developer: "Quantum Factory, Inc"
@@ -99693,6 +99825,7 @@ SLPS-00937:
   name: "MechWarrior 2 - Arcade Combat Edition (Japan)"
   controllers:
     - DigitalController
+    - AnalogJoystick
   metadata:
     publisher: "Bandai Visual (Emotion Digital Software)"
     developer: "Quantum Factory, Inc"
@@ -99711,6 +99844,7 @@ SLES-00374:
   name: "MechWarrior 2 - Combat au 31ieme Siecle (France)"
   controllers:
     - DigitalController
+    - AnalogJoystick
   metadata:
     publisher: "Activision"
     developer: "Quantum Factory, Inc"
@@ -99729,6 +99863,7 @@ SLES-00375:
   name: "MechWarrior 2 - Kampfspiel des 31. Jahrhunderts - Arcade Combat Edition (Germany)"
   controllers:
     - DigitalController
+    - AnalogJoystick
   metadata:
     publisher: "Activision"
     developer: "Quantum Factory, Inc"
@@ -101652,6 +101787,7 @@ SCPS-45320:
   name: "Metal Gear Solid"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPCPUMode
@@ -101677,8 +101813,6 @@ SCPS-45320:
     linkCable: false
 PAPX-90044:
   name: "Metal Gear Solid (Asia) (Demo)"
-  metadata:
-    genre: "			"
   compatibility:
     rating: NoIssues
     versionTested: "0.1-905-g237f469"
@@ -101695,6 +101829,7 @@ SCPS-45317:
       - SCPS-45318
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPCPUMode
@@ -101726,6 +101861,7 @@ SCPS-45318:
       - SCPS-45318
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPCPUMode
@@ -101776,6 +101912,7 @@ SLES-01370:
     versionTested: "0.1-905-g237f469"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPCPUMode
@@ -101807,6 +101944,7 @@ SLES-11370:
     versionTested: "0.1-905-g237f469"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPCPUMode
@@ -101838,6 +101976,7 @@ SLES-01506:
     versionTested: "0.1-905-g237f469"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPCPUMode
@@ -101869,6 +102008,7 @@ SLES-11506:
     versionTested: "0.1-905-g237f469"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPCPUMode
@@ -101900,6 +102040,7 @@ SLES-01507:
     versionTested: "0.1-905-g237f469"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPCPUMode
@@ -101931,6 +102072,7 @@ SLES-11507:
     versionTested: "0.1-905-g237f469"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPCPUMode
@@ -101962,6 +102104,7 @@ SLES-01508:
     versionTested: "0.1-905-g237f469"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPCPUMode
@@ -101993,6 +102136,7 @@ SLES-11508:
     versionTested: "0.1-905-g237f469"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPCPUMode
@@ -102016,6 +102160,7 @@ SLPM-86098:
   name: "Metal Gear Solid (Japan) (Demo)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPCPUMode
@@ -102044,6 +102189,7 @@ SLPM-86114:
       - SLPM-86115
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPCPUMode
@@ -102075,6 +102221,7 @@ SLPM-86115:
       - SLPM-86115
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPCPUMode
@@ -102109,6 +102256,7 @@ SLES-01734:
     versionTested: "0.1-905-g237f469"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPCPUMode
@@ -102140,6 +102288,7 @@ SLES-11734:
     versionTested: "0.1-905-g237f469"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPCPUMode
@@ -102179,6 +102328,7 @@ SLUS-00594:
     versionTested: "0.1-905-g237f469"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPCPUMode
@@ -102210,6 +102360,7 @@ SLUS-00776:
     versionTested: "0.1-905-g237f469"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPCPUMode
@@ -102239,6 +102390,7 @@ SCPS-45414:
       - SCPS-45414
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   codes:
     - SCPS-45414
@@ -102274,6 +102426,7 @@ SCPS-45412:
     versionTested: "0.1-3652-g4c3d2cd3"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   codes:
     - SCPS-45412
@@ -102308,6 +102461,7 @@ SCPS-45413:
     versionTested: "0.1-4011-g2bf0771a"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   codes:
     - SCPS-45413
@@ -102336,6 +102490,7 @@ SLES-02136:
     versionTested: "0.1-4315-gf7587eae"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Konami"
@@ -102362,6 +102517,7 @@ SLUS-00957:
     versionTested: "0.1-1790-ge8e461c0"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Konami"
@@ -102385,6 +102541,7 @@ SLPM-86485:
   name: "Metal Gear Solid [Konami the Best]"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPCPUMode
@@ -102409,6 +102566,7 @@ SLPM-87030:
   name: "Metal Gear Solid [PSOne Books]"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   codes:
     - SLPM-87030
@@ -102647,6 +102805,7 @@ SLES-01594:
   name: "Michael Owen's World League Soccer '99 (Europe) (En,Fr,It)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Eidos Interactive"
@@ -106868,7 +107027,12 @@ SCUS-94355:
     versionTested: "0.1-2483-g98d6b499"
   controllers:
     - DigitalController
+    - AnalogJoystick
     - NeGcon
+  traits:
+    - ForcePGXPCPUMode # Fix gaps in geometry.
+  settings:
+    gpuPGXPTolerance: 2 # Stop minimap glitching out.
   metadata:
     publisher: "Sony"
     developer: "Opus Corp. / Bandit"
@@ -106906,7 +107070,12 @@ SCES-00245:
   name: "Motor Toon Grand Prix 2 (Europe)"
   controllers:
     - DigitalController
+    - AnalogJoystick
     - NeGcon
+  traits:
+    - ForcePGXPCPUMode # Fix gaps in geometry.
+  settings:
+    gpuPGXPTolerance: 2 # Stop minimap glitching out.
   metadata:
     publisher: "Sony"
     developer: "Opus Corp. / Bandit"
@@ -106930,7 +107099,12 @@ SCPS-10018:
       - SCPS-10019
   controllers:
     - DigitalController
+    - AnalogJoystick
     - NeGcon
+  traits:
+    - ForcePGXPCPUMode # Fix gaps in geometry.
+  settings:
+    gpuPGXPTolerance: 2 # Stop minimap glitching out.
   metadata:
     publisher: "Sony"
     developer: "Opus Corp. / Bandit"
@@ -106954,7 +107128,12 @@ SCPS-10019:
       - SCPS-10019
   controllers:
     - DigitalController
+    - AnalogJoystick
     - NeGcon
+  traits:
+    - ForcePGXPCPUMode # Fix gaps in geometry.
+  settings:
+    gpuPGXPTolerance: 2 # Stop minimap glitching out.
   metadata:
     publisher: "Sony"
     developer: "Opus Corp. / Bandit"
@@ -108475,6 +108654,7 @@ SLES-00905:
   name: "NASCAR 98 (Europe)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -108497,6 +108677,7 @@ SLES-00880:
   name: "NASCAR 98 (Germany)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -108517,6 +108698,7 @@ SLPS-01295:
   name: "NASCAR 98 (Japan)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -108537,6 +108719,7 @@ SLUS-00521:
   name: "NASCAR 98 (USA)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -108557,6 +108740,7 @@ SLUS-00647:
   name: "NASCAR 98 Collector's Edition (USA)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -113904,6 +114088,7 @@ SLES-00658:
     versionTested: "0.1-2862-g6fbffb6f"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -113932,6 +114117,7 @@ SLUS-00276:
     versionTested: "0.1-986-gfc911de1"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -128478,6 +128664,7 @@ SCPS-45117:
   name: "Porsche Challenge"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -128498,6 +128685,7 @@ SCES-00409:
   name: "Porsche Challenge (Europe) (En,Fr,De,Es,It)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -128522,6 +128710,7 @@ SIPS-60016:
   name: "Porsche Challenge (Japan)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -128544,6 +128733,7 @@ SCUS-94187:
     rating: NoIssues
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -131694,6 +131884,7 @@ SLES-01534:
   name: "Quake II (Europe)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - PlayStationMouse
   metadata:
@@ -131717,6 +131908,7 @@ SLUS-00757:
     versionTested: "0.1-986-gfc911de1"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - PlayStationMouse
   metadata:
@@ -132943,6 +133135,7 @@ SCPS-45404:
     versionTested: "0.1-3968-gd9151ceb"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPCPUMode
@@ -132967,6 +133160,7 @@ SLPS-91487:
   name: "Racing Lagoon [PSOne Books]"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Squaresoft"
@@ -134185,6 +134379,7 @@ SLES-02882:
     versionTested: "0.1-1638-g0af22825"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "JVC Digital Studios"
@@ -134207,6 +134402,7 @@ SLPM-86450:
     versionTested: "0.1-884-g096ed21"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Taito"
@@ -134229,6 +134425,7 @@ SLUS-01217:
     versionTested: "0.1-1638-g0af22825"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Working Designs/Spaz"
@@ -136484,6 +136681,9 @@ SLUS-00748:
     serials:
       - SLUS-00748
       - SLUS-00756
+  compatibility:
+    rating: NoIssues
+    versionTested: "0.1-9460-g09e785555"
   controllers:
     - AnalogController
     - DigitalController
@@ -136512,6 +136712,9 @@ SLUS-00756:
     serials:
       - SLUS-00748
       - SLUS-00756
+  compatibility:
+    rating: NoIssues
+    versionTested: "0.1-9460-g09e785555"
   controllers:
     - AnalogController
     - DigitalController
@@ -140703,6 +140906,7 @@ SLES-01286:
   name: "S.C.A.R.S. (Europe) (En,Fr,De,Es,It)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -140727,6 +140931,7 @@ SLUS-00692:
   name: "S.C.A.R.S. (USA)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -141198,8 +141403,7 @@ SCUS-94230:
   name: "SaGa Frontier (USA)"
   compatibility:
     rating: NoIssues
-    versionTested: "0.1-986-gfc911de1"
-    comments: "Black screen if fast boot is used."
+    versionTested: "0.1-9460-g09e785555"
   controllers:
     - DigitalController
   metadata:
@@ -141284,6 +141488,9 @@ SLES-02118:
     linkCable: false
 SLUS-00933:
   name: "SaGa Frontier 2 (USA)"
+  compatibility:
+    rating: NoIssues
+    versionTested: "0.1-9460-g09e785555"
   controllers:
     - AnalogController
     - DigitalController
@@ -147740,6 +147947,9 @@ SLUS-00707:
     - Justifier
   traits:
     - ForceRecompilerICache
+  settings:
+    displayActiveStartOffset: -8
+    displayActiveEndOffset: -8
   metadata:
     publisher: "Konami"
     developer: "KCET"
@@ -151843,6 +152053,7 @@ SLES-02194:
   name: "Sled Storm (Europe) (En,Fr,De,Es)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -151866,6 +152077,7 @@ SLUS-00955:
   name: "Sled Storm (USA)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -156176,6 +156388,7 @@ SCES-02835:
     rating: NoIssues
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - DisableCDROMReadSpeedup # Fixes cutscene audio.
@@ -156206,6 +156419,7 @@ SCUS-94467:
     versionTested: "0.1-986-gfc911de1"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - DisableCDROMReadSpeedup # Fixes cutscene audio.
@@ -156267,6 +156481,7 @@ SCUS-94425:
     versionTested: "0.1-986-gfc911de1"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - DisableCDROMReadSpeedup # Fixes cutscene audio.
@@ -156301,6 +156516,7 @@ SCPS-45395:
   name: "Spyro the Dragon"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPCPUMode # Required, but not perfect. Game messes with geometry.
@@ -156325,6 +156541,7 @@ SCES-01438:
     rating: NoIssues
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPCPUMode # Required, but not perfect. Game messes with geometry.
@@ -156354,6 +156571,7 @@ SCPS-10085:
     versionTested: "0.1-986-gfc911de1"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPCPUMode # Required, but not perfect. Game messes with geometry.
@@ -156383,6 +156601,7 @@ SCPS-10083:
   name: "Spyro the Dragon (Japan) (Shokai Genteiban)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPCPUMode # Required, but not perfect. Game messes with geometry.
@@ -156408,6 +156627,7 @@ SCUS-94228:
     versionTested: "0.1-986-gfc911de1"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPCPUMode # Required, but not perfect. Game messes with geometry.
@@ -156448,6 +156668,7 @@ SCPS-10128:
   name: "Spyro x Sparx - Tondemo Tours (Japan)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Sony"
@@ -156867,6 +157088,7 @@ SLUS-00241:
   name: "Star Fighter (USA)"
   controllers:
     - DigitalController
+    - AnalogJoystick
   metadata:
     publisher: "Acclaim"
     developer: "Krisalis Software Ltd"
@@ -157032,6 +157254,8 @@ SCES-02159:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking.
   metadata:
     publisher: "Sony Computer Entertaiment Europe"
     developer: "tri-Ace"
@@ -157056,6 +157280,8 @@ SCES-12159:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking.
   metadata:
     publisher: "Sony Computer Entertaiment Europe"
     developer: "tri-Ace"
@@ -157080,6 +157306,8 @@ SCES-02160:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking.
   metadata:
     publisher: "Sony Computer Entertaiment Europe"
     developer: "tri-Ace"
@@ -157104,6 +157332,8 @@ SCES-12160:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking.
   metadata:
     publisher: "Sony Computer Entertaiment Europe"
     developer: "tri-Ace"
@@ -157128,6 +157358,8 @@ SCES-02161:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking.
   metadata:
     publisher: "Sony Computer Entertaiment Europe"
     developer: "tri-Ace"
@@ -157152,6 +157384,8 @@ SCES-12161:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking.
   metadata:
     publisher: "Sony Computer Entertaiment Europe"
     developer: "tri-Ace"
@@ -157176,6 +157410,8 @@ SLPM-86105:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking.
   metadata:
     publisher: "Enix"
     developer: "tri-Ace"
@@ -157200,6 +157436,8 @@ SLPM-87357:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking.
   metadata:
     publisher: "Enix"
     developer: "tri-Ace"
@@ -157224,6 +157462,8 @@ SLPM-86106:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking.
   metadata:
     publisher: "Enix"
     developer: "tri-Ace"
@@ -157248,6 +157488,8 @@ SLPM-87358:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking.
   metadata:
     publisher: "Enix"
     developer: "tri-Ace"
@@ -157275,6 +157517,8 @@ SCUS-94421:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking.
   codes:
     - HASH-360EBC987F8D1BB3
   metadata:
@@ -157304,6 +157548,8 @@ SCUS-94422:
   controllers:
     - AnalogController
     - DigitalController
+  traits:
+    - DisableCDROMSpeedupOnMDEC # Stops FMVs breaking.
   codes:
     - HASH-21D700A3A4CEA53F
   metadata:
@@ -157501,6 +157747,7 @@ SLES-03273:
   name: "Star Wars - Demolition (Europe)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Activision"
@@ -157520,6 +157767,7 @@ SLES-03274:
   name: "Star Wars - Demolition (France)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Activision"
@@ -157539,6 +157787,7 @@ SLES-03275:
   name: "Star Wars - Demolition (Germany)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Activision"
@@ -157561,6 +157810,7 @@ SLUS-01183:
     versionTested: "0.1-1336-gd711baa"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Lucasarts"
@@ -158290,6 +158540,7 @@ SLES-00293:
   name: "StarFighter 3000 (Europe) (En,Fr,De,Es,It)"
   controllers:
     - DigitalController
+    - AnalogJoystick
   metadata:
     publisher: "Telstar"
     developer: "Krisalis Software Ltd"
@@ -158312,6 +158563,7 @@ SLPS-00487:
   name: "StarFighter 3000 (Japan)"
   controllers:
     - DigitalController
+    - AnalogJoystick
   metadata:
     publisher: "Imageneer"
     developer: "Krisalis Software Ltd"
@@ -158676,6 +158928,7 @@ SCES-01023:
   name: "Steel Reign (Europe)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Sony Computer Entertaiment Europe"
@@ -158695,6 +158948,7 @@ SCUS-94902:
   name: "Steel Reign (USA)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Sony Computer Entertaiment America"
@@ -165189,6 +165443,7 @@ SCES-01910:
     versionTested: "0.1-1308-g622e50fa"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Sony / 989 Studios"
@@ -165208,6 +165463,7 @@ SCES-01911:
   name: "Syphon Filter (France)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Sony / 989 Studios"
@@ -165227,6 +165483,7 @@ SCES-01912:
   name: "Syphon Filter (Germany)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Sony / 989 Studios"
@@ -165246,6 +165503,7 @@ SCES-01913:
   name: "Syphon Filter (Italy)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Sony / 989 Studios"
@@ -165265,6 +165523,7 @@ SLPS-02216:
   name: "Syphon Filter (Japan)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   codes:
     - SLPS-02216
@@ -165294,6 +165553,7 @@ SCES-01914:
     versionTested: "0.1-4423-g32ab7c13"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Sony / 989 Studios"
@@ -165316,6 +165576,7 @@ SCUS-94240:
     versionTested: "0.1-986-gfc911de1"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "989 Studios"
@@ -165344,6 +165605,7 @@ SCES-02285:
       - SCES-12285
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Sony / 989 Studios"
@@ -165368,6 +165630,7 @@ SCES-12285:
       - SCES-12285
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Sony / 989 Studios"
@@ -165392,6 +165655,7 @@ SCES-02286:
       - SCES-12286
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Sony / 989 Studios"
@@ -165416,6 +165680,7 @@ SCES-12286:
       - SCES-12286
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Sony / 989 Studios"
@@ -165440,6 +165705,7 @@ SCES-02287:
       - SCES-12287
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Sony / 989 Studios"
@@ -165464,6 +165730,7 @@ SCES-12287:
       - SCES-12287
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Sony / 989 Studios"
@@ -165488,6 +165755,7 @@ SCES-02288:
       - SCES-12288
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Sony / 989 Studios"
@@ -165512,6 +165780,7 @@ SCES-12288:
       - SCES-12288
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Sony / 989 Studios"
@@ -165544,6 +165813,7 @@ SCUS-94451:
     versionTested: "0.1-986-gfc911de1"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "989 Studios"
@@ -165572,6 +165842,7 @@ SCUS-94492:
     versionTested: "0.1-986-gfc911de1"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "989 Studios"
@@ -165607,6 +165878,7 @@ SCES-02289:
     versionTested: "0.1-4423-g32ab7c13"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Sony / 989 Studios"
@@ -165634,6 +165906,7 @@ SCES-12289:
     versionTested: "0.1-4423-g32ab7c13"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "Sony / 989 Studios"
@@ -165653,6 +165926,7 @@ SCES-03697:
   name: "Syphon Filter 3 (Europe)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPVertexCache
@@ -165674,6 +165948,7 @@ SCES-03698:
   name: "Syphon Filter 3 (France)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPVertexCache
@@ -165695,6 +165970,7 @@ SCES-03699:
   name: "Syphon Filter 3 (Germany)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPVertexCache
@@ -165716,6 +165992,7 @@ SCES-03700:
   name: "Syphon Filter 3 (Italy)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPVertexCache
@@ -165740,6 +166017,7 @@ SCUS-94640:
     versionTested: "0.1-986-gfc911de1"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPVertexCache
@@ -165770,6 +166048,7 @@ SCES-03701:
     versionTested: "0.1-4423-g32ab7c13"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   traits:
     - ForcePGXPVertexCache
@@ -168411,6 +168690,7 @@ SLES-00316:
   name: "Tempest X3 (Europe)"
   controllers:
     - DigitalController
+    - AnalogJoystick
     - PlayStationMouse
   metadata:
     publisher: "Interplay"
@@ -168433,6 +168713,7 @@ SLUS-00283:
     versionTested: "0.1-1969-g671033fd"
   controllers:
     - DigitalController
+    - AnalogJoystick
     - PlayStationMouse
     - NeGcon
   metadata:
@@ -169220,6 +169501,7 @@ SLES-00948:
   name: "Test Drive 4 (Europe) (En,Fr,De,It)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -169263,6 +169545,7 @@ SLUS-00487:
   name: "Test Drive 4 (USA)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -174592,7 +174875,7 @@ SLES-02239:
     minPlayers: 1
     maxPlayers: 1
     minBlocks: 2
-    maxBlocks: 0
+    maxBlocks: 2
     vibration: true
     multitap: false
     linkCable: false
@@ -174630,7 +174913,7 @@ SLES-02238:
     minPlayers: 1
     maxPlayers: 1
     minBlocks: 2
-    maxBlocks: 0
+    maxBlocks: 2
     vibration: true
     multitap: false
     linkCable: false
@@ -174653,7 +174936,7 @@ SLES-02241:
     minPlayers: 1
     maxPlayers: 1
     minBlocks: 2
-    maxBlocks: 0
+    maxBlocks: 2
     vibration: true
     multitap: false
     linkCable: false
@@ -174672,7 +174955,7 @@ SLES-02242:
     minPlayers: 1
     maxPlayers: 1
     minBlocks: 2
-    maxBlocks: 0
+    maxBlocks: 2
     vibration: true
     multitap: false
     linkCable: false
@@ -174684,6 +174967,8 @@ SLUS-00885:
   controllers:
     - AnalogController
     - DigitalController
+  settings:
+    displayCropMode: Borders
   metadata:
     publisher: "Eidos Interactive"
     developer: "Core Design"
@@ -174694,7 +174979,7 @@ SLUS-00885:
     minPlayers: 1
     maxPlayers: 1
     minBlocks: 2
-    maxBlocks: 0
+    maxBlocks: 2
     vibration: true
     multitap: false
     linkCable: false
@@ -174770,6 +175055,8 @@ SLUS-01311:
   controllers:
     - AnalogController
     - DigitalController
+  settings:
+    displayCropMode: Borders
   metadata:
     publisher: "Eidos Interactive"
     developer: "Core Design"
@@ -175142,7 +175429,7 @@ SLES-02240:
     minPlayers: 1
     maxPlayers: 1
     minBlocks: 2
-    maxBlocks: 0
+    maxBlocks: 2
     vibration: true
     multitap: false
     linkCable: false
@@ -175164,7 +175451,7 @@ SLPM-86896:
     minPlayers: 1
     maxPlayers: 1
     minBlocks: 2
-    maxBlocks: 0
+    maxBlocks: 2
     vibration: true
     multitap: false
     linkCable: false
@@ -181821,6 +182108,7 @@ SCPS-10027:
   name: "Velldeselba Senki - Tsubasa no Kunshou (Japan)"
   controllers:
     - DigitalController
+    - AnalogJoystick
   metadata:
     publisher: "Sony"
     developer: "Tenki"
@@ -182279,6 +182567,7 @@ SLES-01212:
   name: "Vigilante 8 (Europe)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -182303,6 +182592,7 @@ SLES-01213:
   name: "Vigilante 8 (France)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -182323,6 +182613,7 @@ SLES-01214:
   name: "Vigilante 8 (Germany)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -182343,6 +182634,7 @@ SLES-01215:
   name: "Vigilante 8 (Italy)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -182363,6 +182655,7 @@ SLPS-01703:
   name: "Vigilante 8 (Japan)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   codes:
@@ -182393,6 +182686,7 @@ SLUS-00510:
     versionTested: "0.1-3187-gf580dbc6"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -182417,6 +182711,7 @@ SLPS-02615:
   name: "Vigilante 8 - 2nd Battle (Japan)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -182437,6 +182732,7 @@ SLES-02162:
   name: "Vigilante 8 - 2nd Offense (Europe)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -182460,6 +182756,7 @@ SLUS-00868:
     versionTested: "0.1-986-gfc911de1"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -182480,6 +182777,7 @@ SLPM-86928:
   name: "Vigilante 8 - Second Battle [Pokkiri 1400 Series]"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -182500,6 +182798,7 @@ SLPM-86929:
   name: "Vigilante 8 [Pokkiri 1400 Series]"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
     - NeGcon
   metadata:
@@ -187097,6 +187396,7 @@ SLES-01375:
   name: "Wing Over 2 (Europe)"
   controllers:
     - AnalogController
+    - AnalogJoystick
     - DigitalController
   metadata:
     publisher: "JVC"

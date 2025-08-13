@@ -32,6 +32,7 @@
 #include <QtWidgets/QScrollBar>
 #include <QtWidgets/QStyledItemDelegate>
 #include <algorithm>
+#include <limits>
 
 #include "moc_gamelistwidget.cpp"
 
@@ -660,17 +661,54 @@ QVariant GameListModel::data(const QModelIndex& index, int role, const GameList:
     {
       switch (index.column())
       {
+        case Column_Serial:
+          return QtUtils::StringViewToQString(ge->serial);
+
+        case Column_Title:
+          return QtUtils::StringViewToQString(ge->title);
+
+        case Column_FileTitle:
+          return QtUtils::StringViewToQString(Path::GetFileTitle(ge->path));
+
+        case Column_Developer:
+          return ge->dbentry ? QtUtils::StringViewToQString(ge->dbentry->developer) : QString();
+
+        case Column_Publisher:
+          return ge->dbentry ? QtUtils::StringViewToQString(ge->dbentry->publisher) : QString();
+
+        case Column_Genre:
+          return ge->dbentry ? QtUtils::StringViewToQString(ge->dbentry->genre) : QString();
+
         case Column_TimePlayed:
+        {
           if (ge->total_played_time == 0)
             return {};
           else
             return QtUtils::StringViewToQString(GameList::FormatTimespan(ge->total_played_time, false));
+        }
 
         case Column_LastPlayed:
+        {
           if (ge->last_played_time == 0)
             return {};
           else
             return QtHost::FormatNumber(Host::NumberFormatType::LongDateTime, static_cast<s64>(ge->last_played_time));
+        }
+
+        case Column_Achievements:
+        {
+          if (ge->num_achievements == 0)
+            return tr("No Achievements");
+
+          QString tooltip = tr("%1/%2 achievements unlocked").arg(ge->unlocked_achievements).arg(ge->num_achievements);
+          if (ge->unlocked_achievements_hc > 0)
+          {
+            tooltip = QStringLiteral("%1\n%2").arg(tooltip).arg(
+              tr("%1 unlocked in hardcore mode").arg(ge->unlocked_achievements_hc));
+          }
+
+          return tooltip;
+        }
 
         default:
           return {};
@@ -1281,6 +1319,7 @@ void GameListWidget::refresh(bool invalidate_cache)
           Qt::QueuedConnection);
   connect(m_refresh_thread, &GameListRefreshThread::refreshComplete, this, &GameListWidget::onRefreshComplete,
           Qt::QueuedConnection);
+  m_refresh_last_entry_count = std::numeric_limits<int>::max(); // force reset on first progress update
   m_refresh_thread->start();
 }
 
@@ -1336,12 +1375,25 @@ void GameListWidget::updateBackground(bool reload_image)
   });
 }
 
-void GameListWidget::onRefreshProgress(const QString& status, int current, int total, float time)
+void GameListWidget::onRefreshProgress(const QString& status, int current, int total, int entry_count, float time)
 {
   // Avoid spamming the UI on very short refresh (e.g. game exit).
   static constexpr float SHORT_REFRESH_TIME = 0.5f;
   if (!m_model->hasTakenGameList())
-    m_model->refresh();
+  {
+    if (entry_count > m_refresh_last_entry_count)
+    {
+      m_model->beginInsertRows(QModelIndex(), m_refresh_last_entry_count, entry_count - 1);
+      m_model->endInsertRows();
+    }
+    else
+    {
+      m_model->beginResetModel();
+      m_model->endResetModel();
+    }
+
+    m_refresh_last_entry_count = entry_count;
+  }
 
   // switch away from the placeholder while we scan, in case we find anything
   if (m_ui.stack->currentIndex() == 2)
@@ -1520,7 +1572,6 @@ void GameListWidget::updateView(bool grid_view)
   {
     m_ui.stack->setCurrentIndex(0);
     setFocusProxy(m_list_view);
-    resizeListViewColumnsToFit();
   }
 }
 
@@ -1541,11 +1592,6 @@ void GameListWidget::resizeEvent(QResizeEvent* event)
 {
   QWidget::resizeEvent(event);
   updateBackground(false);
-}
-
-void GameListWidget::resizeListViewColumnsToFit()
-{
-  m_list_view->resizeColumnsToFit();
 }
 
 const GameList::Entry* GameListWidget::getSelectedEntry() const
@@ -1595,6 +1641,10 @@ GameListListView::GameListListView(GameListModel* model, GameListSortModel* sort
   QHeaderView* const horizontal_header = horizontalHeader();
   horizontal_header->setHighlightSections(false);
   horizontal_header->setContextMenuPolicy(Qt::CustomContextMenu);
+  setFixedColumnWidths();
+
+  horizontal_header->setSectionResizeMode(GameListModel::Column_Title, QHeaderView::Stretch);
+  horizontal_header->setSectionResizeMode(GameListModel::Column_FileTitle, QHeaderView::Stretch);
 
   verticalHeader()->hide();
 
@@ -1617,32 +1667,60 @@ GameListListView::GameListListView(GameListModel* model, GameListSortModel* sort
 
 GameListListView::~GameListListView() = default;
 
-void GameListListView::resizeEvent(QResizeEvent* e)
+void GameListListView::setFixedColumnWidth(int column, int width)
 {
-  QTableView::resizeEvent(e);
-  resizeColumnsToFit();
+  horizontalHeader()->setSectionResizeMode(column, QHeaderView::Fixed);
+  setColumnWidth(column, width);
 }
 
-void GameListListView::resizeColumnsToFit()
+void GameListListView::setFixedColumnWidth(const QFontMetrics& fm, int column, int str_width)
 {
-  QtUtils::ResizeColumnsForTableView(this, {
-                                             45,  // type
-                                             95,  // serial
-                                             -1,  // title
-                                             -1,  // file title
-                                             200, // developer
-                                             200, // publisher
-                                             200, // genre
-                                             50,  // year
-                                             100, // players
-                                             85,  // time played
-                                             85,  // last played
-                                             80,  // file size
-                                             80,  // size
-                                             55,  // region
-                                             100, // achievements
-                                             100  // compatibility
-                                           });
+  const int margin = style()->pixelMetric(QStyle::PM_HeaderMargin, nullptr, this);
+  const int header_width = fm.size(0, m_model->getColumnDisplayName(column)).width() +
+                           style()->pixelMetric(QStyle::PM_HeaderMarkSize, nullptr, this) + // sort indicator
+                           margin; // space between text and sort indicator
+  const int width = std::max(header_width, str_width) +
+                    2 * margin; // left and right margins
+  setFixedColumnWidth(column, width);
+}
+
+void GameListListView::setFixedColumnWidths()
+{
+  const QFontMetrics fm(fontMetrics());
+  const auto width_for = [&fm](const QString& text) { return fm.size(0, text).width(); };
+
+  setFixedColumnWidth(fm, GameListModel::Column_Serial, width_for(QStringLiteral("SWWW-00000")));
+  setFixedColumnWidth(fm, GameListModel::Column_Year,
+                      std::max(width_for(QStringLiteral("1999")), width_for(QStringLiteral("2000"))));
+  setFixedColumnWidth(fm, GameListModel::Column_Players, width_for(QStringLiteral("1-8")));
+
+  // Played time is a little trickier, since some locales might have longer words for "hours" and "minutes".
+  setFixedColumnWidth(fm, GameListModel::Column_TimePlayed,
+                      std::max(width_for(qApp->translate("GameList", "%n seconds", "", 59)),
+                               std::max(width_for(qApp->translate("GameList", "%n minutes", "", 59)),
+                                        width_for(qApp->translate("GameList", "%n hours", "", 1000)))));
+
+  // And this is a monstrosity.
+  setFixedColumnWidth(
+    fm, GameListModel::Column_LastPlayed,
+    std::max(width_for(qApp->translate("GameList", "Today")),
+             std::max(width_for(qApp->translate("GameList", "Yesterday")),
+                      std::max(width_for(qApp->translate("GameList", "Never")),
+                               width_for(QtHost::FormatNumber(Host::NumberFormatType::ShortDate,
+                                                              static_cast<s64>(QDateTime::currentSecsSinceEpoch())))))));
+
+  // Assume 8 is the widest digit.
+  int size_width = width_for(QStringLiteral("%1 MB").arg(8888.88, 0, 'f', 2));
+  setFixedColumnWidth(fm, GameListModel::Column_FileSize, size_width);
+  setFixedColumnWidth(fm, GameListModel::Column_UncompressedSize, size_width);
+
+  setFixedColumnWidth(GameListModel::Column_Icon, 45);
+  setFixedColumnWidth(GameListModel::Column_Region, 55);
+  setFixedColumnWidth(GameListModel::Column_Achievements, 100);
+  setFixedColumnWidth(GameListModel::Column_Compatibility, 100);
+  setColumnWidth(GameListModel::Column_Developer, 200);
+  setColumnWidth(GameListModel::Column_Publisher, 200);
+  setColumnWidth(GameListModel::Column_Genre, 200);
 }
 
 static TinyString getColumnVisibilitySettingsKeyName(int column)
@@ -1719,7 +1797,6 @@ void GameListListView::setAndSaveColumnHidden(int column, bool hidden)
   setColumnHidden(column, hidden);
   Host::SetBaseBoolSettingValue("GameListTableView", getColumnVisibilitySettingsKeyName(column), !hidden);
   Host::CommitBaseSettingChanges();
-  resizeColumnsToFit();
 }
 
 void GameListListView::onHeaderSortIndicatorChanged(int, Qt::SortOrder)
@@ -1739,10 +1816,7 @@ void GameListListView::onHeaderContextMenuRequested(const QPoint& point)
     QAction* action = menu.addAction(m_model->getColumnDisplayName(column));
     action->setCheckable(true);
     action->setChecked(!isColumnHidden(column));
-    connect(action, &QAction::triggered, [this, column](bool enabled) {
-      setAndSaveColumnHidden(column, !enabled);
-      resizeColumnsToFit();
-    });
+    connect(action, &QAction::triggered, [this, column](bool enabled) { setAndSaveColumnHidden(column, !enabled); });
   }
 
   menu.exec(mapToGlobal(point));
@@ -1838,7 +1912,7 @@ void GameListGridView::updateLayout()
   const int item_width = icon_width + item_margin + item_spacing + 2;
 
   // one line of text
-  const int item_height = item_width + (m_model->getShowCoverTitles() ? QFontMetrics(font()).height() : 0);
+  const int item_height = item_width + (m_model->getShowCoverTitles() ? fontMetrics().height() : 0);
 
   const int available_width = width() - scrollbar_width;
   const int num_columns = available_width / item_width;

@@ -56,7 +56,7 @@ void ShowOrRaiseWindow(QWidget* window);
 
 /// Closes and deletes a window later, outside of this event pump.
 template<typename T>
-[[maybe_unused]] static void CloseAndDeleteWindow(T*& window)
+inline void CloseAndDeleteWindow(T*& window)
 {
   if (!window)
     return;
@@ -70,10 +70,11 @@ template<typename T>
   window = nullptr;
 }
 
-/// Resizes columns of the table view to at the specified widths. A negative width will stretch the column to use the
-/// remaining space.
-void ResizeColumnsForTableView(QTableView* view, const std::initializer_list<int>& widths);
-void ResizeColumnsForTreeView(QTreeView* view, const std::initializer_list<int>& widths);
+/// For any positive values, sets the corresponding column width to the specified value.
+/// Any values of 0 will set the column's width based on the content.
+/// Any values of -1 will stretch the column to use the remaining space.
+void SetColumnWidthsForTableView(QTableView* view, const std::initializer_list<int>& widths);
+void SetColumnWidthsForTreeView(QTreeView* view, const std::initializer_list<int>& widths);
 
 /// Returns a key id for a key event, including any modifiers that we need (e.g. Keypad).
 /// NOTE: Defined in QtKeyCodes.cpp, not QtUtils.cpp.
@@ -122,15 +123,14 @@ qreal GetDevicePixelRatioForWidget(const QWidget* widget);
 std::optional<WindowInfo> GetWindowInfoForWidget(QWidget* widget, RenderAPI render_api, Error* error = nullptr);
 
 /// Saves a window's geometry to configuration. Returns false if the configuration was changed.
-bool SaveWindowGeometry(std::string_view window_name, QWidget* widget, bool auto_commit_changes = true);
+void SaveWindowGeometry(std::string_view window_name, QWidget* widget, bool auto_commit_changes = true);
 
 /// Restores a window's geometry from configuration. Returns false if it was not found in the configuration.
 bool RestoreWindowGeometry(std::string_view window_name, QWidget* widget);
 
 /// CPU-friendly way of blocking the UI thread while some predicate holds true.
 template<typename Predicate>
-[[maybe_unused]] static void ProcessEventsWithSleep(QEventLoop::ProcessEventsFlags flags, const Predicate& pred,
-                                                    int sleep_time_ms = 10)
+inline void ProcessEventsWithSleep(QEventLoop::ProcessEventsFlags flags, const Predicate& pred, int sleep_time_ms = 10)
 {
   if (sleep_time_ms == 0)
   {
