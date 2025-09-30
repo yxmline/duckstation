@@ -181,8 +181,6 @@ void CPU::Initialize()
 
   UpdateMemoryPointers();
   UpdateDebugDispatcherFlag();
-
-  GTE::Initialize();
 }
 
 void CPU::Shutdown()
@@ -1396,7 +1394,7 @@ restart_instruction:
       }
 
       u8 value;
-      if (!ReadMemoryByte(addr, &value))
+      if (!ReadMemoryByte(addr, &value)) [[unlikely]]
         return;
 
       const u32 sxvalue = SignExtend32(value);
@@ -1418,7 +1416,7 @@ restart_instruction:
       }
 
       u16 value;
-      if (!ReadMemoryHalfWord(addr, &value))
+      if (!ReadMemoryHalfWord(addr, &value)) [[unlikely]]
         return;
 
       const u32 sxvalue = SignExtend32(value);
@@ -1439,7 +1437,7 @@ restart_instruction:
       }
 
       u32 value;
-      if (!ReadMemoryWord(addr, &value))
+      if (!ReadMemoryWord(addr, &value)) [[unlikely]]
         return;
 
       WriteRegDelayed(inst.i.rt, value);
@@ -1459,7 +1457,7 @@ restart_instruction:
       }
 
       u8 value;
-      if (!ReadMemoryByte(addr, &value))
+      if (!ReadMemoryByte(addr, &value)) [[unlikely]]
         return;
 
       const u32 zxvalue = ZeroExtend32(value);
@@ -1480,7 +1478,7 @@ restart_instruction:
       }
 
       u16 value;
-      if (!ReadMemoryHalfWord(addr, &value))
+      if (!ReadMemoryHalfWord(addr, &value)) [[unlikely]]
         return;
 
       const u32 zxvalue = ZeroExtend32(value);
@@ -1498,16 +1496,19 @@ restart_instruction:
       const VirtualMemoryAddress aligned_addr = addr & ~UINT32_C(3);
       if constexpr (debug)
       {
-        Cop0DataBreakpointCheck<MemoryAccessType::Read>(addr);
-        MemoryBreakpointCheck<MemoryAccessType::Read>(addr);
+        Cop0DataBreakpointCheck<MemoryAccessType::Read>(aligned_addr);
+        MemoryBreakpointCheck<MemoryAccessType::Read>(aligned_addr);
       }
 
       u32 aligned_value;
-      if (!ReadMemoryWord(aligned_addr, &aligned_value))
+      if (!ReadMemoryWord(aligned_addr, &aligned_value)) [[unlikely]]
         return;
 
       // Bypasses load delay. No need to check the old value since this is the delay slot or it's not relevant.
       const u32 existing_value = (inst.i.rt == g_state.load_delay_reg) ? g_state.load_delay_value : ReadReg(inst.i.rt);
+      if constexpr (pgxp_mode >= PGXPMode::Memory)
+        PGXP::CPU_LWx(inst, addr, existing_value);
+
       const u8 shift = (Truncate8(addr) & u8(3)) * u8(8);
       u32 new_value;
       if (inst.op == InstructionOp::lwl)
@@ -1522,9 +1523,6 @@ restart_instruction:
       }
 
       WriteRegDelayed(inst.i.rt, new_value);
-
-      if constexpr (pgxp_mode >= PGXPMode::Memory)
-        PGXP::CPU_LW(inst, addr, new_value);
     }
     break;
 
@@ -1591,11 +1589,14 @@ restart_instruction:
       }
 
       const u32 reg_value = ReadReg(inst.i.rt);
-      const u8 shift = (Truncate8(addr) & u8(3)) * u8(8);
       u32 mem_value;
-      if (!ReadMemoryWord(aligned_addr, &mem_value))
+      if (!ReadMemoryWord(aligned_addr, &mem_value)) [[unlikely]]
         return;
 
+      if constexpr (pgxp_mode >= PGXPMode::Memory)
+        PGXP::CPU_SWx(inst, addr, reg_value);
+
+      const u8 shift = (Truncate8(addr) & u8(3)) * u8(8);
       u32 new_value;
       if (inst.op == InstructionOp::swl)
       {
@@ -1609,9 +1610,6 @@ restart_instruction:
       }
 
       WriteMemoryWord(aligned_addr, new_value);
-
-      if constexpr (pgxp_mode >= PGXPMode::Memory)
-        PGXP::CPU_SW(inst, aligned_addr, new_value);
     }
     break;
 
@@ -3195,7 +3193,7 @@ bool CPU::SafeReadMemoryWord(VirtualMemoryAddress addr, u32* value)
   return true;
 }
 
-bool CPU::SafeReadMemoryCString(VirtualMemoryAddress addr, std::string* value, u32 max_length /*= 1024*/)
+bool CPU::SafeReadMemoryCString(VirtualMemoryAddress addr, SmallStringBase* value, u32 max_length /*= 1024*/)
 {
   value->clear();
 
@@ -3206,7 +3204,7 @@ bool CPU::SafeReadMemoryCString(VirtualMemoryAddress addr, std::string* value, u
       return true;
 
     value->push_back(ch);
-    if (value->size() >= max_length)
+    if (value->length() >= max_length)
       return true;
 
     addr++;

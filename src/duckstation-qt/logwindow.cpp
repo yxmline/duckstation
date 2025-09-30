@@ -200,7 +200,7 @@ void LogWindow::updateLogLevelUi()
 {
   const Log::Level level =
     Settings::ParseLogLevelName(Host::GetBaseStringSettingValue("Logging", "LogLevel", "").c_str())
-      .value_or(Settings::DEFAULT_LOG_LEVEL);
+      .value_or(Log::DEFAULT_LOG_LEVEL);
 
   const QList<QAction*> actions = m_level_menu->actions();
   for (u32 i = 0; i < actions.size(); i++)
@@ -282,9 +282,8 @@ void LogWindow::logCallback(void* pUserParam, Log::MessageCategory cat, const ch
   }
   else
   {
-    QMetaObject::invokeMethod(this_ptr, "appendMessage", Qt::QueuedConnection,
-                              Q_ARG(const QLatin1StringView&, qchannel), Q_ARG(quint32, static_cast<u32>(cat)),
-                              Q_ARG(const QString&, qmessage));
+    QMetaObject::invokeMethod(this_ptr, &LogWindow::appendMessage, Qt::QueuedConnection, qchannel,
+                              static_cast<quint32>(cat), qmessage);
   }
 }
 

@@ -67,16 +67,17 @@ static bool IsUNCPath(const T& path)
 
 static inline bool FileSystemCharacterIsSane(char32_t c, bool strip_slashes)
 {
+  // no newlines, don't be silly. or other control characters...
+  if (c <= static_cast<char32_t>(31))
+    return false;
+
 #ifdef _WIN32
   // https://docs.microsoft.com/en-gb/windows/win32/fileio/naming-a-file?redirectedfrom=MSDN#naming-conventions
   if ((c == U'/' || c == U'\\') && strip_slashes)
     return false;
 
-  if (c == U'<' || c == U'>' || c == U':' || c == U'"' || c == U'|' || c == U'?' || c == U'*' || c == 0 ||
-      c <= static_cast<char32_t>(31))
-  {
+  if (c == U'<' || c == U'>' || c == U':' || c == U'"' || c == U'|' || c == U'?' || c == U'*')
     return false;
-  }
 #else
   if (c == '/' && strip_slashes)
     return false;
@@ -147,6 +148,26 @@ void Path::SanitizeFileName(std::string* str, bool strip_slashes /* = true */)
   if (str->length() > 0 && str->back() == '.')
     str->back() = '_';
 #endif
+}
+
+bool Path::IsFileNameValid(std::string_view str, bool allow_slashes)
+{
+  size_t pos = 0;
+  while (pos < str.length())
+  {
+    char32_t ch;
+    pos += StringUtil::DecodeUTF8(str, pos, &ch);
+    if (!FileSystemCharacterIsSane(ch, !allow_slashes))
+      return false;
+  }
+
+#ifdef _WIN32
+  // Windows: Can't end filename with a period.
+  if (str.length() > 0 && str.back() == '.')
+    return false;
+#endif
+
+  return true;
 }
 
 std::string Path::RemoveLengthLimits(std::string_view str)
@@ -587,15 +608,6 @@ std::string_view Path::GetExtension(std::string_view path)
     return std::string_view();
   else
     return path.substr(pos + 1);
-}
-
-std::string_view Path::StripExtension(std::string_view path)
-{
-  const std::string_view::size_type pos = path.rfind('.');
-  if (pos == std::string_view::npos)
-    return path;
-
-  return path.substr(0, pos);
 }
 
 std::string Path::ReplaceExtension(std::string_view path, std::string_view new_extension)

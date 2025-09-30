@@ -15,6 +15,7 @@
     <ClCompile Include="controllerglobalsettingswidget.cpp" />
     <ClCompile Include="controllersettingswindow.cpp" />
     <ClCompile Include="coverdownloadwindow.cpp" />
+    <ClCompile Include="debuggercodeview.cpp" />
     <ClCompile Include="emulationsettingswidget.cpp" />
     <ClCompile Include="debuggermodels.cpp" />
     <ClCompile Include="debuggerwindow.cpp" />
@@ -28,6 +29,7 @@
     <ClCompile Include="inputbindingwidgets.cpp" />
     <ClCompile Include="isobrowserwindow.cpp" />
     <ClCompile Include="logwindow.cpp" />
+    <ClCompile Include="memoryeditorwindow.cpp" />
     <ClCompile Include="memoryscannerwindow.cpp" />
     <ClCompile Include="memoryviewwidget.cpp" />
     <ClCompile Include="displaywidget.cpp" />
@@ -44,15 +46,16 @@
     <ClCompile Include="postprocessingsettingswidget.cpp" />
     <ClCompile Include="qtthemes.cpp" />
     <ClCompile Include="qthost.cpp" />
-    <ClCompile Include="qtkeycodes.cpp" />
     <ClCompile Include="qtprogresscallback.cpp" />
     <ClCompile Include="qtutils.cpp" />
     <ClCompile Include="selectdiscdialog.cpp" />
     <ClCompile Include="settingswindow.cpp" />
     <ClCompile Include="setupwizarddialog.cpp" />
+    <ClCompile Include="togglebutton.cpp" />
     <ClCompile Include="vcruntimecheck.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <QtMoc Include="togglebutton.h" />
     <QtMoc Include="setupwizarddialog.h" />
     <QtMoc Include="aboutdialog.h" />
     <QtMoc Include="audiosettingswidget.h" />
@@ -77,6 +80,7 @@
     <QtMoc Include="controllersettingswindow.h" />
     <QtMoc Include="colorpickerbutton.h" />
     <ClInclude Include="controllersettingwidgetbinder.h" />
+    <QtMoc Include="memoryeditorwindow.h" />
     <QtMoc Include="memoryviewwidget.h" />
     <QtMoc Include="logwindow.h" />
     <QtMoc Include="graphicssettingswidget.h" />
@@ -84,6 +88,7 @@
     <QtMoc Include="gamecheatsettingswidget.h" />
     <QtMoc Include="gamepatchsettingswidget.h" />
     <QtMoc Include="isobrowserwindow.h" />
+    <QtMoc Include="debuggercodeview.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="resource.h" />
     <QtMoc Include="selectdiscdialog.h" />
@@ -310,6 +315,9 @@
       <FileType>Document</FileType>
     </QtUi>
     <QtUi Include="postprocessingoverlayconfigwidget.ui">
+      <FileType>Document</FileType>
+    </QtUi>
+    <QtUi Include="memoryeditorwindow.ui">
       <FileType>Document</FileType>
     </QtUi>
     <None Include="translations\duckstation-qt_es-es.ts" />

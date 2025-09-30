@@ -212,15 +212,18 @@ static bool ExtractCodeInfo(CodeInfoList* dst, const std::string_view file_data,
 static void AppendCheatToList(CodeInfoList* dst, CodeInfo code);
 
 static bool ShouldLoadDatabaseCheats();
+static bool WantsWidescreenPatch();
 static bool AreAnyPatchesEnabled();
 static void ReloadEnabledLists();
-static u32 EnableCheats(const CheatCodeList& patches, const EnableCodeList& enable_list, const char* section,
-                        bool hc_mode_active);
+static u32 EnablePatches(const CheatCodeList& patches, const EnableCodeList& enable_list, const char* section,
+                         bool hc_mode_active);
+static bool EnableWidescreenPatch(const CheatCodeList& patches, bool hc_mode_active);
 static void UpdateActiveCodes(bool reload_enabled_list, bool verbose, bool verbose_if_changed,
                               bool show_disabled_codes);
 
 template<typename F>
-bool SearchCheatArchive(CheatArchive& archive, std::string_view serial, std::optional<GameHash> hash, const F& f);
+static bool SearchCheatArchive(CheatArchive& archive, std::string_view serial, std::optional<GameHash> hash,
+                               const F& f);
 
 template<typename F>
 static void EnumerateChtFiles(const std::string_view serial, std::optional<GameHash> hash, bool cheats, bool for_ui,
@@ -244,21 +247,34 @@ const char* PATCHES_CONFIG_SECTION = "Patches";
 const char* CHEATS_CONFIG_SECTION = "Cheats";
 const char* PATCH_ENABLE_CONFIG_KEY = "Enable";
 
-static std::mutex s_zip_mutex;
-static CheatArchive s_patches_zip;
-static CheatArchive s_cheats_zip;
-static CheatCodeList s_patch_codes;
-static CheatCodeList s_cheat_codes;
-static EnableCodeList s_enabled_cheats;
-static EnableCodeList s_enabled_patches;
+namespace {
+struct Locals
+{
+  CheatCodeList patch_codes;
+  CheatCodeList cheat_codes;
+  EnableCodeList enabled_cheats;
+  EnableCodeList enabled_patches;
 
-static ActiveCodeList s_frame_end_codes;
+  ActiveCodeList frame_end_codes;
 
-static u32 s_active_patch_count = 0;
-static u32 s_active_cheat_count = 0;
-static bool s_patches_enabled = false;
-static bool s_cheats_enabled = false;
-static bool s_database_cheat_codes_enabled = false;
+  u32 active_patch_count = 0;
+  u32 active_cheat_count = 0;
+  bool patches_enabled = false;
+  bool cheats_enabled = false;
+  bool has_widescreen_patch = false;
+  bool database_cheat_codes_enabled = false;
+};
+
+struct ArchiveLocals
+{
+  std::mutex zip_mutex;
+  CheatArchive patches_zip;
+  CheatArchive cheats_zip;
+};
+} // namespace
+
+ALIGN_TO_CACHE_LINE static Locals s_locals;
+ALIGN_TO_CACHE_LINE static ArchiveLocals s_archive_locals;
 
 } // namespace Cheats
 
@@ -286,7 +302,7 @@ void Cheats::CheatCode::ApplySettingOverrides()
     DEV_LOG("Enabling 8MB ram from {} patch.", GetName());
     g_settings.enable_8mb_ram = true;
   }
-  if (m_metadata.override_aspect_ratio.has_value() && g_settings.display_aspect_ratio == DisplayAspectRatio::Auto)
+  if (m_metadata.override_aspect_ratio.has_value() && g_settings.display_aspect_ratio == DisplayAspectRatio::Auto())
   {
     DEV_LOG("Setting aspect ratio to {} from {} patch.",
             Settings::GetDisplayAspectRatioName(m_metadata.override_aspect_ratio.value()), GetName());
@@ -416,8 +432,8 @@ void Cheats::EnumerateChtFiles(const std::string_view serial, std::optional<Game
   // Prefer files on disk over the zip, so we have to load the zip first.
   if (load_from_database)
   {
-    const std::unique_lock lock(s_zip_mutex);
-    CheatArchive& archive = cheats ? s_cheats_zip : s_patches_zip;
+    const std::unique_lock lock(s_archive_locals.zip_mutex);
+    CheatArchive& archive = cheats ? s_archive_locals.cheats_zip : s_archive_locals.patches_zip;
     if (!archive.IsOpen())
       archive.Open(cheats);
 
@@ -427,9 +443,9 @@ void Cheats::EnumerateChtFiles(const std::string_view serial, std::optional<Game
       {
         // Is this game part of a disc set? Try codes for the other discs.
         const GameDatabase::Entry* gentry = GameDatabase::GetEntryForSerial(serial);
-        if (gentry && gentry->disc_set_serials.size() > 1)
+        if (gentry && gentry->disc_set)
         {
-          for (const std::string_view& set_serial : gentry->disc_set_serials)
+          for (const std::string_view& set_serial : gentry->disc_set->serials)
           {
             if (set_serial == serial)
               continue;
@@ -798,10 +814,20 @@ bool Cheats::ShouldLoadDatabaseCheats()
   return (sif && sif->GetBoolValue("Cheats", "LoadCheatsFromDatabase", true));
 }
 
+bool Cheats::WantsWidescreenPatch()
+{
+  return (g_settings.gpu_widescreen_rendering && g_settings.display_aspect_ratio.IsValid() &&
+          g_settings.display_aspect_ratio != DisplayAspectRatio{4, 3});
+}
+
 bool Cheats::AreAnyPatchesEnabled()
 {
   if (g_settings.disable_all_enhancements)
     return false;
+
+  // Look for widescreen patches.
+  if (WantsWidescreenPatch())
+    return true;
 
   // Only in the gameini.
   const SettingsInterface* sif = Host::Internal::GetGameSettingsLayer();
@@ -814,21 +840,21 @@ void Cheats::ReloadEnabledLists()
   if (!sif)
   {
     // no gameini => nothing is going to be enabled.
-    s_enabled_cheats = {};
-    s_enabled_patches = {};
+    s_locals.enabled_cheats = {};
+    s_locals.enabled_patches = {};
     return;
   }
 
   if (AreCheatsEnabled())
-    s_enabled_cheats = sif->GetStringList(CHEATS_CONFIG_SECTION, PATCH_ENABLE_CONFIG_KEY);
+    s_locals.enabled_cheats = sif->GetStringList(CHEATS_CONFIG_SECTION, PATCH_ENABLE_CONFIG_KEY);
   else
-    s_enabled_cheats = {};
+    s_locals.enabled_cheats = {};
 
-  s_enabled_patches = sif->GetStringList(PATCHES_CONFIG_SECTION, PATCH_ENABLE_CONFIG_KEY);
+  s_locals.enabled_patches = sif->GetStringList(PATCHES_CONFIG_SECTION, PATCH_ENABLE_CONFIG_KEY);
 }
 
-u32 Cheats::EnableCheats(const CheatCodeList& patches, const EnableCodeList& enable_list, const char* section,
-                         bool hc_mode_active)
+u32 Cheats::EnablePatches(const CheatCodeList& patches, const EnableCodeList& enable_list, const char* section,
+                          bool hc_mode_active)
 {
   u32 count = 0;
   for (const std::unique_ptr<CheatCode>& p : patches)
@@ -849,7 +875,7 @@ u32 Cheats::EnableCheats(const CheatCodeList& patches, const EnableCodeList& ena
     switch (p->GetActivation())
     {
       case CodeActivation::EndFrame:
-        s_frame_end_codes.push_back(p.get());
+        s_locals.frame_end_codes.push_back(p.get());
         break;
 
       default:
@@ -876,49 +902,81 @@ u32 Cheats::EnableCheats(const CheatCodeList& patches, const EnableCodeList& ena
   return count;
 }
 
+bool Cheats::EnableWidescreenPatch(const CheatCodeList& patches, bool hc_mode_active)
+{
+  const DisplayAspectRatio ar = g_settings.display_aspect_ratio;
+  if (ar.numerator <= 0 || ar.denominator <= 0)
+    return false;
+
+  for (const std::unique_ptr<CheatCode>& p : patches)
+  {
+    // don't rely on the name, use the attribute instead
+    if (!p->GetMetadata().override_aspect_ratio.has_value() || p->GetMetadata().override_aspect_ratio.value() != ar)
+      continue;
+
+    // don't load banned patches
+    if (p->GetMetadata().disallow_for_achievements && hc_mode_active)
+      continue;
+
+    // already enabled?
+    if (std::find(s_locals.enabled_patches.begin(), s_locals.enabled_patches.end(), p->GetName()) !=
+        s_locals.enabled_patches.end())
+    {
+      return true;
+    }
+
+    INFO_LOG("Enabling widescreen patch: {}", p->GetName());
+    s_locals.enabled_patches.push_back(p->GetName());
+    return true;
+  }
+
+  WARNING_LOG("No widescreen patch found for aspect ratio {}.", Settings::GetDisplayAspectRatioName(ar));
+  return false;
+}
+
 void Cheats::ReloadCheats(bool reload_files, bool reload_enabled_list, bool verbose, bool verbose_if_changed,
                           bool show_disabled_codes)
 {
-  for (const CheatCode* code : s_frame_end_codes)
+  for (const CheatCode* code : s_locals.frame_end_codes)
     code->ApplyOnDisable();
 
   // Reload files if cheats or patches are enabled, and they were not previously.
   const bool patches_are_enabled = AreAnyPatchesEnabled();
   const bool cheats_are_enabled = AreCheatsEnabled();
   const bool cheatdb_is_enabled = cheats_are_enabled && ShouldLoadDatabaseCheats();
-  reload_files = reload_files || (s_patches_enabled != patches_are_enabled);
-  reload_files = reload_files || (s_cheats_enabled != cheats_are_enabled);
-  reload_files = reload_files || (s_database_cheat_codes_enabled != cheatdb_is_enabled);
+  reload_files = reload_files || (s_locals.patches_enabled != patches_are_enabled);
+  reload_files = reload_files || (s_locals.cheats_enabled != cheats_are_enabled);
+  reload_files = reload_files || (s_locals.database_cheat_codes_enabled != cheatdb_is_enabled);
 
   if (reload_files)
   {
-    s_patch_codes.clear();
-    s_cheat_codes.clear();
+    s_locals.patch_codes.clear();
+    s_locals.cheat_codes.clear();
 
     if (const std::string& serial = System::GetGameSerial(); !serial.empty())
     {
       const GameHash hash = System::GetGameHash();
 
-      s_patches_enabled = patches_are_enabled;
+      s_locals.patches_enabled = patches_are_enabled;
       if (patches_are_enabled)
       {
         EnumerateChtFiles(serial, hash, false, false, !Achievements::IsHardcoreModeActive(), true,
                           [](const std::string& filename, const std::string& file_contents, bool from_database) {
-                            ParseFile(&s_patch_codes, file_contents);
-                            if (s_patch_codes.size() > 0)
-                              INFO_LOG("Found {} game patches in {}.", s_patch_codes.size(), filename);
+                            ParseFile(&s_locals.patch_codes, file_contents);
+                            if (s_locals.patch_codes.size() > 0)
+                              INFO_LOG("Found {} game patches in {}.", s_locals.patch_codes.size(), filename);
                           });
       }
 
-      s_cheats_enabled = cheats_are_enabled;
-      s_database_cheat_codes_enabled = cheatdb_is_enabled;
+      s_locals.cheats_enabled = cheats_are_enabled;
+      s_locals.database_cheat_codes_enabled = cheatdb_is_enabled;
       if (cheats_are_enabled)
       {
         EnumerateChtFiles(serial, hash, true, false, true, cheatdb_is_enabled,
                           [](const std::string& filename, const std::string& file_contents, bool from_database) {
-                            ParseFile(&s_cheat_codes, file_contents);
-                            if (s_cheat_codes.size() > 0)
-                              INFO_LOG("Found {} cheats in {}.", s_cheat_codes.size(), filename);
+                            ParseFile(&s_locals.cheat_codes, file_contents);
+                            if (s_locals.cheat_codes.size() > 0)
+                              INFO_LOG("Found {} cheats in {}.", s_locals.cheat_codes.size(), filename);
                           });
       }
     }
@@ -932,24 +990,25 @@ void Cheats::ReloadCheats(bool reload_files, bool reload_enabled_list, bool verb
 
 void Cheats::UnloadAll()
 {
-  s_active_cheat_count = 0;
-  s_active_patch_count = 0;
-  s_frame_end_codes = ActiveCodeList();
-  s_enabled_patches = EnableCodeList();
-  s_enabled_cheats = EnableCodeList();
-  s_cheat_codes = CheatCodeList();
-  s_patch_codes = CheatCodeList();
-  s_patches_enabled = false;
-  s_cheats_enabled = false;
-  s_database_cheat_codes_enabled = false;
+  s_locals.active_cheat_count = 0;
+  s_locals.active_patch_count = 0;
+  s_locals.frame_end_codes = ActiveCodeList();
+  s_locals.enabled_patches = EnableCodeList();
+  s_locals.enabled_cheats = EnableCodeList();
+  s_locals.cheat_codes = CheatCodeList();
+  s_locals.patch_codes = CheatCodeList();
+  s_locals.patches_enabled = false;
+  s_locals.cheats_enabled = false;
+  s_locals.has_widescreen_patch = false;
+  s_locals.database_cheat_codes_enabled = false;
 }
 
 bool Cheats::HasAnySettingOverrides()
 {
   const bool hc_mode_active = Achievements::IsHardcoreModeActive();
-  for (const std::string& name : s_enabled_patches)
+  for (const std::string& name : s_locals.enabled_patches)
   {
-    for (std::unique_ptr<CheatCode>& code : s_patch_codes)
+    for (std::unique_ptr<CheatCode>& code : s_locals.patch_codes)
     {
       if (name == code->GetName())
       {
@@ -971,9 +1030,9 @@ void Cheats::ApplySettingOverrides()
 {
   // only need to check patches for this
   const bool hc_mode_active = Achievements::IsHardcoreModeActive();
-  for (const std::string& name : s_enabled_patches)
+  for (const std::string& name : s_locals.enabled_patches)
   {
-    for (std::unique_ptr<CheatCode>& code : s_patch_codes)
+    for (std::unique_ptr<CheatCode>& code : s_locals.patch_codes)
     {
       if (name == code->GetName())
       {
@@ -992,45 +1051,48 @@ void Cheats::UpdateActiveCodes(bool reload_enabled_list, bool verbose, bool verb
   if (reload_enabled_list)
     ReloadEnabledLists();
 
-  const size_t prev_count = s_frame_end_codes.size();
-  s_frame_end_codes.clear();
+  const size_t prev_count = s_locals.frame_end_codes.size();
+  s_locals.frame_end_codes.clear();
 
-  s_active_patch_count = 0;
-  s_active_cheat_count = 0;
+  s_locals.active_patch_count = 0;
+  s_locals.active_cheat_count = 0;
 
   const bool hc_mode_active = Achievements::IsHardcoreModeActive();
 
   if (!g_settings.disable_all_enhancements)
   {
-    s_active_patch_count = EnableCheats(s_patch_codes, s_enabled_patches, "Patches", hc_mode_active);
-    s_active_cheat_count =
-      AreCheatsEnabled() ? EnableCheats(s_cheat_codes, s_enabled_cheats, "Cheats", hc_mode_active) : 0;
+    s_locals.has_widescreen_patch =
+      WantsWidescreenPatch() && EnableWidescreenPatch(s_locals.patch_codes, hc_mode_active);
+    s_locals.active_patch_count =
+      EnablePatches(s_locals.patch_codes, s_locals.enabled_patches, "Patches", hc_mode_active);
+    s_locals.active_cheat_count =
+      AreCheatsEnabled() ? EnablePatches(s_locals.cheat_codes, s_locals.enabled_cheats, "Cheats", hc_mode_active) : 0;
   }
 
   // Display message on first boot when we load patches.
   // Except when it's just GameDB.
-  const size_t new_count = s_frame_end_codes.size();
+  const size_t new_count = s_locals.frame_end_codes.size();
   if (verbose || (verbose_if_changed && prev_count != new_count))
   {
-    if (s_active_patch_count > 0)
+    if (s_locals.active_patch_count > 0)
     {
       System::SetTaint(System::Taint::Patches);
       Host::AddIconOSDMessage(
-        "LoadPatches", ICON_FA_BANDAGE,
-        TRANSLATE_PLURAL_STR("Cheats", "%n game patches are active.", "OSD Message", s_active_patch_count),
+        "LoadCheats", ICON_FA_BANDAGE,
+        TRANSLATE_PLURAL_STR("Cheats", "%n game patches are active.", "OSD Message", s_locals.active_patch_count),
         Host::OSD_INFO_DURATION);
     }
-    if (s_active_cheat_count > 0)
+    if (s_locals.active_cheat_count > 0)
     {
       System::SetTaint(System::Taint::Cheats);
       Host::AddIconOSDMessage("LoadCheats", ICON_EMOJI_WARNING,
                               TRANSLATE_PLURAL_STR("Cheats", "%n cheats are enabled. This may crash games.",
-                                                   "OSD Message", s_active_cheat_count),
+                                                   "OSD Message", s_locals.active_cheat_count),
                               Host::OSD_WARNING_DURATION);
     }
-    else if (s_active_patch_count == 0)
+    else if (s_locals.active_patch_count == 0)
     {
-      Host::RemoveKeyedOSDMessage("LoadPatches");
+      Host::RemoveKeyedOSDMessage("LoadCheats");
       Host::AddIconOSDMessage("LoadCheats", ICON_FA_BANDAGE,
                               TRANSLATE_STR("Cheats", "No cheats/patches are found or enabled."),
                               Host::OSD_INFO_DURATION);
@@ -1045,9 +1107,10 @@ void Cheats::UpdateActiveCodes(bool reload_enabled_list, bool verbose, bool verb
                                         0;
     const u32 requested_patches_count = sif ? static_cast<u32>(sif->GetStringList("Patches", "Enable").size()) : 0;
     const u32 blocked_cheats =
-      (s_active_cheat_count < requested_cheat_count) ? requested_cheat_count - s_active_cheat_count : 0;
-    const u32 blocked_patches =
-      (s_active_patch_count < requested_patches_count) ? requested_patches_count - s_active_patch_count : 0;
+      (s_locals.active_cheat_count < requested_cheat_count) ? requested_cheat_count - s_locals.active_cheat_count : 0;
+    const u32 blocked_patches = (s_locals.active_patch_count < requested_patches_count) ?
+                                  requested_patches_count - s_locals.active_patch_count :
+                                  0;
     if (blocked_cheats > 0 || blocked_patches > 0)
     {
       const SmallString blocked_cheats_msg =
@@ -1060,20 +1123,20 @@ void Cheats::UpdateActiveCodes(bool reload_enabled_list, bool verbose, bool verb
                       blocked_cheats_msg.view(), blocked_patches_msg.view()) :
           fmt::format(TRANSLATE_FS("Cheats", "{} disabled by achievements hardcore mode/safe mode."),
                       (blocked_cheats > 0) ? blocked_cheats_msg.view() : blocked_patches_msg.view());
-      Host::AddIconOSDMessage("CheatsBlocked", ICON_EMOJI_WARNING, std::move(message), Host::OSD_INFO_DURATION);
+      Host::AddIconOSDMessage("LoadCheats", ICON_EMOJI_WARNING, std::move(message), Host::OSD_INFO_DURATION);
     }
   }
 }
 
 void Cheats::ApplyFrameEndCodes()
 {
-  for (const CheatCode* code : s_frame_end_codes)
+  for (const CheatCode* code : s_locals.frame_end_codes)
     code->Apply();
 }
 
 bool Cheats::EnumerateManualCodes(std::function<bool(const std::string& name)> callback)
 {
-  for (const std::unique_ptr<CheatCode>& code : s_cheat_codes)
+  for (const std::unique_ptr<CheatCode>& code : s_locals.cheat_codes)
   {
     if (code->IsManuallyActivated())
     {
@@ -1086,7 +1149,7 @@ bool Cheats::EnumerateManualCodes(std::function<bool(const std::string& name)> c
 
 bool Cheats::ApplyManualCode(const std::string_view name)
 {
-  for (const std::unique_ptr<CheatCode>& code : s_cheat_codes)
+  for (const std::unique_ptr<CheatCode>& code : s_locals.cheat_codes)
   {
     if (code->IsManuallyActivated() && code->GetName() == name)
     {
@@ -1103,12 +1166,17 @@ bool Cheats::ApplyManualCode(const std::string_view name)
 
 u32 Cheats::GetActivePatchCount()
 {
-  return s_active_patch_count;
+  return s_locals.active_patch_count;
 }
 
 u32 Cheats::GetActiveCheatCount()
 {
-  return s_active_cheat_count;
+  return s_locals.active_cheat_count;
+}
+
+bool Cheats::IsWidescreenPatchActive()
+{
+  return s_locals.has_widescreen_patch;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -1373,7 +1441,7 @@ void Cheats::ParseFile(CheatCodeList* dst_list, const std::string_view file_cont
   CheatFileReader reader(file_contents);
 
   std::string_view next_code_group;
-  CheatCode::Metadata next_code_metadata;
+  CheatCode::Metadata next_code_metadata = {};
   bool next_code_ignored = false;
   std::optional<size_t> code_body_start;
 
@@ -1382,7 +1450,7 @@ void Cheats::ParseFile(CheatCodeList* dst_list, const std::string_view file_cont
     if (!code_body_start.has_value())
     {
       WARNING_LOG("Empty cheat body at line {}", reader.GetCurrentLineNumber());
-      next_code_metadata = CheatCode::Metadata();
+      next_code_metadata = {};
       return;
     }
 
@@ -1408,7 +1476,7 @@ void Cheats::ParseFile(CheatCodeList* dst_list, const std::string_view file_cont
     }
 
     next_code_group = {};
-    next_code_metadata = CheatCode::Metadata();
+    next_code_metadata = {};
     code_body_start.reset();
     if (std::exchange(next_code_ignored, false))
       return;
@@ -1993,7 +2061,8 @@ bool Cheats::ImportOldChtFile(const std::string_view serial)
   if (!dbentry || dbentry->title.empty())
     return false;
 
-  const std::string old_path = fmt::format("{}" FS_OSPATH_SEPARATOR_STR "{}.cht", EmuFolders::Cheats, dbentry->title);
+  const std::string old_path =
+    fmt::format("{}" FS_OSPATH_SEPARATOR_STR "{}.cht", EmuFolders::Cheats, dbentry->GetSaveTitle());
   if (!FileSystem::FileExists(old_path.c_str()))
     return false;
 

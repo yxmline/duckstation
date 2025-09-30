@@ -871,6 +871,9 @@ bool GPUTextureCache::CompilePipelines(Error* error)
   plconfig.blend = GPUPipeline::BlendState::GetNoBlendingState();
   plconfig.primitive = GPUPipeline::Primitive::Triangles;
   plconfig.geometry_shader = nullptr;
+  plconfig.samples = 1;
+  plconfig.per_sample_shading = false;
+  plconfig.render_pass_flags = GPUPipeline::NoRenderPassFlags;
   plconfig.SetTargetFormats(REPLACEMENT_TEXTURE_FORMAT);
 
   // Most flags don't matter here.
@@ -3544,14 +3547,14 @@ std::string GPUTextureCache::GetTextureReplacementDirectory()
     {
       // If this is a multi-disc game, try the first disc.
       const GameDatabase::Entry* dbentry = GameDatabase::GetEntryForSerial(serial);
-      if (dbentry && !dbentry->disc_set_serials.empty() && serial != dbentry->disc_set_serials.front())
+      if (dbentry && dbentry->disc_set && serial != dbentry->disc_set->serials.front())
       {
         altdir =
           Path::Combine(EmuFolders::Textures, SmallString::from_format("{}" FS_OSPATH_SEPARATOR_STR "replacements",
-                                                                       dbentry->disc_set_serials.front()));
+                                                                       dbentry->disc_set->serials.front()));
         if (FileSystem::DirectoryExists(altdir.c_str()))
         {
-          WARNING_LOG("Using texture replacements from first disc {}", dbentry->disc_set_serials.front());
+          WARNING_LOG("Using texture replacements from first disc {}", dbentry->disc_set->serials.front());
           dir = std::move(altdir);
         }
       }

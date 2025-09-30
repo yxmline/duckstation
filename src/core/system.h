@@ -157,6 +157,9 @@ DiscRegion GetRegionForPsf(const char* path);
 /// Returns the path for the game settings ini file for the specified serial.
 std::string GetGameSettingsPath(std::string_view game_serial, bool ignore_disc_set);
 
+/// Returns true if separate disc settings should be used for the specified serial.
+bool ShouldUseSeparateDiscSettingsForSerial(std::string_view game_serial);
+
 /// Returns the loaded interface for the game settings ini file for the specified serial. If create is true, an empty
 /// ini reader will be returned if the file does not exist. If quit is true, no log messages will be emitted.
 std::unique_ptr<INISettingsInterface> GetGameSettingsInterface(const GameDatabase::Entry* dbentry,
@@ -293,7 +296,7 @@ void SetVideoFrameRate(float frequency);
 
 // Access controllers for simulating input.
 Controller* GetController(u32 slot);
-void UpdateMemoryCardTypes();
+void UpdateMemoryCards();
 bool HasMemoryCard(u32 slot);
 bool IsSavingMemoryCards();
 
@@ -322,9 +325,6 @@ u32 GetMediaSubImageCount();
 
 /// Returns the current image from the media/disc playlist.
 u32 GetMediaSubImageIndex();
-
-/// Returns the index of the specified path in the playlist, or UINT32_MAX if it does not exist.
-u32 GetMediaSubImageIndexForTitle(std::string_view title);
 
 /// Returns the path to the specified playlist index.
 std::string GetMediaSubImageTitle(u32 index);

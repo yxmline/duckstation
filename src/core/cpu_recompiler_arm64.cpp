@@ -453,6 +453,7 @@ u32 CPU::CodeCache::EmitASMFunctions(void* code, u32 code_size)
 #endif
 
   Label dispatch;
+  Label run_events_and_dispatch;
 
   g_enter_recompiler = armAsm->GetCursorAddress<decltype(g_enter_recompiler)>();
   {
@@ -468,7 +469,6 @@ u32 CPU::CodeCache::EmitASMFunctions(void* code, u32 code_size)
 
   // check events then for frame done
   armAlignCode(armAsm, Recompiler::FUNCTION_ALIGNMENT);
-  g_check_events_and_dispatch = armAsm->GetCursorAddress<const void*>();
   {
     armAsm->ldr(RWARG1, PTR(&g_state.pending_ticks));
     armAsm->ldr(RWARG2, PTR(&g_state.downcount));
@@ -476,6 +476,7 @@ u32 CPU::CodeCache::EmitASMFunctions(void* code, u32 code_size)
     armAsm->b(&dispatch, lt);
 
     g_run_events_and_dispatch = armAsm->GetCursorAddress<const void*>();
+    armAsm->bind(&run_events_and_dispatch);
     armEmitCall(armAsm, reinterpret_cast<const void*>(&TimingEvents::RunEvents), true);
   }
 
@@ -516,6 +517,10 @@ u32 CPU::CodeCache::EmitASMFunctions(void* code, u32 code_size)
   g_interpret_block = armAsm->GetCursorAddress<const void*>();
   {
     armEmitCall(armAsm, reinterpret_cast<const void*>(GetInterpretUncachedBlockFunction()), true);
+    armAsm->ldr(RWARG1, PTR(&g_state.pending_ticks));
+    armAsm->ldr(RWARG2, PTR(&g_state.downcount));
+    armAsm->cmp(RWARG1, RWARG2);
+    armAsm->b(&run_events_and_dispatch, ge);
     armAsm->b(&dispatch);
   }
 
@@ -1078,15 +1083,28 @@ void CPU::ARM64Recompiler::MoveTToReg(const vixl::aarch64::Register& dst, Compil
   }
 }
 
-void CPU::ARM64Recompiler::MoveMIPSRegToReg(const vixl::aarch64::Register& dst, Reg reg)
+void CPU::ARM64Recompiler::MoveMIPSRegToReg(const vixl::aarch64::Register& dst, Reg reg, bool ignore_load_delays)
 {
   DebugAssert(reg < Reg::count && dst.IsW());
-  if (const std::optional<u32> hreg = CheckHostReg(0, Recompiler::HR_TYPE_CPU_REG, reg))
+  if (ignore_load_delays && m_load_delay_register == reg)
+  {
+    if (m_load_delay_value_register == NUM_HOST_REGS)
+      armAsm->ldr(dst, PTR(&g_state.load_delay_value));
+    else
+      armAsm->mov(dst, WRegister(m_load_delay_value_register));
+  }
+  else if (const std::optional<u32> hreg = CheckHostReg(0, Recompiler::HR_TYPE_CPU_REG, reg))
+  {
     armAsm->mov(dst, WRegister(hreg.value()));
+  }
   else if (HasConstantReg(reg))
+  {
     EmitMov(dst, GetConstantRegU32(reg));
+  }
   else
+  {
     armAsm->ldr(dst, MipsPtr(reg));
+  }
 }
 
 void CPU::ARM64Recompiler::GeneratePGXPCallWithMIPSRegs(const void* func, u32 arg1val, Reg arg2reg /* = Reg::count */,
@@ -2080,6 +2098,17 @@ void CPU::ARM64Recompiler::Compile_lwx(CompileFlags cf, MemoryAccessSize size, b
 
   // We'd need to be careful here if we weren't overwriting it..
   ComputeLoadStoreAddressArg(cf, address, addr);
+
+  // Do PGXP first, it does its own load.
+  if (g_settings.gpu_pgxp_enable && inst->r.rt != Reg::zero)
+  {
+    Flush(FLUSH_FOR_C_CALL);
+    EmitMov(RWARG1, inst->bits);
+    armAsm->mov(RWARG2, addr);
+    MoveMIPSRegToReg(RWARG3, inst->r.rt, true);
+    EmitCall(reinterpret_cast<const void*>(&PGXP::CPU_LWx));
+  }
+
   armAsm->and_(RWARG1, addr, armCheckLogicalConstant(~0x3u));
   GenerateLoad(RWARG1, MemoryAccessSize::Word, false, use_fastmem, []() { return RWRET; });
 
@@ -2147,15 +2176,6 @@ void CPU::ARM64Recompiler::Compile_lwx(CompileFlags cf, MemoryAccessSize size, b
   }
 
   FreeHostReg(addr.GetCode());
-
-  if (g_settings.gpu_pgxp_enable)
-  {
-    Flush(FLUSH_FOR_C_CALL);
-    armAsm->mov(RWARG3, value);
-    armAsm->and_(RWARG2, addr, armCheckLogicalConstant(~0x3u));
-    EmitMov(RWARG1, inst->bits);
-    EmitCall(reinterpret_cast<const void*>(&PGXP::CPU_LW));
-  }
 }
 
 void CPU::ARM64Recompiler::Compile_lwc2(CompileFlags cf, MemoryAccessSize size, bool sign, bool use_fastmem,
@@ -2280,15 +2300,22 @@ void CPU::ARM64Recompiler::Compile_swx(CompileFlags cf, MemoryAccessSize size, b
   // TODO: this can take over rt's value if it's no longer needed
   // NOTE: can't trust T in cf because of the alloc
   const Register addr = WRegister(AllocateTempHostReg(HR_CALLEE_SAVED));
-  const Register value = g_settings.gpu_pgxp_enable ? WRegister(AllocateTempHostReg(HR_CALLEE_SAVED)) : RWARG2;
-  if (g_settings.gpu_pgxp_enable)
-    MoveMIPSRegToReg(value, inst->r.rt);
 
   FlushForLoadStore(address, true, use_fastmem);
 
   // TODO: if address is constant, this can be simplified..
   // We'd need to be careful here if we weren't overwriting it..
   ComputeLoadStoreAddressArg(cf, address, addr);
+
+  if (g_settings.gpu_pgxp_enable)
+  {
+    Flush(FLUSH_FOR_C_CALL);
+    EmitMov(RWARG1, inst->bits);
+    armAsm->mov(RWARG2, addr);
+    MoveMIPSRegToReg(RWARG3, inst->r.rt);
+    EmitCall(reinterpret_cast<const void*>(&PGXP::CPU_SWx));
+  }
+
   armAsm->and_(RWARG1, addr, armCheckLogicalConstant(~0x3u));
   GenerateLoad(RWARG1, MemoryAccessSize::Word, false, use_fastmem, []() { return RWRET; });
 
@@ -2296,9 +2323,7 @@ void CPU::ARM64Recompiler::Compile_swx(CompileFlags cf, MemoryAccessSize size, b
   armAsm->lsl(RWSCRATCH, RWSCRATCH, 3); // *8
   armAsm->and_(addr, addr, armCheckLogicalConstant(~0x3u));
 
-  // Need to load down here for PGXP-off, because it's in a volatile reg that can get overwritten by flush.
-  if (!g_settings.gpu_pgxp_enable)
-    MoveMIPSRegToReg(value, inst->r.rt);
+  MoveMIPSRegToReg(RWARG2, inst->r.rt);
 
   if (inst->op == InstructionOp::swl)
   {
@@ -2310,40 +2335,25 @@ void CPU::ARM64Recompiler::Compile_swx(CompileFlags cf, MemoryAccessSize size, b
 
     EmitMov(RWARG3, 24);
     armAsm->sub(RWARG3, RWARG3, RWSCRATCH);
-    armAsm->lsrv(value, value, RWARG3);
-    armAsm->orr(value, value, RWRET);
+    armAsm->lsrv(RWARG2, RWARG2, RWARG3);
+    armAsm->orr(RWARG2, RWARG2, RWRET);
   }
   else
   {
     // const u32 mem_mask = UINT32_C(0x00FFFFFF) >> (24 - shift);
     // new_value = (RWRET & mem_mask) | (value << shift);
-    armAsm->lslv(value, value, RWSCRATCH);
+    armAsm->lslv(RWARG2, RWARG2, RWSCRATCH);
 
     EmitMov(RWARG3, 24);
     armAsm->sub(RWARG3, RWARG3, RWSCRATCH);
     EmitMov(RWSCRATCH, 0x00FFFFFFu);
     armAsm->lsrv(RWSCRATCH, RWSCRATCH, RWARG3);
     armAsm->and_(RWRET, RWRET, RWSCRATCH);
-    armAsm->orr(value, value, RWRET);
+    armAsm->orr(RWARG2, RWARG2, RWRET);
   }
 
-  if (!g_settings.gpu_pgxp_enable)
-  {
-    GenerateStore(addr, value, MemoryAccessSize::Word, use_fastmem);
-    FreeHostReg(addr.GetCode());
-  }
-  else
-  {
-    GenerateStore(addr, value, MemoryAccessSize::Word, use_fastmem);
-
-    Flush(FLUSH_FOR_C_CALL);
-    armAsm->mov(RWARG3, value);
-    FreeHostReg(value.GetCode());
-    armAsm->mov(RWARG2, addr);
-    FreeHostReg(addr.GetCode());
-    EmitMov(RWARG1, inst->bits);
-    EmitCall(reinterpret_cast<const void*>(&PGXP::CPU_SW));
-  }
+  GenerateStore(addr, RWARG2, MemoryAccessSize::Word, use_fastmem);
+  FreeHostReg(addr.GetCode());
 }
 
 void CPU::ARM64Recompiler::Compile_swc2(CompileFlags cf, MemoryAccessSize size, bool sign, bool use_fastmem,

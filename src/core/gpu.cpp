@@ -657,26 +657,22 @@ float GPU::ComputeDisplayAspectRatio() const
     return 4.0f / 3.0f;
 
   // PAR 1:1 is not corrected.
-  if (g_settings.display_aspect_ratio == DisplayAspectRatio::PAR1_1)
+  if (g_settings.display_aspect_ratio == DisplayAspectRatio::PAR1_1())
     return static_cast<float>(m_crtc_state.display_width) / static_cast<float>(m_crtc_state.display_height);
 
   float ar = 4.0f / 3.0f;
   if (!g_settings.display_force_4_3_for_24bit || !m_GPUSTAT.display_area_color_depth_24)
   {
-    if (g_settings.display_aspect_ratio == DisplayAspectRatio::MatchWindow)
+    if (g_settings.display_aspect_ratio == DisplayAspectRatio::Stretch())
     {
       const WindowInfo& wi = GPUThread::GetRenderWindowInfo();
       if (!wi.IsSurfaceless() && wi.surface_width > 0 && wi.surface_height > 0)
         ar = static_cast<float>(wi.surface_width) / static_cast<float>(wi.surface_height);
     }
-    else if (g_settings.display_aspect_ratio == DisplayAspectRatio::Custom)
+    else if (g_settings.display_aspect_ratio != DisplayAspectRatio::Auto())
     {
-      ar = static_cast<float>(g_settings.display_aspect_ratio_custom_numerator) /
-           static_cast<float>(g_settings.display_aspect_ratio_custom_denominator);
-    }
-    else
-    {
-      ar = g_settings.GetDisplayAspectRatioValue();
+      ar = static_cast<float>(g_settings.display_aspect_ratio.numerator) /
+           static_cast<float>(g_settings.display_aspect_ratio.denominator);
     }
   }
 
@@ -690,7 +686,7 @@ float GPU::ComputeSourceAspectRatio() const
 
   // Correction is applied to the GTE for stretch to fit, that way it fills the window.
   const float source_aspect_ratio_correction =
-    (g_settings.display_aspect_ratio == DisplayAspectRatio::MatchWindow) ? 1.0f : ComputeAspectRatioCorrection();
+    (g_settings.display_aspect_ratio == DisplayAspectRatio::Stretch()) ? 1.0f : ComputeAspectRatioCorrection();
 
   return source_aspect_ratio / source_aspect_ratio_correction;
 }
@@ -708,7 +704,7 @@ float GPU::ComputeAspectRatioCorrection() const
   const CRTCState& cs = m_crtc_state;
   float relative_width = static_cast<float>(cs.horizontal_visible_end - cs.horizontal_visible_start);
   float relative_height = static_cast<float>(cs.vertical_visible_end - cs.vertical_visible_start);
-  if (relative_width <= 0 || relative_height <= 0 || g_settings.display_aspect_ratio == DisplayAspectRatio::PAR1_1)
+  if (relative_width <= 0 || relative_height <= 0 || g_settings.display_aspect_ratio == DisplayAspectRatio::PAR1_1())
     return 1.0f;
 
   // Apply aspect ratio correction for all borders, or overscan with altered display range.
@@ -1951,6 +1947,11 @@ void GPU::UpdateDisplay(bool submit_frame)
   const bool interlaced = IsInterlacedDisplayEnabled();
   const u8 interlaced_field = GetInterlacedDisplayField();
   const bool line_skip = (interlaced && m_GPUSTAT.vertical_resolution);
+
+  // NOTE: Must be split out, since this can push commands itself (e.g. media capture).
+  GPUBackendFramePresentationParameters frame;
+  submit_frame = (submit_frame && System::GetFramePresentationParameters(&frame));
+
   GPUBackendUpdateDisplayCommand* cmd = GPUBackend::NewUpdateDisplayCommand();
   cmd->display_width = m_crtc_state.display_width;
   cmd->display_height = m_crtc_state.display_height;
@@ -1968,8 +1969,10 @@ void GPU::UpdateDisplay(bool submit_frame)
   cmd->display_24bit = m_GPUSTAT.display_area_color_depth_24;
   cmd->display_disabled = IsDisplayDisabled();
   cmd->display_pixel_aspect_ratio = ComputePixelAspectRatio();
-  if ((cmd->submit_frame = submit_frame && System::GetFramePresentationParameters(&cmd->frame)))
+  if ((cmd->submit_frame = submit_frame))
   {
+    std::memcpy(&cmd->frame, &frame, sizeof(frame));
+
     const bool drain_one = cmd->frame.present_frame && GPUBackend::BeginQueueFrame();
     GPUThread::PushCommandAndWakeThread(cmd);
     if (drain_one)
@@ -1985,15 +1988,20 @@ void GPU::QueuePresentCurrentFrame()
 {
   DebugAssert(g_settings.IsRunaheadEnabled());
 
+  // NOTE: Must be split out, since this can push commands itself (e.g. media capture).
+  GPUBackendFramePresentationParameters frame;
+  const bool submit_frame = System::GetFramePresentationParameters(&frame);
+  if (!submit_frame)
+    return;
+
   // Submit can be skipped if it's a dupe frame and we're not dumping frames.
   GPUBackendSubmitFrameCommand* cmd = GPUBackend::NewSubmitFrameCommand();
-  if (System::GetFramePresentationParameters(&cmd->frame))
-  {
-    const bool drain_one = cmd->frame.present_frame && GPUBackend::BeginQueueFrame();
-    GPUThread::PushCommandAndWakeThread(cmd);
-    if (drain_one)
-      GPUBackend::WaitForOneQueuedFrame();
-  }
+  std::memcpy(&cmd->frame, &frame, sizeof(frame));
+
+  const bool drain_one = cmd->frame.present_frame && GPUBackend::BeginQueueFrame();
+  GPUThread::PushCommandAndWakeThread(cmd);
+  if (drain_one)
+    GPUBackend::WaitForOneQueuedFrame();
 }
 
 u8 GPU::CalculateAutomaticResolutionScale() const
@@ -2011,7 +2019,7 @@ u8 GPU::CalculateAutomaticResolutionScale() const
                       m_crtc_state.display_height, m_crtc_state.display_origin_left, m_crtc_state.display_origin_top,
                       m_crtc_state.display_vram_width, m_crtc_state.display_vram_height, g_settings.display_rotation,
                       g_settings.display_alignment, g_settings.gpu_show_vram ? 1.0f : ComputePixelAspectRatio(),
-                      g_settings.IsUsingIntegerDisplayScaling(), &display_rect, &draw_rect);
+                      g_settings.IsUsingIntegerDisplayScaling(false), &display_rect, &draw_rect);
 
     // We use the draw rect to determine scaling. This way we match the resolution as best we can, regardless of the
     // anamorphic aspect ratio.

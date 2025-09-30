@@ -10,17 +10,12 @@ jobs:
     runs-on: macos-14
     timeout-minutes: 120
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         fetch-depth: 0
 
     - name: Use Xcode 16.1
       run: sudo xcode-select -s /Applications/Xcode_16.1.app
-
-    - name: Install packages
-      shell: bash
-      run: |
-        brew install ninja
 
     - name: Cache Dependencies
       id: cache-deps-mac
@@ -54,8 +49,8 @@ jobs:
       shell: bash
       run: |
         cd data/resources
-        curl -LO "https://github.com/duckstation/chtdb/releases/download/latest/cheats.zip"
-        curl -LO "https://github.com/duckstation/chtdb/releases/download/latest/patches.zip"
+        curl --retry 5 --retry-all-errors -LO "https://github.com/duckstation/chtdb/releases/download/latest/cheats.zip"
+        curl --retry 5 --retry-all-errors -LO "https://github.com/duckstation/chtdb/releases/download/latest/patches.zip"
 
     - name: Compile and Zip .app
       shell: bash

@@ -34,6 +34,7 @@
 #include "common/sha256_digest.h"
 #include "common/string_util.h"
 #include "common/threading.h"
+#include "common/time_helpers.h"
 #include "common/timer.h"
 
 #include "fmt/format.h"
@@ -604,16 +605,9 @@ std::string Host::FormatNumber(NumberFormatType type, s64 value)
         DefaultCaseIsUnreachable();
     }
 
-    struct tm ttime = {};
-    const std::time_t tvalue = static_cast<std::time_t>(value);
-#ifdef _MSC_VER
-    localtime_s(&ttime, &tvalue);
-#else
-    localtime_r(&tvalue, &ttime);
-#endif
-
     char buf[128];
-    std::strftime(buf, std::size(buf), "%x", &ttime);
+    const std::tm ttime = Common::LocalTime(static_cast<std::time_t>(value));
+    std::strftime(buf, std::size(buf), format, &ttime);
     ret.assign(buf);
   }
   else
@@ -688,21 +682,6 @@ void Host::OpenHostFileSelectorAsync(std::string_view title, bool select_directo
                                      std::string_view initial_directory /* = std::string_view() */)
 {
   callback(std::string());
-}
-
-std::optional<u32> InputManager::ConvertHostKeyboardStringToCode(std::string_view str)
-{
-  return std::nullopt;
-}
-
-std::optional<std::string> InputManager::ConvertHostKeyboardCodeToString(u32 code)
-{
-  return std::nullopt;
-}
-
-const char* InputManager::ConvertHostKeyboardCodeToIcon(u32 code)
-{
-  return nullptr;
 }
 
 void Host::AddFixedInputBindings(const SettingsInterface& si)

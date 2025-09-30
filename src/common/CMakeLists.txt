@@ -56,10 +56,13 @@ add_library(common
   small_string.h
   string_util.cpp
   string_util.h
+  time_helpers.h
   thirdparty/SmallVector.cpp
   thirdparty/SmallVector.h
   thirdparty/aes.cpp
   thirdparty/aes.h
+  thirdparty/usb_key_code_data.h
+  thirdparty/usb_key_code_data.inl
   task_queue.cpp
   task_queue.h
   threading.cpp

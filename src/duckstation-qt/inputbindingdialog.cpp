@@ -8,6 +8,7 @@
 #include "qtutils.h"
 
 #include "common/bitutils.h"
+#include "common/log.h"
 
 #include "fmt/format.h"
 
@@ -17,6 +18,8 @@
 #include <QtGui/QWheelEvent>
 
 #include "moc_inputbindingdialog.cpp"
+
+LOG_CHANNEL(Host);
 
 InputBindingDialog::InputBindingDialog(SettingsInterface* sif, InputBindingInfo::Type bind_type,
                                        std::string section_name, std::string key_name,
@@ -72,6 +75,14 @@ InputBindingDialog::~InputBindingDialog()
   Q_ASSERT(!isListeningForInput());
 }
 
+void InputBindingDialog::logInputEvent(InputBindingInfo::Type bind_type, InputBindingKey key, float value,
+                                       float initial_value, float min_value)
+{
+  const TinyString key_str = InputManager::ConvertInputBindingKeyToString(bind_type, key);
+  DEV_LOG("Binding input event: key={} value={:.2f} initial_value={:.2f} min_value={:.2f}", key_str, value,
+          initial_value, min_value);
+}
+
 bool InputBindingDialog::eventFilter(QObject* watched, QEvent* event)
 {
   const QEvent::Type event_type = event->type();
@@ -86,7 +97,8 @@ bool InputBindingDialog::eventFilter(QObject* watched, QEvent* event)
   else if (event_type == QEvent::KeyPress)
   {
     const QKeyEvent* key_event = static_cast<const QKeyEvent*>(event);
-    m_new_bindings.push_back(InputManager::MakeHostKeyboardKey(QtUtils::KeyEventToCode(key_event)));
+    if (const std::optional<u32> key = QtUtils::KeyEventToCode(key_event))
+      m_new_bindings.push_back(InputManager::MakeHostKeyboardKey(key.value()));
     return true;
   }
   else if (event_type == QEvent::MouseButtonPress || event_type == QEvent::MouseButtonDblClick)
@@ -220,15 +232,15 @@ void InputBindingDialog::addNewBinding()
   if (m_new_bindings.empty())
     return;
 
-  std::string new_binding =
+  SmallString new_binding =
     InputManager::ConvertInputBindingKeysToString(m_bind_type, m_new_bindings.data(), m_new_bindings.size());
   if (!new_binding.empty())
   {
-    if (std::find(m_bindings.begin(), m_bindings.end(), new_binding) != m_bindings.end())
+    if (std::find(m_bindings.begin(), m_bindings.end(), new_binding.view()) != m_bindings.end())
       return;
 
-    m_ui.bindingList->addItem(QString::fromStdString(new_binding));
-    m_bindings.push_back(std::move(new_binding));
+    m_ui.bindingList->addItem(QtUtils::StringViewToQString(new_binding));
+    m_bindings.emplace_back(new_binding);
     saveListToSettings();
   }
 }
@@ -309,9 +321,11 @@ void InputBindingDialog::inputManagerHookCallback(InputBindingKey key, float val
     m_value_ranges.emplace_back(key, std::make_pair(initial_value, min_value));
   }
 
+  logInputEvent(m_bind_type, key, value, initial_value, min_value);
+
   const float abs_value = std::abs(value);
-  const bool reverse_threshold =
-    (key.source_subtype == InputSubclass::ControllerAxis && std::abs(initial_value) > 0.5f);
+  const bool reverse_threshold = (key.source_subtype == InputSubclass::ControllerAxis &&
+                                  std::abs(initial_value) > 0.5f && std::abs(initial_value - min_value) > 0.1f);
 
   for (InputBindingKey& other_key : m_new_bindings)
   {
@@ -398,8 +412,7 @@ void InputBindingDialog::onResetSensitivityClicked()
 void InputBindingDialog::hookInputManager()
 {
   InputManager::SetHook([this](InputBindingKey key, float value) {
-    QMetaObject::invokeMethod(this, "inputManagerHookCallback", Qt::QueuedConnection, Q_ARG(InputBindingKey, key),
-                              Q_ARG(float, value));
+    QMetaObject::invokeMethod(this, &InputBindingDialog::inputManagerHookCallback, Qt::QueuedConnection, key, value);
     return InputInterceptHook::CallbackResult::StopProcessingEvent;
   });
 }

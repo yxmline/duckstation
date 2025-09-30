@@ -118,8 +118,8 @@ static void SetAppRoot();
 static void SetResourcesDirectory();
 static bool SetDataDirectory();
 static bool SetCriticalFolders();
+static void LoadResources();
 static void SetDefaultSettings(SettingsInterface& si, bool system, bool controller);
-static void MigrateSettings();
 static void SaveSettings();
 static bool RunSetupWizard();
 static void UpdateFontOrder(std::string_view language);
@@ -134,16 +134,26 @@ static bool ParseCommandLineParametersAndInitializeConfig(QApplication& app,
                                                           std::shared_ptr<SystemBootParameters>& boot_params);
 } // namespace QtHost
 
-static INISettingsInterface s_base_settings_interface;
-static std::unique_ptr<QTimer> s_settings_save_timer;
-static std::vector<QTranslator*> s_translators;
-static QLocale s_app_locale;
-static bool s_batch_mode = false;
-static bool s_nogui_mode = false;
-static bool s_start_fullscreen_ui = false;
-static bool s_start_fullscreen_ui_fullscreen = false;
-static bool s_run_setup_wizard = false;
-static bool s_cleanup_after_update = false;
+namespace {
+struct State
+{
+  INISettingsInterface base_settings_interface;
+  std::unique_ptr<QTimer> settings_save_timer;
+  std::vector<QTranslator*> translators;
+  QIcon app_icon;
+  QLocale app_locale;
+  std::once_flag roboto_font_once_flag;
+  QStringList roboto_font_families;
+  bool batch_mode = false;
+  bool nogui_mode = false;
+  bool start_fullscreen_ui = false;
+  bool start_fullscreen_ui_fullscreen = false;
+  bool run_setup_wizard = false;
+  bool cleanup_after_update = false;
+};
+} // namespace
+
+ALIGN_TO_CACHE_LINE static State s_state;
 
 EmuThread* g_emu_thread;
 
@@ -229,12 +239,14 @@ bool QtHost::EarlyProcessStartup()
   qInstallMessageHandler(MessageOutputHandler);
 
   Error error;
-  if (System::ProcessStartup(&error)) [[likely]]
-    return true;
+  if (!System::ProcessStartup(&error)) [[unlikely]]
+  {
+    QMessageBox::critical(nullptr, QStringLiteral("Process Startup Failed"),
+                          QString::fromStdString(error.GetDescription()));
+    return false;
+  }
 
-  QMessageBox::critical(nullptr, QStringLiteral("Process Startup Failed"),
-                        QString::fromStdString(error.GetDescription()));
-  return false;
+  return true;
 }
 
 void QtHost::MessageOutputHandler(QtMsgType type, const QMessageLogContext& context, const QString& msg)
@@ -266,12 +278,12 @@ void QtHost::MessageOutputHandler(QtMsgType type, const QMessageLogContext& cont
 
 bool QtHost::InBatchMode()
 {
-  return s_batch_mode;
+  return s_state.batch_mode;
 }
 
 bool QtHost::InNoGUIMode()
 {
-  return s_nogui_mode;
+  return s_state.nogui_mode;
 }
 
 bool QtHost::IsRunningOnWayland()
@@ -309,7 +321,7 @@ QString QtHost::GetResourcesBasePath()
 
 INISettingsInterface* QtHost::GetBaseSettingsInterface()
 {
-  return &s_base_settings_interface;
+  return &s_state.base_settings_interface;
 }
 
 bool QtHost::SaveGameSettings(SettingsInterface* sif, bool delete_if_empty)
@@ -357,8 +369,7 @@ bool QtHost::SaveGameSettings(SettingsInterface* sif, bool delete_if_empty)
 
 const QIcon& QtHost::GetAppIcon()
 {
-  static const QIcon icon(QStringLiteral(":/icons/duck.png"));
-  return icon;
+  return s_state.app_icon;
 }
 
 std::optional<bool> QtHost::DownloadFile(QWidget* parent, const QString& title, std::string url, std::vector<u8>* data)
@@ -461,53 +472,52 @@ bool QtHost::InitializeConfig()
   std::string settings_path = Path::Combine(EmuFolders::DataRoot, "settings.ini");
   const bool settings_exists = FileSystem::FileExists(settings_path.c_str());
   INFO_LOG("Loading config from {}.", settings_path);
-  s_base_settings_interface.SetPath(std::move(settings_path));
-  Host::Internal::SetBaseSettingsLayer(&s_base_settings_interface);
+  s_state.base_settings_interface.SetPath(std::move(settings_path));
+  Host::Internal::SetBaseSettingsLayer(&s_state.base_settings_interface);
 
   uint settings_version;
-  if (!settings_exists || !s_base_settings_interface.Load() ||
-      !s_base_settings_interface.GetUIntValue("Main", "SettingsVersion", &settings_version) ||
+  if (!settings_exists || !s_state.base_settings_interface.Load() ||
+      !s_state.base_settings_interface.GetUIntValue("Main", "SettingsVersion", &settings_version) ||
       settings_version != SETTINGS_VERSION)
   {
-    if (s_base_settings_interface.ContainsValue("Main", "SettingsVersion"))
+    if (s_state.base_settings_interface.ContainsValue("Main", "SettingsVersion"))
     {
       // NOTE: No point translating this, because there's no config loaded, so no language loaded.
       Host::ReportErrorAsync("Error", fmt::format("Settings version {} does not match expected version {}, resetting.",
                                                   settings_version, SETTINGS_VERSION));
     }
 
-    s_base_settings_interface.SetUIntValue("Main", "SettingsVersion", SETTINGS_VERSION);
-    SetDefaultSettings(s_base_settings_interface, true, true);
+    s_state.base_settings_interface.SetUIntValue("Main", "SettingsVersion", SETTINGS_VERSION);
+    SetDefaultSettings(s_state.base_settings_interface, true, true);
 
     // Flag for running the setup wizard if this is our first run. We want to run it next time if they don't finish it.
-    s_base_settings_interface.SetBoolValue("Main", "SetupWizardIncomplete", true);
+    s_state.base_settings_interface.SetBoolValue("Main", "SetupWizardIncomplete", true);
 
     // Make sure we can actually save the config, and the user doesn't have some permission issue.
     Error error;
-    if (!s_base_settings_interface.Save(&error))
+    if (!s_state.base_settings_interface.Save(&error))
     {
       QMessageBox::critical(
         nullptr, QStringLiteral("DuckStation"),
         QStringLiteral(
           "Failed to save configuration to\n\n%1\n\nThe error was: %2\n\nPlease ensure this directory is writable. You "
           "can also try portable mode by creating portable.txt in the same directory you installed DuckStation into.")
-          .arg(QString::fromStdString(s_base_settings_interface.GetPath()))
+          .arg(QString::fromStdString(s_state.base_settings_interface.GetPath()))
           .arg(QString::fromStdString(error.GetDescription())));
       return false;
     }
   }
 
   // Setup wizard was incomplete last time?
-  s_run_setup_wizard =
-    s_run_setup_wizard || s_base_settings_interface.GetBoolValue("Main", "SetupWizardIncomplete", false);
+  s_state.run_setup_wizard =
+    s_state.run_setup_wizard || s_state.base_settings_interface.GetBoolValue("Main", "SetupWizardIncomplete", false);
 
-  EmuFolders::LoadConfig(s_base_settings_interface);
+  EmuFolders::LoadConfig(s_state.base_settings_interface);
   EmuFolders::EnsureFoldersExist();
-  MigrateSettings();
 
   // We need to create the console window early, otherwise it appears in front of the main window.
-  if (!Log::IsConsoleOutputEnabled() && s_base_settings_interface.GetBoolValue("Logging", "LogToConsole", false))
-    Log::SetConsoleOutputParams(true, s_base_settings_interface.GetBoolValue("Logging", "LogTimestamps", true));
+  if (!Log::IsConsoleOutputEnabled() && s_state.base_settings_interface.GetBoolValue("Logging", "LogToConsole", false))
+    Log::SetConsoleOutputParams(true, s_state.base_settings_interface.GetBoolValue("Logging", "LogTimestamps", true));
 
   UpdateApplicationLanguage(nullptr);
   return true;
@@ -531,12 +541,7 @@ bool QtHost::SetCriticalFolders()
   // the resources directory should exist, bail out if not
   const std::string rcc_path = Path::Combine(EmuFolders::Resources, "duckstation-qt.rcc");
   if (!FileSystem::FileExists(rcc_path.c_str()) || !QResource::registerResource(QString::fromStdString(rcc_path)) ||
-      !FileSystem::DirectoryExists(EmuFolders::Resources.c_str())
-#ifdef __linux__
-      // Broken packages that won't stop distributing my application.
-      || StringUtil::StartsWithNoCase(EmuFolders::AppRoot, "/usr/lib")
-#endif
-  )
+      !FileSystem::DirectoryExists(EmuFolders::Resources.c_str()))
   {
     QMessageBox::critical(nullptr, QStringLiteral("Error"),
                           QStringLiteral("Resources are missing, your installation is incomplete."));
@@ -591,6 +596,11 @@ bool QtHost::SetDataDirectory()
   return true;
 }
 
+void QtHost::LoadResources()
+{
+  s_state.app_icon = QIcon(QStringLiteral(":/icons/duck.png"));
+}
+
 void Host::LoadSettings(const SettingsInterface& si, std::unique_lock<std::mutex>& lock)
 {
 }
@@ -606,14 +616,13 @@ void EmuThread::setDefaultSettings(bool system /* = true */, bool controller /* 
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "setDefaultSettings", Qt::QueuedConnection, Q_ARG(bool, system),
-                              Q_ARG(bool, controller));
+    QMetaObject::invokeMethod(this, &EmuThread::setDefaultSettings, Qt::QueuedConnection, system, controller);
     return;
   }
 
   {
     auto lock = Host::GetSettingsLock();
-    QtHost::SetDefaultSettings(s_base_settings_interface, system, controller);
+    QtHost::SetDefaultSettings(s_state.base_settings_interface, system, controller);
     QtHost::QueueSettingsSave();
   }
 
@@ -640,21 +649,6 @@ void QtHost::SetDefaultSettings(SettingsInterface& si, bool system, bool control
   }
 }
 
-void QtHost::MigrateSettings()
-{
-  SmallString value;
-  if (s_base_settings_interface.GetStringValue("Display", "SyncMode", &value))
-  {
-    s_base_settings_interface.SetBoolValue("Display", "VSync", (value == "VSync" || value == "VSyncRelaxed"));
-    s_base_settings_interface.SetBoolValue(
-      "Display", "OptimalFramePacing",
-      (value == "VRR" || s_base_settings_interface.GetBoolValue("Display", "DisplayAllFrames", false)));
-    s_base_settings_interface.DeleteValue("Display", "SyncMode");
-    s_base_settings_interface.DeleteValue("Display", "DisplayAllFrames");
-    s_base_settings_interface.Save();
-  }
-}
-
 bool QtHost::CanRenderToMainWindow()
 {
   return !Host::GetBoolSettingValue("Main", "RenderToSeparateWindow", false) && !InNoGUIMode();
@@ -678,7 +672,7 @@ void EmuThread::applySettings(bool display_osd_messages /* = false */)
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "applySettings", Qt::QueuedConnection, Q_ARG(bool, display_osd_messages));
+    QMetaObject::invokeMethod(this, &EmuThread::applySettings, Qt::QueuedConnection, display_osd_messages);
     return;
   }
 
@@ -689,7 +683,7 @@ void EmuThread::reloadGameSettings(bool display_osd_messages /* = false */)
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "reloadGameSettings", Qt::QueuedConnection, Q_ARG(bool, display_osd_messages));
+    QMetaObject::invokeMethod(this, &EmuThread::reloadGameSettings, Qt::QueuedConnection, display_osd_messages);
     return;
   }
 
@@ -700,7 +694,7 @@ void EmuThread::reloadInputProfile(bool display_osd_messages /*= false*/)
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "reloadInputProfile", Qt::QueuedConnection, Q_ARG(bool, display_osd_messages));
+    QMetaObject::invokeMethod(this, &EmuThread::reloadInputProfile, Qt::QueuedConnection, display_osd_messages);
     return;
   }
 
@@ -749,7 +743,7 @@ void EmuThread::startFullscreenUI()
 
   // borrow the game start fullscreen flag
   const bool start_fullscreen =
-    (s_start_fullscreen_ui_fullscreen || Host::GetBaseBoolSettingValue("Main", "StartFullscreen", false));
+    (s_state.start_fullscreen_ui_fullscreen || Host::GetBaseBoolSettingValue("Main", "StartFullscreen", false));
 
   m_is_fullscreen_ui_started = true;
   emit fullscreenUIStartedOrStopped(true);
@@ -797,7 +791,7 @@ void EmuThread::exitFullscreenUI()
     return;
   }
 
-  const bool was_in_nogui_mode = std::exchange(s_nogui_mode, false);
+  const bool was_in_nogui_mode = std::exchange(s_state.nogui_mode, false);
 
   stopFullscreenUI();
 
@@ -817,8 +811,7 @@ void EmuThread::bootSystem(std::shared_ptr<SystemBootParameters> params)
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "bootSystem", Qt::QueuedConnection,
-                              Q_ARG(std::shared_ptr<SystemBootParameters>, std::move(params)));
+    QMetaObject::invokeMethod(this, &EmuThread::bootSystem, Qt::QueuedConnection, std::move(params));
     return;
   }
 
@@ -920,7 +913,7 @@ void EmuThread::redrawDisplayWindow()
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "redrawDisplayWindow", Qt::QueuedConnection);
+    QMetaObject::invokeMethod(this, &EmuThread::redrawDisplayWindow, Qt::QueuedConnection);
     return;
   }
 
@@ -934,7 +927,7 @@ void EmuThread::toggleFullscreen()
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "toggleFullscreen", Qt::QueuedConnection);
+    QMetaObject::invokeMethod(this, &EmuThread::toggleFullscreen, Qt::QueuedConnection);
     return;
   }
 
@@ -945,7 +938,7 @@ void EmuThread::setFullscreen(bool fullscreen)
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "setFullscreen", Qt::QueuedConnection, Q_ARG(bool, fullscreen));
+    QMetaObject::invokeMethod(this, &EmuThread::setFullscreen, Qt::QueuedConnection, fullscreen);
     return;
   }
 
@@ -974,7 +967,7 @@ void EmuThread::setSurfaceless(bool surfaceless)
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "setSurfaceless", Qt::QueuedConnection, Q_ARG(bool, surfaceless));
+    QMetaObject::invokeMethod(this, &EmuThread::setSurfaceless, Qt::QueuedConnection, surfaceless);
     return;
   }
 
@@ -1000,7 +993,7 @@ void EmuThread::requestDisplaySize(float scale)
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "requestDisplaySize", Qt::QueuedConnection, Q_ARG(float, scale));
+    QMetaObject::invokeMethod(this, &EmuThread::requestDisplaySize, Qt::QueuedConnection, scale);
     return;
   }
 
@@ -1177,8 +1170,7 @@ void EmuThread::shutdownSystem(bool save_state, bool check_memcard_busy)
   if (!isCurrentThread())
   {
     System::CancelPendingStartup();
-    QMetaObject::invokeMethod(this, "shutdownSystem", Qt::QueuedConnection, Q_ARG(bool, save_state),
-                              Q_ARG(bool, check_memcard_busy));
+    QMetaObject::invokeMethod(this, &EmuThread::shutdownSystem, Qt::QueuedConnection, save_state, check_memcard_busy);
     return;
   }
 
@@ -1200,7 +1192,7 @@ void EmuThread::resetSystem(bool check_memcard_busy)
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "resetSystem", Qt::QueuedConnection, Q_ARG(bool, check_memcard_busy));
+    QMetaObject::invokeMethod(this, &EmuThread::resetSystem, Qt::QueuedConnection, check_memcard_busy);
     return;
   }
 
@@ -1220,9 +1212,9 @@ void EmuThread::setSystemPaused(bool paused, bool wait_until_paused /* = false *
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "setSystemPaused",
-                              wait_until_paused ? Qt::BlockingQueuedConnection : Qt::QueuedConnection,
-                              Q_ARG(bool, paused), Q_ARG(bool, wait_until_paused));
+    QMetaObject::invokeMethod(this, &EmuThread::setSystemPaused,
+                              wait_until_paused ? Qt::BlockingQueuedConnection : Qt::QueuedConnection, paused,
+                              wait_until_paused);
     return;
   }
 
@@ -1233,8 +1225,8 @@ void EmuThread::changeDisc(const QString& new_disc_filename, bool reset_system, 
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "changeDisc", Qt::QueuedConnection, Q_ARG(const QString&, new_disc_filename),
-                              Q_ARG(bool, reset_system), Q_ARG(bool, check_memcard_busy));
+    QMetaObject::invokeMethod(this, &EmuThread::changeDisc, Qt::QueuedConnection, new_disc_filename, reset_system,
+                              check_memcard_busy);
     return;
   }
 
@@ -1263,7 +1255,7 @@ void EmuThread::changeDiscFromPlaylist(quint32 index)
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "changeDiscFromPlaylist", Qt::QueuedConnection, Q_ARG(quint32, index));
+    QMetaObject::invokeMethod(this, &EmuThread::changeDiscFromPlaylist, Qt::QueuedConnection, index);
     return;
   }
 
@@ -1278,8 +1270,8 @@ void EmuThread::reloadCheats(bool reload_files, bool reload_enabled_list, bool v
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "reloadCheats", Qt::QueuedConnection, Q_ARG(bool, reload_files),
-                              Q_ARG(bool, reload_enabled_list), Q_ARG(bool, verbose), Q_ARG(bool, verbose_if_changed));
+    QMetaObject::invokeMethod(this, &EmuThread::reloadCheats, Qt::QueuedConnection, reload_files, reload_enabled_list,
+                              verbose, verbose_if_changed);
     return;
   }
 
@@ -1296,7 +1288,7 @@ void EmuThread::applyCheat(const QString& name)
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "applyCheat", Qt::QueuedConnection, Q_ARG(const QString&, name));
+    QMetaObject::invokeMethod(this, &EmuThread::applyCheat, Qt::QueuedConnection, name);
     return;
   }
 
@@ -1308,7 +1300,7 @@ void EmuThread::reloadPostProcessingShaders()
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "reloadPostProcessingShaders", Qt::QueuedConnection);
+    QMetaObject::invokeMethod(this, &EmuThread::reloadPostProcessingShaders, Qt::QueuedConnection);
     return;
   }
 
@@ -1320,8 +1312,8 @@ void EmuThread::updatePostProcessingSettings(bool display, bool internal, bool f
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "updatePostProcessingSettings", Qt::QueuedConnection, Q_ARG(bool, display),
-                              Q_ARG(bool, internal), Q_ARG(bool, force_reload));
+    QMetaObject::invokeMethod(this, &EmuThread::updatePostProcessingSettings, Qt::QueuedConnection, display, internal,
+                              force_reload);
     return;
   }
 
@@ -1333,7 +1325,7 @@ void EmuThread::clearInputBindStateFromSource(InputBindingKey key)
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "clearInputBindStateFromSource", Qt::QueuedConnection, Q_ARG(InputBindingKey, key));
+    QMetaObject::invokeMethod(this, &EmuThread::clearInputBindStateFromSource, Qt::QueuedConnection, key);
     return;
   }
 
@@ -1344,7 +1336,7 @@ void EmuThread::reloadTextureReplacements()
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "reloadTextureReplacements", Qt::QueuedConnection);
+    QMetaObject::invokeMethod(this, &EmuThread::reloadTextureReplacements, Qt::QueuedConnection);
     return;
   }
 
@@ -1356,7 +1348,7 @@ void EmuThread::captureGPUFrameDump()
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "captureGPUFrameDump", Qt::QueuedConnection);
+    QMetaObject::invokeMethod(this, &EmuThread::captureGPUFrameDump, Qt::QueuedConnection);
     return;
   }
 
@@ -1370,7 +1362,7 @@ void EmuThread::startControllerTest()
 
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "startControllerTest", Qt::QueuedConnection);
+    QMetaObject::invokeMethod(this, &EmuThread::startControllerTest, Qt::QueuedConnection);
     return;
   }
 
@@ -1412,16 +1404,16 @@ void Host::RunOnCPUThread(std::function<void()> function, bool block /* = false 
 {
   const bool self = g_emu_thread->isCurrentThread();
 
-  QMetaObject::invokeMethod(g_emu_thread, "runOnEmuThread",
+  QMetaObject::invokeMethod(g_emu_thread, &EmuThread::runOnEmuThread,
                             (block && !self) ? Qt::BlockingQueuedConnection : Qt::QueuedConnection,
-                            Q_ARG(std::function<void()>, std::move(function)));
+                            std::move(function));
 }
 
 void Host::RunOnUIThread(std::function<void()> function, bool block /* = false*/)
 {
   // main window always exists, so it's fine to attach it to that.
-  QMetaObject::invokeMethod(g_main_window, "runOnUIThread", block ? Qt::BlockingQueuedConnection : Qt::QueuedConnection,
-                            Q_ARG(std::function<void()>, std::move(function)));
+  QMetaObject::invokeMethod(g_main_window, &MainWindow::runOnUIThread,
+                            block ? Qt::BlockingQueuedConnection : Qt::QueuedConnection, std::move(function));
 }
 
 QtAsyncTask::QtAsyncTask(WorkCallback callback)
@@ -1447,12 +1439,12 @@ void QtAsyncTask::create(QObject* owner, WorkCallback callback)
 
 void Host::RefreshGameListAsync(bool invalidate_cache)
 {
-  QMetaObject::invokeMethod(g_main_window, "refreshGameList", Qt::QueuedConnection, Q_ARG(bool, invalidate_cache));
+  QMetaObject::invokeMethod(g_main_window, &MainWindow::refreshGameList, Qt::QueuedConnection, invalidate_cache);
 }
 
 void Host::CancelGameListRefresh()
 {
-  QMetaObject::invokeMethod(g_main_window, "cancelGameListRefresh", Qt::BlockingQueuedConnection);
+  QMetaObject::invokeMethod(g_main_window, &MainWindow::cancelGameListRefresh, Qt::BlockingQueuedConnection);
 }
 
 void Host::OnGameListEntriesChanged(std::span<const u32> changed_indices)
@@ -1464,22 +1456,24 @@ void Host::OnGameListEntriesChanged(std::span<const u32> changed_indices)
   emit g_emu_thread->gameListRowsChanged(changed_rows);
 }
 
-void EmuThread::loadState(const QString& filename)
+void EmuThread::loadState(const QString& path)
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "loadState", Qt::QueuedConnection, Q_ARG(const QString&, filename));
+    QMetaObject::invokeMethod(this, static_cast<void (EmuThread::*)(const QString&)>(&EmuThread::loadState),
+                              Qt::QueuedConnection, path);
     return;
   }
 
-  bootOrLoadState(filename.toStdString());
+  bootOrLoadState(path.toStdString());
 }
 
 void EmuThread::loadState(bool global, qint32 slot)
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "loadState", Qt::QueuedConnection, Q_ARG(bool, global), Q_ARG(qint32, slot));
+    QMetaObject::invokeMethod(this, static_cast<void (EmuThread::*)(bool, qint32)>(&EmuThread::loadState),
+                              Qt::QueuedConnection, global, slot);
     return;
   }
 
@@ -1491,12 +1485,13 @@ void EmuThread::loadState(bool global, qint32 slot)
                            System::GetGameSaveStatePath(System::GetGameSerial(), slot));
 }
 
-void EmuThread::saveState(const QString& filename, bool block_until_done /* = false */)
+void EmuThread::saveState(const QString& path, bool block_until_done /* = false */)
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "saveState", block_until_done ? Qt::BlockingQueuedConnection : Qt::QueuedConnection,
-                              Q_ARG(const QString&, filename), Q_ARG(bool, block_until_done));
+    QMetaObject::invokeMethod(this, static_cast<void (EmuThread::*)(const QString&, bool)>(&EmuThread::saveState),
+                              block_until_done ? Qt::BlockingQueuedConnection : Qt::QueuedConnection, path,
+                              block_until_done);
     return;
   }
 
@@ -1504,7 +1499,7 @@ void EmuThread::saveState(const QString& filename, bool block_until_done /* = fa
     return;
 
   Error error;
-  if (!System::SaveState(filename.toStdString(), &error, g_settings.create_save_state_backups, false))
+  if (!System::SaveState(path.toStdString(), &error, g_settings.create_save_state_backups, false))
     emit errorReported(tr("Error"), tr("Failed to save state: %1").arg(QString::fromStdString(error.GetDescription())));
 }
 
@@ -1512,8 +1507,9 @@ void EmuThread::saveState(bool global, qint32 slot, bool block_until_done /* = f
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "saveState", block_until_done ? Qt::BlockingQueuedConnection : Qt::QueuedConnection,
-                              Q_ARG(bool, global), Q_ARG(qint32, slot), Q_ARG(bool, block_until_done));
+    QMetaObject::invokeMethod(this, static_cast<void (EmuThread::*)(bool, qint32, bool)>(&EmuThread::saveState),
+                              block_until_done ? Qt::BlockingQueuedConnection : Qt::QueuedConnection, global, slot,
+                              block_until_done);
     return;
   }
 
@@ -1534,7 +1530,7 @@ void EmuThread::undoLoadState()
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "undoLoadState", Qt::QueuedConnection);
+    QMetaObject::invokeMethod(this, &EmuThread::undoLoadState, Qt::QueuedConnection);
     return;
   }
 
@@ -1545,8 +1541,8 @@ void EmuThread::setAudioOutputVolume(int volume, int fast_forward_volume)
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "setAudioOutputVolume", Qt::QueuedConnection, Q_ARG(int, volume),
-                              Q_ARG(int, fast_forward_volume));
+    QMetaObject::invokeMethod(this, &EmuThread::setAudioOutputVolume, Qt::QueuedConnection, volume,
+                              fast_forward_volume);
     return;
   }
 
@@ -1559,7 +1555,7 @@ void EmuThread::setAudioOutputMuted(bool muted)
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "setAudioOutputMuted", Qt::QueuedConnection, Q_ARG(bool, muted));
+    QMetaObject::invokeMethod(this, &EmuThread::setAudioOutputMuted, Qt::QueuedConnection, muted);
     return;
   }
 
@@ -1571,7 +1567,7 @@ void EmuThread::singleStepCPU()
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "singleStepCPU", Qt::BlockingQueuedConnection);
+    QMetaObject::invokeMethod(this, &EmuThread::singleStepCPU, Qt::BlockingQueuedConnection);
     return;
   }
 
@@ -1581,56 +1577,56 @@ void EmuThread::singleStepCPU()
   System::SingleStepCPU();
 }
 
-void EmuThread::dumpRAM(const QString& filename)
+void EmuThread::dumpRAM(const QString& path)
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "dumpRAM", Qt::QueuedConnection, Q_ARG(const QString&, filename));
+    QMetaObject::invokeMethod(this, &EmuThread::dumpRAM, Qt::QueuedConnection, path);
     return;
   }
 
-  const std::string filename_str = filename.toStdString();
-  if (System::DumpRAM(filename_str.c_str()))
-    Host::AddOSDMessage(fmt::format("RAM dumped to '{}'", filename_str), 10.0f);
+  const std::string path_str = path.toStdString();
+  if (System::DumpRAM(path_str.c_str()))
+    Host::AddOSDMessage(fmt::format("RAM dumped to '{}'", path_str), 10.0f);
   else
-    Host::ReportErrorAsync("Error", fmt::format("Failed to dump RAM to '{}'", filename_str));
+    Host::ReportErrorAsync("Error", fmt::format("Failed to dump RAM to '{}'", path_str));
 }
 
-void EmuThread::dumpVRAM(const QString& filename)
+void EmuThread::dumpVRAM(const QString& path)
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "dumpVRAM", Qt::QueuedConnection, Q_ARG(const QString&, filename));
+    QMetaObject::invokeMethod(this, &EmuThread::dumpVRAM, Qt::QueuedConnection, path);
     return;
   }
 
-  const std::string filename_str = filename.toStdString();
-  if (System::DumpVRAM(filename_str.c_str()))
-    Host::AddOSDMessage(fmt::format("VRAM dumped to '{}'", filename_str), 10.0f);
+  const std::string path_str = path.toStdString();
+  if (System::DumpVRAM(path_str.c_str()))
+    Host::AddOSDMessage(fmt::format("VRAM dumped to '{}'", path_str), 10.0f);
   else
-    Host::ReportErrorAsync("Error", fmt::format("Failed to dump VRAM to '{}'", filename_str));
+    Host::ReportErrorAsync("Error", fmt::format("Failed to dump VRAM to '{}'", path_str));
 }
 
-void EmuThread::dumpSPURAM(const QString& filename)
+void EmuThread::dumpSPURAM(const QString& path)
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "dumpSPURAM", Qt::QueuedConnection, Q_ARG(const QString&, filename));
+    QMetaObject::invokeMethod(this, &EmuThread::dumpSPURAM, Qt::QueuedConnection, path);
     return;
   }
 
-  const std::string filename_str = filename.toStdString();
-  if (System::DumpSPURAM(filename_str.c_str()))
-    Host::AddOSDMessage(fmt::format("SPU RAM dumped to '{}'", filename_str), 10.0f);
+  const std::string path_str = path.toStdString();
+  if (System::DumpSPURAM(path_str.c_str()))
+    Host::AddOSDMessage(fmt::format("SPU RAM dumped to '{}'", path_str), 10.0f);
   else
-    Host::ReportErrorAsync("Error", fmt::format("Failed to dump SPU RAM to '{}'", filename_str));
+    Host::ReportErrorAsync("Error", fmt::format("Failed to dump SPU RAM to '{}'", path_str));
 }
 
 void EmuThread::saveScreenshot()
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "saveScreenshot", Qt::QueuedConnection);
+    QMetaObject::invokeMethod(this, &EmuThread::saveScreenshot, Qt::QueuedConnection);
     return;
   }
 
@@ -1766,7 +1762,7 @@ void Host::BeginTextInput()
   // NOTE: Called on GPU thread.
   QInputMethod* method = qApp->inputMethod();
   if (method)
-    QMetaObject::invokeMethod(method, "show", Qt::QueuedConnection);
+    QMetaObject::invokeMethod(method, &QInputMethod::show, Qt::QueuedConnection);
 }
 
 void Host::EndTextInput()
@@ -1775,7 +1771,7 @@ void Host::EndTextInput()
 
   QInputMethod* method = qApp->inputMethod();
   if (method)
-    QMetaObject::invokeMethod(method, "hide", Qt::QueuedConnection);
+    QMetaObject::invokeMethod(method, &QInputMethod::hide, Qt::QueuedConnection);
 }
 
 bool Host::CreateAuxiliaryRenderWindow(s32 x, s32 y, u32 width, u32 height, std::string_view title,
@@ -1815,10 +1811,9 @@ void EmuThread::queueAuxiliaryRenderWindowInputEvent(Host::AuxiliaryRenderWindow
                                                      Host::AuxiliaryRenderWindowEventParam param3)
 {
   DebugAssert(QThread::isMainThread());
-  QMetaObject::invokeMethod(this, "processAuxiliaryRenderWindowInputEvent", Qt::QueuedConnection,
-                            Q_ARG(void*, userdata), Q_ARG(quint32, static_cast<quint32>(event)),
-                            Q_ARG(quint32, param1.uint_param), Q_ARG(quint32, param2.uint_param),
-                            Q_ARG(quint32, param3.uint_param));
+  QMetaObject::invokeMethod(this, &EmuThread::processAuxiliaryRenderWindowInputEvent, Qt::QueuedConnection, userdata,
+                            static_cast<quint32>(event), static_cast<quint32>(param1.uint_param),
+                            static_cast<quint32>(param2.uint_param), static_cast<quint32>(param3.uint_param));
 }
 
 void EmuThread::processAuxiliaryRenderWindowInputEvent(void* userdata, quint32 event, quint32 param1, quint32 param2,
@@ -1879,7 +1874,7 @@ void EmuThread::setGPUThreadRunIdle(bool active)
 {
   if (!isCurrentThread())
   {
-    QMetaObject::invokeMethod(this, "setGPUThreadRunIdle", Qt::QueuedConnection, Q_ARG(bool, active));
+    QMetaObject::invokeMethod(this, &EmuThread::setGPUThreadRunIdle, Qt::QueuedConnection, active);
     return;
   }
 
@@ -1927,9 +1922,9 @@ void EmuThread::stop()
   QtUtils::ProcessEventsWithSleep(QEventLoop::ExcludeUserInputEvents, []() { return (g_emu_thread->isRunning()); });
 
   // Ensure settings are saved.
-  if (s_settings_save_timer)
+  if (s_state.settings_save_timer)
   {
-    s_settings_save_timer.reset();
+    s_state.settings_save_timer.reset();
     QtHost::SaveSettings();
   }
 }
@@ -2020,7 +2015,7 @@ void EmuThread::wakeThread()
   if (isCurrentThread())
     m_event_loop->quit();
   else
-    QMetaObject::invokeMethod(m_event_loop, "quit", Qt::QueuedConnection);
+    QMetaObject::invokeMethod(m_event_loop, &QEventLoop::quit, Qt::QueuedConnection);
 }
 
 void Host::ReportFatalError(std::string_view title, std::string_view message)
@@ -2047,7 +2042,8 @@ void Host::ReportFatalError(std::string_view title, std::string_view message)
     timer->moveToThread(ui_thread);
     timer->setSingleShot(true);
     QObject::connect(timer, &QTimer::timeout, std::move(cb));
-    QMetaObject::invokeMethod(timer, "start", Qt::QueuedConnection, Q_ARG(int, 0));
+    QMetaObject::invokeMethod(timer, static_cast<void (QTimer::*)(int)>(&QTimer::start), Qt::QueuedConnection,
+                              static_cast<int>(0));
   }
 }
 
@@ -2058,10 +2054,9 @@ void Host::ReportErrorAsync(std::string_view title, std::string_view message)
   else if (!message.empty())
     ERROR_LOG("ReportErrorAsync: {}", message);
 
-  QMetaObject::invokeMethod(
-    g_main_window, "reportError", Qt::QueuedConnection,
-    Q_ARG(const QString&, title.empty() ? QString() : QString::fromUtf8(title.data(), title.size())),
-    Q_ARG(const QString&, message.empty() ? QString() : QString::fromUtf8(message.data(), message.size())));
+  QMetaObject::invokeMethod(g_main_window, &MainWindow::reportError, Qt::QueuedConnection,
+                            title.empty() ? QString() : QString::fromUtf8(title.data(), title.size()),
+                            message.empty() ? QString() : QString::fromUtf8(message.data(), message.size()));
 }
 
 bool Host::ConfirmMessage(std::string_view title, std::string_view message)
@@ -2206,24 +2201,24 @@ QString QtHost::FormatNumber(Host::NumberFormatType type, s64 value)
       case Host::NumberFormatType::ShortDate:
       case Host::NumberFormatType::LongDate:
       {
-        format = s_app_locale.dateFormat((type == Host::NumberFormatType::LongDate) ? QLocale::LongFormat :
-                                                                                      QLocale::ShortFormat);
+        format = s_state.app_locale.dateFormat((type == Host::NumberFormatType::LongDate) ? QLocale::LongFormat :
+                                                                                            QLocale::ShortFormat);
       }
       break;
 
       case Host::NumberFormatType::ShortTime:
       case Host::NumberFormatType::LongTime:
       {
-        format = s_app_locale.timeFormat((type == Host::NumberFormatType::LongTime) ? QLocale::LongFormat :
-                                                                                      QLocale::ShortFormat);
+        format = s_state.app_locale.timeFormat((type == Host::NumberFormatType::LongTime) ? QLocale::LongFormat :
+                                                                                            QLocale::ShortFormat);
       }
       break;
 
       case Host::NumberFormatType::ShortDateTime:
       case Host::NumberFormatType::LongDateTime:
       {
-        format = s_app_locale.dateTimeFormat((type == Host::NumberFormatType::LongDateTime) ? QLocale::LongFormat :
-                                                                                              QLocale::ShortFormat);
+        format = s_state.app_locale.dateTimeFormat(
+          (type == Host::NumberFormatType::LongDateTime) ? QLocale::LongFormat : QLocale::ShortFormat);
 
         // Remove time zone specifiers 't', 'tt', 'ttt', 'tttt'.
         format.remove(QRegularExpression("\\s*t+\\s*"));
@@ -2237,7 +2232,7 @@ QString QtHost::FormatNumber(Host::NumberFormatType type, s64 value)
   }
   else
   {
-    ret = s_app_locale.toString(value);
+    ret = s_state.app_locale.toString(value);
   }
 
   return ret;
@@ -2256,7 +2251,7 @@ QString QtHost::FormatNumber(Host::NumberFormatType type, double value)
   {
     case Host::NumberFormatType::Number:
     default:
-      ret = s_app_locale.toString(value);
+      ret = s_state.app_locale.toString(value);
       break;
   }
 
@@ -2270,12 +2265,12 @@ std::string Host::FormatNumber(NumberFormatType type, double value)
 
 void QtHost::UpdateApplicationLanguage(QWidget* dialog_parent)
 {
-  for (QTranslator* translator : s_translators)
+  for (QTranslator* translator : s_state.translators)
   {
     qApp->removeTranslator(translator);
     translator->deleteLater();
   }
-  s_translators.clear();
+  s_state.translators.clear();
 
   // Fixup automatic language.
   std::string language = Host::GetBaseStringSettingValue("Main", "Language", "");
@@ -2311,12 +2306,12 @@ void QtHost::UpdateApplicationLanguage(QWidget* dialog_parent)
     {
       QMessageBox::warning(
         dialog_parent, QStringLiteral("Translation Error"),
-        QStringLiteral("Failed to find load base translation file for '%1':\n%2").arg(qlanguage).arg(base_path));
+        QStringLiteral("Failed to load base translation file for '%1':\n%2").arg(qlanguage).arg(base_path));
       delete base_translator;
     }
     else
     {
-      s_translators.push_back(base_translator);
+      s_state.translators.push_back(base_translator);
       qApp->installTranslator(base_translator);
     }
   }
@@ -2342,7 +2337,7 @@ void QtHost::UpdateApplicationLanguage(QWidget* dialog_parent)
 
   INFO_LOG("Loaded translation file for language {}", qlanguage.toUtf8().constData());
   qApp->installTranslator(translator);
-  s_translators.push_back(translator);
+  s_state.translators.push_back(translator);
 
   // We end up here both on language change, and on startup.
   UpdateFontOrder(language);
@@ -2417,7 +2412,7 @@ const char* Host::GetLanguageName(std::string_view language_code)
 
 std::string_view QtHost::GetSystemLanguage()
 {
-  std::string locname = QLocale::system().name().toStdString();
+  std::string locname = QLocale::system().name(QLocale::TagSeparator::Dash).toStdString();
 
   // Does this match any of our translations?
   for (const auto& [lname, lcode] : Host::GetAvailableLanguageList())
@@ -2495,7 +2490,7 @@ void QtHost::UpdateFontOrder(std::string_view language)
 
 const QLocale& QtHost::GetApplicationLocale()
 {
-  return s_app_locale;
+  return s_state.app_locale;
 }
 
 void QtHost::UpdateApplicationLocale(std::string_view language)
@@ -2508,9 +2503,9 @@ void QtHost::UpdateApplicationLocale(std::string_view language)
 
   // If the system locale is using the same language, then use the system locale.
   // Otherwise we'll be using that ugly US date format in Straya mate.
-  s_app_locale = QLocale::system();
-  const std::string system_locale_name = s_app_locale.name().toStdString();
-  if (s_app_locale.name().startsWith(QLatin1StringView(language), Qt::CaseInsensitive))
+  s_state.app_locale = QLocale::system();
+  const QString system_locale_name = s_state.app_locale.name(QLocale::TagSeparator::Dash);
+  if (system_locale_name.startsWith(QLatin1StringView(language), Qt::CaseInsensitive))
   {
     INFO_LOG("Using system locale for {}.", language);
     return;
@@ -2520,7 +2515,7 @@ void QtHost::UpdateApplicationLocale(std::string_view language)
   {
     if (language == code)
     {
-      s_app_locale = QLocale(qlanguage, qcountry);
+      s_state.app_locale = QLocale(qlanguage, qcountry);
       return;
     }
   }
@@ -2603,11 +2598,10 @@ void InputDeviceListModel::enumerateDevices()
   for (const auto& key : motors)
   {
     new_motors.push_back(
-      QString::fromStdString(InputManager::ConvertInputBindingKeyToString(InputBindingInfo::Type::Motor, key)));
+      QtUtils::StringViewToQString(InputManager::ConvertInputBindingKeyToString(InputBindingInfo::Type::Motor, key)));
   }
 
-  QMetaObject::invokeMethod(this, "resetLists", Qt::QueuedConnection, Q_ARG(const DeviceList&, new_devices),
-                            Q_ARG(const QStringList&, new_motors));
+  QMetaObject::invokeMethod(this, &InputDeviceListModel::resetLists, Qt::QueuedConnection, new_devices, new_motors);
 }
 
 void InputDeviceListModel::resetLists(const DeviceList& devices, const QStringList& motors)
@@ -2673,15 +2667,14 @@ void Host::OnInputDeviceConnected(InputBindingKey key, std::string_view identifi
     vibration_motor_list.reserve(im_vibration_motor_list.size());
     for (const InputBindingKey& motor_key : im_vibration_motor_list)
     {
-      vibration_motor_list.push_back(
-        QString::fromStdString(InputManager::ConvertInputBindingKeyToString(InputBindingInfo::Type::Motor, motor_key)));
+      vibration_motor_list.push_back(QtUtils::StringViewToQString(
+        InputManager::ConvertInputBindingKeyToString(InputBindingInfo::Type::Motor, motor_key)));
     }
   }
 
-  QMetaObject::invokeMethod(
-    g_emu_thread->getInputDeviceListModel(), "onDeviceConnected", Qt::QueuedConnection,
-    Q_ARG(const InputBindingKey&, key), Q_ARG(const QString&, QtUtils::StringViewToQString(identifier)),
-    Q_ARG(const QString&, QtUtils::StringViewToQString(device_name)), Q_ARG(const QStringList&, vibration_motor_list));
+  QMetaObject::invokeMethod(g_emu_thread->getInputDeviceListModel(), &InputDeviceListModel::onDeviceConnected,
+                            Qt::QueuedConnection, key, QtUtils::StringViewToQString(identifier),
+                            QtUtils::StringViewToQString(device_name), vibration_motor_list);
 
   if (System::IsValid() || GPUThread::IsFullscreenUIRequested())
   {
@@ -2693,9 +2686,8 @@ void Host::OnInputDeviceConnected(InputBindingKey key, std::string_view identifi
 
 void Host::OnInputDeviceDisconnected(InputBindingKey key, std::string_view identifier)
 {
-  QMetaObject::invokeMethod(g_emu_thread->getInputDeviceListModel(), "onDeviceDisconnected", Qt::QueuedConnection,
-                            Q_ARG(const InputBindingKey&, key),
-                            Q_ARG(const QString&, QtUtils::StringViewToQString(identifier)));
+  QMetaObject::invokeMethod(g_emu_thread->getInputDeviceListModel(), &InputDeviceListModel::onDeviceDisconnected,
+                            Qt::QueuedConnection, key, QtUtils::StringViewToQString(identifier));
 
   if (g_settings.pause_on_controller_disconnection && System::GetState() == System::State::Running &&
       InputManager::HasAnyBindingsForSource(key))
@@ -2727,6 +2719,28 @@ std::string QtHost::GetResourcePath(std::string_view filename, bool allow_overri
 {
   return allow_override ? EmuFolders::GetOverridableResourcePath(filename) :
                           Path::Combine(EmuFolders::Resources, filename);
+}
+
+const QStringList& QtHost::GetRobotoFontFamilies()
+{
+  std::call_once(s_state.roboto_font_once_flag, []() {
+    const int font_id = QFontDatabase::addApplicationFont(
+      QString::fromStdString(Path::Combine(EmuFolders::Resources, "fonts/Roboto-VariableFont_wdth,wght.ttf")));
+    if (font_id < 0)
+    {
+      ERROR_LOG("Failed to load Roboto font.");
+      return;
+    }
+
+    s_state.roboto_font_families = QFontDatabase::applicationFontFamilies(font_id);
+    if (s_state.roboto_font_families.isEmpty())
+    {
+      ERROR_LOG("Failed to get Roboto font family.");
+      return;
+    }
+  });
+
+  return s_state.roboto_font_families;
 }
 
 bool Host::ResourceFileExists(std::string_view filename, bool allow_override)
@@ -2802,8 +2816,8 @@ void EmuThread::updatePerformanceCounters(const GPUBackend* gpu_backend)
   {
     const QString renderer_str = hardware_renderer ? QString::fromUtf8(GPUDevice::RenderAPIToString(render_api)) :
                                                      qApp->translate("GPURenderer", "Software");
-    QMetaObject::invokeMethod(g_main_window->getStatusRendererWidget(), "setText", Qt::QueuedConnection,
-                              Q_ARG(const QString&, renderer_str));
+    QMetaObject::invokeMethod(g_main_window->getStatusRendererWidget(), &QLabel::setText, Qt::QueuedConnection,
+                              renderer_str);
     m_last_render_api = render_api;
     m_last_hardware_renderer = hardware_renderer;
   }
@@ -2811,8 +2825,7 @@ void EmuThread::updatePerformanceCounters(const GPUBackend* gpu_backend)
   {
     const QString text =
       (render_width != 0 && render_height != 0) ? tr("%1x%2").arg(render_width).arg(render_height) : tr("No Image");
-    QMetaObject::invokeMethod(g_main_window->getStatusResolutionWidget(), "setText", Qt::QueuedConnection,
-                              Q_ARG(const QString&, text));
+    QMetaObject::invokeMethod(g_main_window->getStatusResolutionWidget(), &QLabel::setText, Qt::QueuedConnection, text);
     m_last_render_width = render_width;
     m_last_render_height = render_height;
   }
@@ -2820,8 +2833,8 @@ void EmuThread::updatePerformanceCounters(const GPUBackend* gpu_backend)
   const float gfps = PerformanceCounters::GetFPS();
   if (gfps != m_last_game_fps)
   {
-    QMetaObject::invokeMethod(g_main_window->getStatusFPSWidget(), "setText", Qt::QueuedConnection,
-                              Q_ARG(const QString&, tr("Game: %1 FPS").arg(gfps, 0, 'f', 0)));
+    QMetaObject::invokeMethod(g_main_window->getStatusFPSWidget(), &QLabel::setText, Qt::QueuedConnection,
+                              tr("Game: %1 FPS").arg(gfps, 0, 'f', 0));
     m_last_game_fps = gfps;
   }
 
@@ -2829,9 +2842,8 @@ void EmuThread::updatePerformanceCounters(const GPUBackend* gpu_backend)
   const float vfps = PerformanceCounters::GetVPS();
   if (speed != m_last_speed || vfps != m_last_video_fps)
   {
-    QMetaObject::invokeMethod(
-      g_main_window->getStatusVPSWidget(), "setText", Qt::QueuedConnection,
-      Q_ARG(const QString&, tr("Video: %1 FPS (%2%)").arg(vfps, 0, 'f', 0).arg(speed, 0, 'f', 0)));
+    QMetaObject::invokeMethod(g_main_window->getStatusVPSWidget(), &QLabel::setText, Qt::QueuedConnection,
+                              tr("Video: %1 FPS (%2%)").arg(vfps, 0, 'f', 0).arg(speed, 0, 'f', 0));
     m_last_speed = speed;
     m_last_video_fps = vfps;
   }
@@ -2847,15 +2859,11 @@ void EmuThread::resetPerformanceCounters()
   m_last_render_api = RenderAPI::None;
   m_last_hardware_renderer = false;
 
-  QString blank;
-  QMetaObject::invokeMethod(g_main_window->getStatusRendererWidget(), "setText", Qt::QueuedConnection,
-                            Q_ARG(const QString&, blank));
-  QMetaObject::invokeMethod(g_main_window->getStatusResolutionWidget(), "setText", Qt::QueuedConnection,
-                            Q_ARG(const QString&, blank));
-  QMetaObject::invokeMethod(g_main_window->getStatusFPSWidget(), "setText", Qt::QueuedConnection,
-                            Q_ARG(const QString&, blank));
-  QMetaObject::invokeMethod(g_main_window->getStatusVPSWidget(), "setText", Qt::QueuedConnection,
-                            Q_ARG(const QString&, blank));
+  const QString blank;
+  QMetaObject::invokeMethod(g_main_window->getStatusRendererWidget(), &QLabel::setText, Qt::QueuedConnection, blank);
+  QMetaObject::invokeMethod(g_main_window->getStatusResolutionWidget(), &QLabel::setText, Qt::QueuedConnection, blank);
+  QMetaObject::invokeMethod(g_main_window->getStatusFPSWidget(), &QLabel::setText, Qt::QueuedConnection, blank);
+  QMetaObject::invokeMethod(g_main_window->getStatusVPSWidget(), &QLabel::setText, Qt::QueuedConnection, blank);
 }
 
 void Host::OnPerformanceCountersUpdated(const GPUBackend* gpu_backend)
@@ -2902,14 +2910,14 @@ void QtHost::SaveSettings()
   {
     Error error;
     auto lock = Host::GetSettingsLock();
-    if (s_base_settings_interface.IsDirty() && !s_base_settings_interface.Save(&error))
+    if (s_state.base_settings_interface.IsDirty() && !s_state.base_settings_interface.Save(&error))
       ERROR_LOG("Failed to save settings: {}", error.GetDescription());
   }
 
-  if (s_settings_save_timer)
+  if (s_state.settings_save_timer)
   {
-    s_settings_save_timer->deleteLater();
-    s_settings_save_timer.release();
+    s_state.settings_save_timer->deleteLater();
+    s_state.settings_save_timer.release();
   }
 }
 
@@ -2921,13 +2929,13 @@ void QtHost::QueueSettingsSave()
     return;
   }
 
-  if (s_settings_save_timer)
+  if (s_state.settings_save_timer)
     return;
 
-  s_settings_save_timer = std::make_unique<QTimer>();
-  s_settings_save_timer->connect(s_settings_save_timer.get(), &QTimer::timeout, SaveSettings);
-  s_settings_save_timer->setSingleShot(true);
-  s_settings_save_timer->start(SETTINGS_SAVE_DELAY);
+  s_state.settings_save_timer = std::make_unique<QTimer>();
+  s_state.settings_save_timer->connect(s_state.settings_save_timer.get(), &QTimer::timeout, SaveSettings);
+  s_state.settings_save_timer->setSingleShot(true);
+  s_state.settings_save_timer->start(SETTINGS_SAVE_DELAY);
 }
 
 bool QtHost::ShouldShowDebugOptions()
@@ -2940,9 +2948,8 @@ void Host::RequestSystemShutdown(bool allow_confirm, bool save_state, bool check
   if (!System::IsValid())
     return;
 
-  QMetaObject::invokeMethod(g_main_window, "requestShutdown", Qt::QueuedConnection, Q_ARG(bool, allow_confirm),
-                            Q_ARG(bool, true), Q_ARG(bool, save_state), Q_ARG(bool, check_memcard_busy),
-                            Q_ARG(bool, true), Q_ARG(bool, false), Q_ARG(bool, false));
+  QMetaObject::invokeMethod(g_main_window, &MainWindow::requestShutdown, Qt::QueuedConnection, allow_confirm, true,
+                            save_state, check_memcard_busy, true, false, false);
 }
 
 void Host::RequestResetSettings(bool system, bool controller)
@@ -2952,7 +2959,7 @@ void Host::RequestResetSettings(bool system, bool controller)
 
 void Host::RequestExitApplication(bool allow_confirm)
 {
-  QMetaObject::invokeMethod(g_main_window, "requestExit", Qt::QueuedConnection, Q_ARG(bool, allow_confirm));
+  QMetaObject::invokeMethod(g_main_window, &MainWindow::requestExit, Qt::QueuedConnection, allow_confirm);
 }
 
 void Host::RequestExitBigPicture()
@@ -3024,7 +3031,7 @@ static void SignalHandler(int signal)
     graceful_shutdown_attempted = true;
 
     // This could be a bit risky invoking from a signal handler... hopefully it's okay.
-    QMetaObject::invokeMethod(g_main_window, "requestExit", Qt::QueuedConnection, Q_ARG(bool, true));
+    QMetaObject::invokeMethod(g_main_window, &MainWindow::requestExit, Qt::QueuedConnection, true);
     return;
   }
 
@@ -3140,13 +3147,13 @@ bool QtHost::ParseCommandLineParametersAndInitializeConfig(QApplication& app,
       else if (CHECK_ARG("-batch"))
       {
         INFO_LOG("Command Line: Using batch mode.");
-        s_batch_mode = true;
+        s_state.batch_mode = true;
         continue;
       }
       else if (CHECK_ARG("-nogui"))
       {
         INFO_LOG("Command Line: Using NoGUI mode.");
-        s_nogui_mode = true;
+        s_state.nogui_mode = true;
         continue;
       }
       else if (CHECK_ARG("-bios"))
@@ -3196,7 +3203,7 @@ bool QtHost::ParseCommandLineParametersAndInitializeConfig(QApplication& app,
       {
         INFO_LOG("Command Line: Using fullscreen.");
         AutoBoot(autoboot)->override_fullscreen = true;
-        s_start_fullscreen_ui_fullscreen = true;
+        s_state.start_fullscreen_ui_fullscreen = true;
         continue;
       }
       else if (CHECK_ARG("-nofullscreen"))
@@ -3208,12 +3215,12 @@ bool QtHost::ParseCommandLineParametersAndInitializeConfig(QApplication& app,
       else if (CHECK_ARG("-bigpicture"))
       {
         INFO_LOG("Command Line: Starting big picture mode.");
-        s_start_fullscreen_ui = true;
+        s_state.start_fullscreen_ui = true;
         continue;
       }
       else if (CHECK_ARG("-setupwizard"))
       {
-        s_run_setup_wizard = true;
+        s_state.run_setup_wizard = true;
         continue;
       }
       else if (CHECK_ARG("-earlyconsole"))
@@ -3223,7 +3230,7 @@ bool QtHost::ParseCommandLineParametersAndInitializeConfig(QApplication& app,
       }
       else if (CHECK_ARG("-updatecleanup"))
       {
-        s_cleanup_after_update = AutoUpdaterWindow::isSupported();
+        s_state.cleanup_after_update = AutoUpdaterWindow::isSupported();
         continue;
       }
       else if (CHECK_ARG("--"))
@@ -3254,8 +3261,10 @@ bool QtHost::ParseCommandLineParametersAndInitializeConfig(QApplication& app,
     return false;
   }
 
-  // Check the file we're starting actually exists.
+  // Not the best location for this, but early enough.
+  LoadResources();
 
+  // Check the file we're starting actually exists.
   if (autoboot && !autoboot->path.empty() && !FileSystem::FileExists(autoboot->path.c_str()))
   {
     QMessageBox::critical(
@@ -3297,16 +3306,17 @@ bool QtHost::ParseCommandLineParametersAndInitializeConfig(QApplication& app,
     autoboot.reset();
 
   // nogui implies batch mode if not running big picture mode
-  s_batch_mode = (s_batch_mode || (s_nogui_mode && !s_start_fullscreen_ui));
+  s_state.batch_mode = (s_state.batch_mode || (s_state.nogui_mode && !s_state.start_fullscreen_ui));
 
   // if we don't have autoboot, we definitely don't want batch mode (because that'll skip
   // scanning the game list).
-  if (s_batch_mode && !autoboot && !s_start_fullscreen_ui)
+  if (s_state.batch_mode && !autoboot && !s_state.start_fullscreen_ui)
   {
     QMessageBox::critical(
       nullptr, qApp->translate("QtHost", "Error"),
-      s_nogui_mode ? qApp->translate("QtHost", "Cannot use no-gui mode, because no boot filename was specified.") :
-                     qApp->translate("QtHost", "Cannot use batch mode, because no boot filename was specified."));
+      s_state.nogui_mode ?
+        qApp->translate("QtHost", "Cannot use no-gui mode, because no boot filename was specified.") :
+        qApp->translate("QtHost", "Cannot use batch mode, because no boot filename was specified."));
     return false;
   }
 
@@ -3346,7 +3356,7 @@ int main(int argc, char* argv[])
     return EXIT_FAILURE;
 
   // Remove any previous-version remanants.
-  if (s_cleanup_after_update)
+  if (s_state.cleanup_after_update)
     AutoUpdaterWindow::cleanupAfterUpdate();
 
   // Set theme before creating any windows.
@@ -3369,27 +3379,27 @@ int main(int argc, char* argv[])
 
   // Optionally run setup wizard.
   int result;
-  if (s_run_setup_wizard && !QtHost::RunSetupWizard())
+  if (s_state.run_setup_wizard && !QtHost::RunSetupWizard())
   {
     result = EXIT_FAILURE;
     goto shutdown_and_exit;
   }
 
   // When running in batch mode, ensure game list is loaded, but don't scan for any new files.
-  if (!s_batch_mode)
+  if (!s_state.batch_mode)
     g_main_window->refreshGameList(false);
   else
     GameList::Refresh(false, true);
 
   // Don't bother showing the window in no-gui mode.
-  if (!s_nogui_mode)
+  if (!s_state.nogui_mode)
     g_main_window->show();
 
   // Initialize big picture mode if requested.
-  if (s_start_fullscreen_ui)
+  if (s_state.start_fullscreen_ui)
     g_emu_thread->startFullscreenUI();
   else
-    s_start_fullscreen_ui_fullscreen = false;
+    s_state.start_fullscreen_ui_fullscreen = false;
 
   // Always kick off update check. It'll take over if the user is booting a game fullscreen.
   g_main_window->startupUpdateCheck();

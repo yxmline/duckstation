@@ -12,7 +12,6 @@
 class QLabel;
 class QLineEdit;
 class QScrollArea;
-class QGridLayout;
 class QVBoxLayout;
 
 class ControllerSettingsWindow;
@@ -28,9 +27,10 @@ public:
 private:
   struct CategoryWidgets
   {
+    QWidget* heading;
     QLabel* label;
     QLabel* line;
-    QGridLayout* layout;
+    QVBoxLayout* layout;
   };
 
   class Container final : public QWidget
@@ -49,18 +49,20 @@ private:
     QLineEdit* m_search;
   };
 
+  QPalette getLabelPalette(bool is_dark_theme) const;
+  QPalette getRowPalette() const;
+
   void createUi();
   void createButtons();
 
-private Q_SLOTS:
   void setFilter(const QString& filter);
 
-private:
+  void onThemeChanged(bool is_dark_theme);
+
   ControllerSettingsWindow* m_dialog;
   QScrollArea* m_scroll_area = nullptr;
   Container* m_container = nullptr;
   QVBoxLayout* m_layout = nullptr;
-  QLineEdit* m_search = nullptr;
 
   QMap<QString, CategoryWidgets> m_categories;
 };

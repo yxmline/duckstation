@@ -83,17 +83,18 @@ void InputBindingWidget::updateText()
   else
   {
     QString binding_text(QString::fromStdString(m_bindings[0]));
-    setToolTip(binding_text);
 
-    // fix up accelerators, and if it's too long, ellipsise it
+    // fix up accelerators
     if (binding_text.contains('&'))
       binding_text = binding_text.replace(QStringLiteral("&"), QStringLiteral("&&"));
 
+    setToolTip(QStringLiteral("%1\n\n%2\n%3").arg(binding_text).arg(tr(help_text)).arg(tr(help_clear_text)));
+
+    // if it's too long, ellipsise it
     const int max_length = (width() < 300) ? 35 : 60;
     if (binding_text.length() > max_length)
       binding_text = binding_text.left(max_length).append(QStringLiteral("..."));
     setText(binding_text);
-    setToolTip(QStringLiteral("%1\n\n%2\n%3").arg(binding_text).arg(tr(help_text)).arg(tr(help_clear_text)));
   }
 }
 
@@ -111,7 +112,8 @@ bool InputBindingWidget::eventFilter(QObject* watched, QEvent* event)
   else if (event_type == QEvent::KeyPress)
   {
     const QKeyEvent* key_event = static_cast<const QKeyEvent*>(event);
-    m_new_bindings.push_back(InputManager::MakeHostKeyboardKey(QtUtils::KeyEventToCode(key_event)));
+    if (const std::optional<u32> key = QtUtils::KeyEventToCode(key_event))
+      m_new_bindings.push_back(InputManager::MakeHostKeyboardKey(key.value()));
     return true;
   }
   else if ((event_type == QEvent::MouseButtonPress || event_type == QEvent::MouseButtonDblClick) &&
@@ -216,8 +218,8 @@ void InputBindingWidget::setNewBinding()
   if (m_new_bindings.empty())
     return;
 
-  std::string new_binding(
-    InputManager::ConvertInputBindingKeysToString(m_bind_type, m_new_bindings.data(), m_new_bindings.size()));
+  const SmallString new_binding =
+    InputManager::ConvertInputBindingKeysToString(m_bind_type, m_new_bindings.data(), m_new_bindings.size());
   if (!new_binding.empty())
   {
     if (m_sif)
@@ -237,7 +239,7 @@ void InputBindingWidget::setNewBinding()
   }
 
   m_bindings.clear();
-  m_bindings.push_back(std::move(new_binding));
+  m_bindings.emplace_back(new_binding);
 }
 
 void InputBindingWidget::clearBinding()
@@ -348,9 +350,11 @@ void InputBindingWidget::inputManagerHookCallback(InputBindingKey key, float val
     m_value_ranges.emplace_back(key, std::make_pair(initial_value, min_value));
   }
 
+  InputBindingDialog::logInputEvent(m_bind_type, key, value, initial_value, min_value);
+
   const float abs_value = std::abs(value);
-  const bool reverse_threshold =
-    (key.source_subtype == InputSubclass::ControllerAxis && std::abs(initial_value) > 0.5f);
+  const bool reverse_threshold = (key.source_subtype == InputSubclass::ControllerAxis &&
+                                  std::abs(initial_value) > 0.5f && std::abs(initial_value - min_value) > 0.1f);
 
   for (InputBindingKey& other_key : m_new_bindings)
   {
@@ -387,8 +391,7 @@ void InputBindingWidget::inputManagerHookCallback(InputBindingKey key, float val
 void InputBindingWidget::hookInputManager()
 {
   InputManager::SetHook([this](InputBindingKey key, float value) {
-    QMetaObject::invokeMethod(this, "inputManagerHookCallback", Qt::QueuedConnection, Q_ARG(InputBindingKey, key),
-                              Q_ARG(float, value));
+    QMetaObject::invokeMethod(this, &InputBindingWidget::inputManagerHookCallback, Qt::QueuedConnection, key, value);
     return InputInterceptHook::CallbackResult::StopProcessingEvent;
   });
 }
@@ -400,10 +403,11 @@ void InputBindingWidget::unhookInputManager()
 
 void InputBindingWidget::openDialog()
 {
-  InputBindingDialog binding_dialog(m_sif, m_bind_type, m_section_name, m_key_name, m_bindings,
-                                    QtUtils::GetRootWidget(this));
-  binding_dialog.exec();
-  reloadBinding();
+  InputBindingDialog* dlg =
+    new InputBindingDialog(m_sif, m_bind_type, m_section_name, m_key_name, m_bindings, QtUtils::GetRootWidget(this));
+  dlg->setAttribute(Qt::WA_DeleteOnClose, true);
+  connect(dlg, &InputBindingDialog::finished, this, &InputBindingWidget::reloadBinding);
+  dlg->show();
 }
 
 InputVibrationBindingWidget::InputVibrationBindingWidget(QWidget* parent)
@@ -479,6 +483,7 @@ void InputVibrationBindingWidget::onClicked()
   m_binding = new_value.toStdString();
   Host::SetBaseStringSettingValue(m_section_name.c_str(), m_key_name.c_str(), m_binding.c_str());
   Host::CommitBaseSettingChanges();
+  g_emu_thread->reloadInputBindings();
   setText(new_value);
 }
 

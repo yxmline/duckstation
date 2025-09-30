@@ -48,6 +48,17 @@ void MemoryViewWidget::updateMetrics()
   m_char_height = fm.height();
 }
 
+size_t MemoryViewWidget::selectedAddress() const
+{
+  return (m_selected_address != INVALID_SELECTED_ADDRESS) ? (m_selected_address + m_address_offset) :
+                                                            INVALID_SELECTED_ADDRESS;
+}
+
+size_t MemoryViewWidget::topAddress() const
+{
+  return static_cast<size_t>(verticalScrollBar()->value()) * m_bytes_per_line + m_address_offset;
+}
+
 void MemoryViewWidget::setData(size_t address_offset, void* data_ptr, size_t data_size, bool data_editable,
                                EditCallback edit_callback)
 {
@@ -132,6 +143,7 @@ void MemoryViewWidget::keyPressEvent(QKeyEvent* event)
         m_selected_address--;
         m_editing_nibble = -1;
         forceRefresh();
+        notifySelectedAddressChanged();
       }
     }
     else
@@ -154,6 +166,7 @@ void MemoryViewWidget::keyPressEvent(QKeyEvent* event)
 
           m_selected_address = std::min(m_selected_address + 1, m_data_size - 1);
           forceRefresh();
+          notifySelectedAddressChanged();
         }
         else
         {
@@ -184,6 +197,7 @@ void MemoryViewWidget::keyPressEvent(QKeyEvent* event)
             {
               m_editing_nibble = -1;
               m_selected_address = std::min(m_selected_address + 1, m_data_size - 1);
+              notifySelectedAddressChanged();
             }
 
             forceRefresh();
@@ -227,6 +241,7 @@ void MemoryViewWidget::keyPressEvent(QKeyEvent* event)
     forceRefresh();
     expandCurrentDataToInclude(m_selected_address);
     adjustScrollToInclude(m_selected_address);
+    notifySelectedAddressChanged();
     return;
   }
 
@@ -450,6 +465,7 @@ void MemoryViewWidget::setSelection(size_t new_selection, bool new_ascii)
     m_selection_was_ascii = new_ascii;
     m_editing_nibble = -1;
     forceRefresh();
+    notifySelectedAddressChanged();
   }
 }
 
@@ -510,12 +526,7 @@ void MemoryViewWidget::forceRefresh()
 void MemoryViewWidget::adjustContent()
 {
   if (!m_data)
-  {
-    setEnabled(false);
     return;
-  }
-
-  setEnabled(true);
 
   int w = addressWidth() + hexWidth() + asciiWidth();
   horizontalScrollBar()->setRange(0, w - viewport()->width());
@@ -536,4 +547,11 @@ void MemoryViewWidget::adjustContent()
   expandCurrentDataToInclude(m_end_offset);
 
   forceRefresh();
+
+  emit topAddressChanged(topAddress());
+}
+
+void MemoryViewWidget::notifySelectedAddressChanged()
+{
+  emit selectedAddressChanged(selectedAddress());
 }

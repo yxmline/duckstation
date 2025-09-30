@@ -23,6 +23,7 @@
     <ClInclude Include="heap_array.h" />
     <ClInclude Include="intrin.h" />
     <ClInclude Include="layered_settings_interface.h" />
+    <ClInclude Include="time_helpers.h" />
     <ClInclude Include="log.h" />
     <ClInclude Include="log_channels.h" />
     <ClInclude Include="lru_cache.h" />
@@ -44,6 +45,7 @@
     <ClInclude Include="thirdparty\aes.h" />
     <ClInclude Include="thirdparty\SmallVector.h" />
     <ClInclude Include="thirdparty\StackWalker.h" />
+    <ClInclude Include="thirdparty\usb_key_code_data.h" />
     <ClInclude Include="threading.h" />
     <ClInclude Include="task_queue.h" />
     <ClInclude Include="timer.h" />
@@ -100,6 +102,12 @@
     <ProjectReference Include="..\..\dep\fmt\fmt.vcxproj">
       <Project>{8be398e6-b882-4248-9065-fecc8728e038}</Project>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="thirdparty\usb_key_code_data.inl" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="CMakeLists.txt" />
   </ItemGroup>
   <ImportGroup Label="ExtensionTargets">
     <Import Project="$(VCTargetsPath)\BuildCustomizations\marmasm.targets" />

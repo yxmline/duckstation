@@ -22,6 +22,7 @@ AchievementLoginDialog::AchievementLoginDialog(QWidget* parent, Achievements::Lo
   title_font.setPixelSize(20);
   m_ui.titleLabel->setFont(title_font);
   setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
+  setAttribute(Qt::WA_DeleteOnClose, true);
 
   // Adjust text if needed based on reason.
   if (reason == Achievements::LoginRequestReason::TokenInvalid)
@@ -51,8 +52,7 @@ void AchievementLoginDialog::loginClicked()
     Error error;
     const bool result = Achievements::Login(username.toUtf8().constData(), password.toUtf8().constData(), &error);
     const QString message = QString::fromStdString(error.GetDescription());
-    QMetaObject::invokeMethod(this, "processLoginResult", Qt::QueuedConnection, Q_ARG(bool, result),
-                              Q_ARG(const QString&, message));
+    QMetaObject::invokeMethod(this, &AchievementLoginDialog::processLoginResult, Qt::QueuedConnection, result, message);
   });
 }
 

@@ -7,9 +7,13 @@
 
 #include "ui_graphicssettingswidget.h"
 
+#include "core/types.h"
+
 #include "util/gpu_device.h"
 
 enum class GPURenderer : u8;
+
+class SettingsInterface;
 
 class SettingsWindow;
 
@@ -21,16 +25,27 @@ public:
   GraphicsSettingsWidget(SettingsWindow* dialog, QWidget* parent);
   ~GraphicsSettingsWidget();
 
-  static void populateUpscalingModes(QComboBox* cb, int max_scale);
+  static void populateUpscalingModes(QComboBox* const cb, int max_scale);
 
-public Q_SLOTS:
+  static QVariant packAspectRatio(DisplayAspectRatio ar);
+  static DisplayAspectRatio unpackAspectRatio(const QVariant& var);
+  static void createAspectRatioSetting(QComboBox* const cb, QSpinBox* const numerator, QLabel* const separator,
+                                       QSpinBox* const denominator, SettingsInterface* const sif);
+
   void onShowDebugSettingsChanged(bool enabled);
 
-private Q_SLOTS:
+private:
+  static constexpr int TAB_INDEX_RENDERING = 0;
+  static constexpr int TAB_INDEX_ADVANCED = 1;
+  static constexpr int TAB_INDEX_PGXP = 2;
+  static constexpr int TAB_INDEX_OSD = 3;
+  static constexpr int TAB_INDEX_CAPTURE = 4;
+  static constexpr int TAB_INDEX_TEXTURE_REPLACEMENTS = 5;
+  static constexpr int TAB_INDEX_DEBUGGING = 6;
+
   void updateRendererDependentOptions();
   void updatePGXPSettingsEnabled();
 
-  void onAspectRatioChanged();
   void updateResolutionDependentOptions();
   void onDownsampleModeChanged();
 
@@ -46,15 +61,6 @@ private Q_SLOTS:
   void onTextureReplacementOptionsClicked();
 
   void onGPUThreadChanged();
-
-private:
-  static constexpr int TAB_INDEX_RENDERING = 0;
-  static constexpr int TAB_INDEX_ADVANCED = 1;
-  static constexpr int TAB_INDEX_PGXP = 2;
-  static constexpr int TAB_INDEX_OSD = 3;
-  static constexpr int TAB_INDEX_CAPTURE = 4;
-  static constexpr int TAB_INDEX_TEXTURE_REPLACEMENTS = 5;
-  static constexpr int TAB_INDEX_DEBUGGING = 6;
 
   void setupAdditionalUi();
   void removePlatformSpecificUi();

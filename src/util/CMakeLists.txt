@@ -1,4 +1,6 @@
 add_library(util
+  animated_image.cpp
+  animated_image.h
   audio_stream.cpp
   audio_stream.h
   cd_image.cpp
@@ -140,6 +142,9 @@ if(ENABLE_OPENGL)
         opengl_context_egl_wayland.cpp
         opengl_context_egl_wayland.h
       )
+      target_include_directories(util PRIVATE
+        "${Wayland_INCLUDE_DIRS}" # For wayland-egl
+      )
     endif()
     if(ANDROID)
       target_include_directories(util PRIVATE "${CMAKE_SOURCE_DIR}/android")
@@ -271,7 +276,6 @@ elseif(NOT ANDROID)
   target_sources(util PRIVATE
     platform_misc_unix.cpp
   )
-  find_package(PkgConfig REQUIRED)
   pkg_check_modules(DBUS REQUIRED dbus-1)
   target_include_directories(util PRIVATE ${DBUS_INCLUDE_DIRS})
 
@@ -308,11 +312,12 @@ function(add_util_resources target)
       message(WARNING "MoltenVK not found in path, it will depend on the target system having it.")
     endif()
 
-    # Copy shaderc/spirv-cross into the bundle
+    # Copy dynamically-loaded libraries (harfbuzz/shaderc/spirv-cross) into the bundle
+    get_target_property(HARFBUZZ_LIBRARY harfbuzz::harfbuzz IMPORTED_LOCATION_RELEASE)
     get_target_property(SPIRV_CROSS_LIBRARY spirv-cross-c-shared IMPORTED_SONAME_RELEASE)
     get_target_property(SHADERC_LIBRARY Shaderc::shaderc_shared IMPORTED_LOCATION_RELEASE)
-    target_sources(${target} PRIVATE "${SHADERC_LIBRARY}" "${SPIRV_CROSS_LIBRARY}")
-    set_source_files_properties("${SHADERC_LIBRARY}" "${SPIRV_CROSS_LIBRARY}" PROPERTIES MACOSX_PACKAGE_LOCATION Frameworks)
+    target_sources(${target} PRIVATE "${HARFBUZZ_LIBRARY}" "${SHADERC_LIBRARY}" "${SPIRV_CROSS_LIBRARY}")
+    set_source_files_properties("${HARFBUZZ_LIBRARY}" "${SHADERC_LIBRARY}" "${SPIRV_CROSS_LIBRARY}" PROPERTIES MACOSX_PACKAGE_LOCATION Frameworks)
 
     # Copy FFmpeg libraries into the bundle
     foreach(component avcodec avformat avutil swresample swscale)
@@ -321,15 +326,5 @@ function(add_util_resources target)
       target_sources(${target} PRIVATE ${version_lib})
       set_source_files_properties(${target} PRIVATE ${version_lib} PROPERTIES MACOSX_PACKAGE_LOCATION Frameworks)
     endforeach()
-  elseif(ALLOW_INSTALL)
-    # Ensure we look for dependency libraries in the installation directory.
-    set_target_properties(${target} PROPERTIES INSTALL_RPATH "$ORIGIN")
-
-    # Copy dependency libraries to installation directory.
-    install_imported_dep_library(SDL3::SDL3)
-    install_imported_dep_library(Shaderc::shaderc_shared)
-    install_imported_dep_library(spirv-cross-c-shared)
-    install_imported_dep_library(SoundTouch::SoundTouchDLL)
-    install_imported_dep_library(plutosvg::plutosvg)
   endif()
 endfunction()

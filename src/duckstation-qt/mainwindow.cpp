@@ -14,6 +14,7 @@
 #include "isobrowserwindow.h"
 #include "logwindow.h"
 #include "memorycardeditorwindow.h"
+#include "memoryeditorwindow.h"
 #include "memoryscannerwindow.h"
 #include "qthost.h"
 #include "qtutils.h"
@@ -528,6 +529,30 @@ void MainWindow::updateDisplayRelatedActions(bool has_surface, bool fullscreen)
   m_ui.menuWindowSize->setEnabled(s_system_valid && !s_system_starting && has_surface && !fullscreen);
   m_ui.actionFullscreen->setEnabled(has_surface && !s_system_starting);
   m_ui.actionFullscreen->setChecked(fullscreen);
+
+  updateGameListRelatedActions();
+}
+
+void MainWindow::updateGameListRelatedActions()
+{
+  const bool running = !isShowingGameList();
+  const bool disable = (s_system_starting || (running && isRenderingToMain()));
+
+  const bool game_grid = m_game_list_widget->isShowingGameGrid();
+  const bool game_list = m_game_list_widget->isShowingGameList();
+  const bool has_background = m_game_list_widget->hasBackground();
+
+  m_ui.menuSortBy->setDisabled(disable);
+  m_ui.actionMergeDiscSets->setDisabled(disable);
+  m_ui.actionShowLocalizedTitles->setDisabled(disable);
+  m_ui.actionShowGameIcons->setDisabled(disable || !game_list);
+  m_ui.actionAnimateGameIcons->setDisabled(disable || !game_list || !m_ui.actionShowGameIcons->isChecked());
+  m_ui.actionGridViewShowTitles->setDisabled(disable || !game_grid);
+  m_ui.actionViewZoomIn->setDisabled(disable);
+  m_ui.actionViewZoomOut->setDisabled(disable);
+  m_ui.actionGridViewRefreshCovers->setDisabled(disable || !game_grid);
+  m_ui.actionChangeGameListBackground->setDisabled(disable);
+  m_ui.actionClearGameListBackground->setDisabled(disable || !has_background);
 }
 
 void MainWindow::focusDisplayWidget()
@@ -641,12 +666,12 @@ void MainWindow::onSystemDestroyed()
     switchToGameListView();
 }
 
-void MainWindow::onSystemGameChanged(const QString& filename, const QString& game_serial, const QString& game_title)
+void MainWindow::onSystemGameChanged(const QString& path, const QString& game_serial, const QString& game_title)
 {
-  s_current_game_path = filename;
+  s_current_game_path = path;
   s_current_game_title = game_title;
   s_current_game_serial = game_serial;
-  s_current_game_icon = m_game_list_widget->getModel()->getIconForGame(filename);
+  s_current_game_icon = m_game_list_widget->getModel()->getIconForGame(path);
 
   updateWindowTitle();
 }
@@ -858,6 +883,7 @@ void MainWindow::recreate()
 void MainWindow::destroySubWindows()
 {
   QtUtils::CloseAndDeleteWindow(m_cover_download_window);
+  QtUtils::CloseAndDeleteWindow(m_memory_editor_window);
   QtUtils::CloseAndDeleteWindow(m_memory_scanner_window);
   QtUtils::CloseAndDeleteWindow(m_debugger_window);
   QtUtils::CloseAndDeleteWindow(m_memory_card_editor_window);
@@ -1104,7 +1130,7 @@ const GameList::Entry* MainWindow::resolveDiscSetEntry(const GameList::Entry* en
     return entry;
 
   // disc set... need to figure out the disc we want
-  SelectDiscDialog dlg(entry->path, this);
+  SelectDiscDialog dlg(entry->GetDiscSetEntry(), m_game_list_widget->getModel()->getShowLocalizedTitles(), this);
 
   lock.unlock();
   const int res = dlg.exec();
@@ -1120,51 +1146,47 @@ std::shared_ptr<SystemBootParameters> MainWindow::getSystemBootParameters(std::s
   return ret;
 }
 
-std::optional<bool> MainWindow::promptForResumeState(const std::string& save_state_path)
+bool MainWindow::openResumeStateDialog(const std::string& path, const std::string& serial)
 {
   System::FlushSaveStates();
 
   FILESYSTEM_STAT_DATA sd;
+  std::string save_state_path = System::GetGameSaveStatePath(serial, -1);
   if (save_state_path.empty() || !FileSystem::StatFile(save_state_path.c_str(), &sd))
     return false;
 
-  QMessageBox msgbox(this);
-  msgbox.setIcon(QMessageBox::Question);
-  msgbox.setWindowTitle(tr("Load Resume State"));
-  msgbox.setWindowModality(Qt::WindowModal);
-  msgbox.setText(
+  QMessageBox* msgbox = new QMessageBox(this);
+  msgbox->setIcon(QMessageBox::Question);
+  msgbox->setWindowTitle(tr("Load Resume State"));
+  msgbox->setWindowModality(Qt::WindowModal);
+  msgbox->setAttribute(Qt::WA_DeleteOnClose, true);
+  msgbox->setText(
     tr("A resume save state was found for this game, saved at:\n\n%1.\n\nDo you want to load this state, "
        "or start from a fresh boot?")
       .arg(QtHost::FormatNumber(Host::NumberFormatType::LongDateTime, static_cast<s64>(sd.ModificationTime))));
 
-  QPushButton* load = msgbox.addButton(tr("Load State"), QMessageBox::AcceptRole);
-  QPushButton* boot = msgbox.addButton(tr("Fresh Boot"), QMessageBox::RejectRole);
-  QPushButton* delboot = msgbox.addButton(tr("Delete And Boot"), QMessageBox::RejectRole);
-  msgbox.addButton(QMessageBox::Cancel);
-  msgbox.setDefaultButton(load);
-  msgbox.exec();
+  QPushButton* load = msgbox->addButton(tr("Load State"), QMessageBox::AcceptRole);
+  QPushButton* boot = msgbox->addButton(tr("Fresh Boot"), QMessageBox::RejectRole);
+  QPushButton* delboot = msgbox->addButton(tr("Delete And Boot"), QMessageBox::RejectRole);
+  msgbox->addButton(QMessageBox::Cancel);
+  msgbox->setDefaultButton(load);
 
-  QAbstractButton* clicked = msgbox.clickedButton();
-  if (load == clicked)
-  {
-    return true;
-  }
-  else if (boot == clicked)
-  {
-    return false;
-  }
-  else if (delboot == clicked)
-  {
+  connect(load, &QPushButton::clicked, [this, path, save_state_path]() mutable {
+    startFile(std::move(path), std::move(save_state_path), std::nullopt);
+  });
+  connect(boot, &QPushButton::clicked,
+          [this, path]() mutable { startFile(std::move(path), std::nullopt, std::nullopt); });
+  connect(delboot, &QPushButton::clicked, [this, path, save_state_path]() mutable {
     if (!FileSystem::DeleteFile(save_state_path.c_str()))
     {
       QMessageBox::critical(this, tr("Error"),
                             tr("Failed to delete save state file '%1'.").arg(QString::fromStdString(save_state_path)));
     }
+    startFile(std::move(path), std::nullopt, std::nullopt);
+  });
 
-    return false;
-  }
-
-  return std::nullopt;
+  msgbox->show();
+  return true;
 }
 
 void MainWindow::startFile(std::string path, std::optional<std::string> save_path, std::optional<bool> fast_boot)
@@ -1177,34 +1199,24 @@ void MainWindow::startFile(std::string path, std::optional<std::string> save_pat
   g_emu_thread->bootSystem(std::move(params));
 }
 
-void MainWindow::startFileOrChangeDisc(const QString& path)
+void MainWindow::startFileOrChangeDisc(const QString& qpath)
 {
   if (s_system_valid)
   {
     // this is a disc change
-    promptForDiscChange(path);
+    promptForDiscChange(qpath);
     return;
   }
 
-  // try to find the serial for the game
-  std::string path_str(path.toStdString());
-  std::string serial(GameDatabase::GetSerialForPath(path_str.c_str()));
-  std::optional<std::string> save_path;
-  if (!serial.empty())
+  std::string path = qpath.toStdString();
   {
-    std::string resume_path(System::GetGameSaveStatePath(serial.c_str(), -1));
-    std::optional<bool> resume = promptForResumeState(resume_path);
-    if (!resume.has_value())
-    {
-      // cancelled
+    const auto lock = GameList::GetLock();
+    const GameList::Entry* entry = GameList::GetEntryForPath(path);
+    if (entry && !entry->serial.empty() && openResumeStateDialog(entry->path, entry->serial))
       return;
-    }
-    else if (resume.value())
-      save_path = std::move(resume_path);
   }
 
-  // only resume if the option is enabled, and we have one for this game
-  startFile(std::move(path_str), std::move(save_path), std::nullopt);
+  startFile(std::move(path), std::nullopt, std::nullopt);
 }
 
 void MainWindow::promptForDiscChange(const QString& path)
@@ -1287,6 +1299,7 @@ void MainWindow::onChangeDiscMenuAboutToShow()
   if (!s_system_valid)
     return;
 
+  // NOTE: This is terrible and a race condition. But nobody should be using m3u files anyway.
   if (System::HasMediaSubImages())
   {
     const u32 count = System::GetMediaSubImageCount();
@@ -1299,10 +1312,11 @@ void MainWindow::onChangeDiscMenuAboutToShow()
       connect(action, &QAction::triggered, [i]() { g_emu_thread->changeDiscFromPlaylist(i); });
     }
   }
-  else if (const GameDatabase::Entry* entry = System::GetGameDatabaseEntry(); entry && !entry->disc_set_serials.empty())
+  else if (const GameDatabase::Entry* entry = System::GetGameDatabaseEntry(); entry && entry->disc_set)
   {
     auto lock = GameList::GetLock();
-    for (const auto& [title, glentry] : GameList::GetMatchingEntriesForSerial(entry->disc_set_serials))
+    for (const auto& [title, glentry] :
+         GameList::GetEntriesInDiscSet(entry->disc_set, m_game_list_widget->getModel()->getShowLocalizedTitles()))
     {
       QAction* action = m_ui.menuChangeDisc->addAction(QtUtils::StringViewToQString(title));
       QString path = QString::fromStdString(glentry->path);
@@ -1439,12 +1453,14 @@ void MainWindow::onViewStatusBarActionToggled(bool checked)
 void MainWindow::onViewGameListActionTriggered()
 {
   m_game_list_widget->showGameList();
+  updateGameListRelatedActions();
   switchToGameListView();
 }
 
 void MainWindow::onViewGameGridActionTriggered()
 {
   m_game_list_widget->showGameGrid();
+  updateGameListRelatedActions();
   switchToGameListView();
 }
 
@@ -1453,16 +1469,20 @@ void MainWindow::onViewSystemDisplayTriggered()
   switchToEmulationView();
 }
 
-void MainWindow::onViewGameGridZoomInActionTriggered()
+void MainWindow::onViewZoomInActionTriggered()
 {
-  if (isShowingGameList())
-    m_game_list_widget->getGridView()->zoomIn();
+  if (!isShowingGameList())
+    return;
+
+  m_game_list_widget->zoomIn();
 }
 
-void MainWindow::onViewGameGridZoomOutActionTriggered()
+void MainWindow::onViewZoomOutActionTriggered()
 {
-  if (isShowingGameList())
-    m_game_list_widget->getGridView()->zoomOut();
+  if (!isShowingGameList())
+    return;
+
+  m_game_list_widget->zoomOut();
 }
 
 void MainWindow::onGitHubRepositoryActionTriggered()
@@ -1528,22 +1548,11 @@ void MainWindow::onGameListEntryActivated()
     return;
   }
 
-  std::optional<std::string> save_path;
-  if (!entry->serial.empty())
-  {
-    std::string resume_path(System::GetGameSaveStatePath(entry->serial.c_str(), -1));
-    std::optional<bool> resume = promptForResumeState(resume_path);
-    if (!resume.has_value())
-    {
-      // cancelled
-      return;
-    }
-    else if (resume.value())
-      save_path = std::move(resume_path);
-  }
+  if (!entry->serial.empty() && openResumeStateDialog(entry->path, entry->serial))
+    return;
 
   // only resume if the option is enabled, and we have one for this game
-  startFile(entry->path, std::move(save_path), std::nullopt);
+  startFile(entry->path, std::nullopt, std::nullopt);
 }
 
 void MainWindow::onGameListEntryContextMenuRequested(const QPoint& point)
@@ -1562,11 +1571,10 @@ void MainWindow::onGameListEntryContextMenuRequested(const QPoint& point)
         connect(menu.addAction(tr("Properties...")), &QAction::triggered, [qpath]() {
           const auto lock = GameList::GetLock();
           const GameList::Entry* entry = GameList::GetEntryForPath(qpath.toStdString());
-          if (!entry)
+          if (!entry || !g_main_window)
             return;
 
-          SettingsWindow::openGamePropertiesDialog(entry->path, entry->title, entry->serial, entry->hash,
-                                                   entry->region);
+          SettingsWindow::openGamePropertiesDialog(entry);
         });
 
         connect(menu.addAction(tr("Open Containing Directory...")), &QAction::triggered, [this, qpath]() {
@@ -1638,15 +1646,12 @@ void MainWindow::onGameListEntryContextMenuRequested(const QPoint& point)
       }
       else
       {
-        connect(menu.addAction(tr("Properties...")), &QAction::triggered, [disc_set_name = qpath]() {
+        connect(menu.addAction(tr("Properties...")), &QAction::triggered, [dsentry = entry->GetDiscSetEntry()]() {
           // resolve path first
           auto lock = GameList::GetLock();
-          const GameList::Entry* first_disc = GameList::GetFirstDiscSetMember(disc_set_name.toStdString());
-          if (first_disc)
-          {
-            SettingsWindow::openGamePropertiesDialog(first_disc->path, first_disc->title, first_disc->serial,
-                                                     first_disc->hash, first_disc->region);
-          }
+          const GameList::Entry* first_disc = GameList::GetFirstDiscSetMember(dsentry);
+          if (first_disc && g_main_window)
+            SettingsWindow::openGamePropertiesDialog(first_disc);
         });
 
         connect(menu.addAction(tr("Set Cover Image...")), &QAction::triggered, [this, qpath]() {
@@ -1743,7 +1748,8 @@ void MainWindow::clearGameListEntryPlayTime(const GameList::Entry* entry)
   if (QMessageBox::question(
         this, tr("Confirm Reset"),
         tr("Are you sure you want to reset the play time for '%1'?\n\nThis action cannot be undone.")
-          .arg(QString::fromStdString(entry->title))) != QMessageBox::Yes)
+          .arg(QtUtils::StringViewToQString(
+            entry->GetDisplayTitle(m_game_list_widget->getModel()->getShowLocalizedTitles())))) != QMessageBox::Yes)
   {
     return;
   }
@@ -1777,9 +1783,10 @@ void MainWindow::setupAdditionalUi()
   group->addAction(m_ui.actionViewGameGrid);
   group->addAction(m_ui.actionViewSystemDisplay);
 
-  m_game_list_widget = new GameListWidget(m_ui.mainContainer);
-  m_game_list_widget->initialize(m_ui.actionViewGameList, m_ui.actionViewGameGrid, m_ui.actionMergeDiscSets,
-                                 m_ui.actionShowGameIcons, m_ui.actionGridViewShowTitles);
+  m_game_list_widget =
+    new GameListWidget(m_ui.mainContainer, m_ui.actionViewGameList, m_ui.actionViewGameGrid, m_ui.actionMergeDiscSets,
+                       m_ui.actionShowGameIcons, m_ui.actionAnimateGameIcons, m_ui.actionGridViewShowTitles,
+                       m_ui.actionShowLocalizedTitles);
   m_ui.mainContainer->addWidget(m_game_list_widget);
 
   m_status_progress_widget = new QProgressBar(m_ui.statusBar);
@@ -1811,9 +1818,51 @@ void MainWindow::setupAdditionalUi()
   m_settings_toolbar_menu->addAction(m_ui.actionSettings);
   m_settings_toolbar_menu->addAction(m_ui.actionViewGameProperties);
 
+  // View > Sort By
+  {
+    const int current_sort_column = m_game_list_widget->getListView()->horizontalHeader()->sortIndicatorSection();
+    const Qt::SortOrder current_sort_order =
+      m_game_list_widget->getListView()->horizontalHeader()->sortIndicatorOrder();
+
+    QActionGroup* const column_group = new QActionGroup(m_ui.menuSortBy);
+    QActionGroup* const order_group = new QActionGroup(m_ui.menuSortBy);
+
+    for (int i = 0; i <= GameListModel::Column_LastVisible; i++)
+    {
+      QAction* const action =
+        new QAction(m_game_list_widget->getModel()->headerData(i, Qt::Horizontal, Qt::DisplayRole).toString());
+      action->setCheckable(true);
+      action->setChecked(current_sort_column == i);
+      action->setData(i);
+      column_group->addAction(action);
+      m_ui.menuSortBy->addAction(action);
+      connect(action, &QAction::triggered, this, &MainWindow::onViewSortByActionTriggered);
+    }
+
+    m_ui.menuSortBy->addSeparator();
+
+    QAction* const ascending_action = new QAction(tr("&Ascending"));
+    ascending_action->setIcon(QIcon::fromTheme(QStringLiteral("go-up")));
+    ascending_action->setCheckable(true);
+    ascending_action->setChecked(current_sort_order == Qt::AscendingOrder);
+    ascending_action->setObjectName(QStringLiteral("SortAscending"));
+    order_group->addAction(ascending_action);
+    m_ui.menuSortBy->addAction(ascending_action);
+    connect(ascending_action, &QAction::triggered, this, &MainWindow::onViewSortOrderActionTriggered);
+
+    QAction* const descending_action = new QAction(tr("&Descending"));
+    descending_action->setIcon(QIcon::fromTheme(QStringLiteral("go-down")));
+    descending_action->setCheckable(true);
+    descending_action->setChecked(current_sort_order == Qt::DescendingOrder);
+    descending_action->setObjectName(QStringLiteral("SortDescending"));
+    order_group->addAction(descending_action);
+    m_ui.menuSortBy->addAction(descending_action);
+    connect(descending_action, &QAction::triggered, this, &MainWindow::onViewSortOrderActionTriggered);
+  }
+
   for (u32 scale = 1; scale <= 10; scale++)
   {
-    QAction* action = m_ui.menuWindowSize->addAction(tr("%1x Scale").arg(scale));
+    QAction* const action = m_ui.menuWindowSize->addAction(tr("%1x Scale").arg(scale));
     connect(action, &QAction::triggered, [scale]() { g_emu_thread->requestDisplaySize(scale); });
   }
 
@@ -1826,14 +1875,59 @@ void MainWindow::setupAdditionalUi()
   m_shortcuts.game_list_search->setKeys(QKeySequence::keyBindings(QKeySequence::Find) +
                                         QKeySequence::keyBindings(QKeySequence::FindNext));
   connect(m_shortcuts.game_list_search, &QShortcut::activated, m_game_list_widget, &GameListWidget::focusSearchWidget);
-  m_shortcuts.game_grid_zoom_in =
-    new QShortcut(QKeySequence::ZoomIn, this, this, &MainWindow::onViewGameGridZoomInActionTriggered);
-  m_shortcuts.game_grid_zoom_out =
-    new QShortcut(QKeySequence::ZoomOut, this, this, &MainWindow::onViewGameGridZoomOutActionTriggered);
+  m_shortcuts.game_list_zoom_in =
+    new QShortcut(QKeySequence::ZoomIn, this, this, &MainWindow::onViewZoomInActionTriggered);
+  m_shortcuts.game_list_zoom_out =
+    new QShortcut(QKeySequence::ZoomOut, this, this, &MainWindow::onViewZoomOutActionTriggered);
 
   s_disable_window_rounded_corners = Host::GetBaseBoolSettingValue("Main", "DisableWindowRoundedCorners", false);
   if (s_disable_window_rounded_corners)
     PlatformMisc::SetWindowRoundedCornerState(reinterpret_cast<void*>(winId()), false);
+}
+
+void MainWindow::onGameListSortIndicatorOrderChanged(int column, Qt::SortOrder order)
+{
+  // yuck, allocations
+  for (QAction* const action : m_ui.menuSortBy->actions())
+  {
+    bool activate = false;
+
+    if (action->objectName() == QStringLiteral("SortAscending"))
+      activate = (order == Qt::AscendingOrder);
+    else if (action->objectName() == QStringLiteral("SortDescending"))
+      activate = (order == Qt::DescendingOrder);
+    else
+      activate = (action->data() == column);
+
+    if (activate)
+    {
+      const QSignalBlocker sb(m_ui.menuSortBy);
+      action->setChecked(true);
+    }
+  }
+}
+
+void MainWindow::onViewSortByActionTriggered()
+{
+  const QAction* const action = qobject_cast<const QAction*>(sender());
+  if (!action)
+    return;
+
+  QHeaderView* const hh = m_game_list_widget->getListView()->horizontalHeader();
+  hh->setSortIndicator(action->data().toInt(), hh->sortIndicatorOrder());
+}
+
+void MainWindow::onViewSortOrderActionTriggered()
+{
+  const QAction* const action = qobject_cast<const QAction*>(sender());
+  if (!action)
+    return;
+
+  const Qt::SortOrder order =
+    (action->objectName() == QStringLiteral("SortAscending")) ? Qt::AscendingOrder : Qt::DescendingOrder;
+
+  QHeaderView* const hh = m_game_list_widget->getListView()->horizontalHeader();
+  hh->setSortIndicator(hh->sortIndicatorSection(), order);
 }
 
 void MainWindow::updateToolbarActions()
@@ -2044,11 +2138,13 @@ void MainWindow::updateEmulationActions(bool starting, bool running, bool achiev
   m_ui.menuChangeDisc->setDisabled(starting_or_not_running);
   m_ui.menuCheats->setDisabled(starting_or_not_running || achievements_hardcore_mode);
   m_ui.actionCPUDebugger->setDisabled(achievements_hardcore_mode);
+  m_ui.actionMemoryEditor->setDisabled(achievements_hardcore_mode);
   m_ui.actionMemoryScanner->setDisabled(achievements_hardcore_mode);
   m_ui.actionReloadTextureReplacements->setDisabled(starting_or_not_running);
   m_ui.actionDumpRAM->setDisabled(starting_or_not_running || achievements_hardcore_mode);
   m_ui.actionDumpVRAM->setDisabled(starting_or_not_running || achievements_hardcore_mode);
   m_ui.actionDumpSPURAM->setDisabled(starting_or_not_running || achievements_hardcore_mode);
+  m_ui.actionCaptureGPUFrame->setDisabled(starting_or_not_running);
 
   m_ui.actionLoadState->setDisabled(starting);
   m_ui.menuLoadState->setDisabled(starting);
@@ -2061,6 +2157,8 @@ void MainWindow::updateEmulationActions(bool starting, bool running, bool achiev
   m_ui.actionViewGameProperties->setDisabled(starting_or_not_running);
 
   m_ui.actionControllerTest->setDisabled(starting_or_running);
+
+  m_game_list_widget->setDisabled(starting);
 
   updateShortcutActions(starting);
 
@@ -2094,8 +2192,8 @@ void MainWindow::updateShortcutActions(bool starting)
   m_shortcuts.open_file->setEnabled(!starting_or_running);
   m_shortcuts.game_list_refresh->setEnabled(is_showing_game_list);
   m_shortcuts.game_list_search->setEnabled(is_showing_game_list);
-  m_shortcuts.game_grid_zoom_in->setEnabled(is_showing_game_list);
-  m_shortcuts.game_grid_zoom_out->setEnabled(is_showing_game_list);
+  m_shortcuts.game_list_zoom_in->setEnabled(is_showing_game_list);
+  m_shortcuts.game_list_zoom_out->setEnabled(is_showing_game_list);
 }
 
 void MainWindow::updateStatusBarWidgetVisibility()
@@ -2349,6 +2447,7 @@ void MainWindow::connectSignals()
   connect(m_ui.actionAbout, &QAction::triggered, this, &MainWindow::onAboutActionTriggered);
   connect(m_ui.actionCheckForUpdates, &QAction::triggered, this, &MainWindow::onCheckForUpdatesActionTriggered);
   connect(m_ui.actionMemoryCardEditor, &QAction::triggered, this, &MainWindow::onToolsMemoryCardEditorTriggered);
+  connect(m_ui.actionMemoryEditor, &QAction::triggered, this, &MainWindow::onToolsMemoryEditorTriggered);
   connect(m_ui.actionMemoryScanner, &QAction::triggered, this, &MainWindow::onToolsMemoryScannerTriggered);
   connect(m_ui.actionISOBrowser, &QAction::triggered, this, &MainWindow::onToolsISOBrowserTriggered);
   connect(m_ui.actionCoverDownloader, &QAction::triggered, this, &MainWindow::onToolsCoverDownloaderTriggered);
@@ -2362,10 +2461,13 @@ void MainWindow::connectSignals()
   connect(m_ui.actionReloadTextureReplacements, &QAction::triggered, g_emu_thread,
           &EmuThread::reloadTextureReplacements);
   connect(m_ui.actionMergeDiscSets, &QAction::triggered, m_game_list_widget, &GameListWidget::setMergeDiscSets);
+  connect(m_ui.actionShowLocalizedTitles, &QAction::triggered, m_game_list_widget,
+          &GameListWidget::setShowLocalizedTitles);
   connect(m_ui.actionShowGameIcons, &QAction::triggered, m_game_list_widget, &GameListWidget::setShowGameIcons);
+  connect(m_ui.actionAnimateGameIcons, &QAction::triggered, m_game_list_widget, &GameListWidget::setAnimateGameIcons);
   connect(m_ui.actionGridViewShowTitles, &QAction::triggered, m_game_list_widget, &GameListWidget::setShowCoverTitles);
-  connect(m_ui.actionGridViewZoomIn, &QAction::triggered, this, &MainWindow::onViewGameGridZoomInActionTriggered);
-  connect(m_ui.actionGridViewZoomOut, &QAction::triggered, this, &MainWindow::onViewGameGridZoomOutActionTriggered);
+  connect(m_ui.actionViewZoomIn, &QAction::triggered, this, &MainWindow::onViewZoomInActionTriggered);
+  connect(m_ui.actionViewZoomOut, &QAction::triggered, this, &MainWindow::onViewZoomOutActionTriggered);
   connect(m_ui.actionGridViewRefreshCovers, &QAction::triggered, m_game_list_widget,
           &GameListWidget::refreshGridCovers);
   connect(m_ui.actionViewRefreshAchievementProgress, &QAction::triggered, g_emu_thread,
@@ -2411,6 +2513,7 @@ void MainWindow::connectSignals()
           Qt::BlockingQueuedConnection);
   connect(g_emu_thread, &EmuThread::onDestroyAuxiliaryRenderWindow, this, &MainWindow::onDestroyAuxiliaryRenderWindow,
           Qt::BlockingQueuedConnection);
+  connect(this, &MainWindow::themeChanged, g_emu_thread, &EmuThread::updateFullscreenUITheme);
 
   // These need to be queued connections to stop crashing due to menus opening/closing and switching focus.
   connect(m_game_list_widget, &GameListWidget::refreshProgress, this, &MainWindow::onGameListRefreshProgress);
@@ -2423,6 +2526,8 @@ void MainWindow::connectSignals()
           &MainWindow::onGameListEntryContextMenuRequested, Qt::QueuedConnection);
   connect(m_game_list_widget, &GameListWidget::addGameDirectoryRequested, this,
           [this]() { getSettingsWindow()->getGameListSettingsWidget()->addSearchDirectory(this); });
+  connect(m_game_list_widget->getListView()->horizontalHeader(), &QHeaderView::sortIndicatorChanged, this,
+          &MainWindow::onGameListSortIndicatorOrderChanged);
 
   SettingWidgetBinder::BindMenuToEnumSetting(m_ui.menuCPUExecutionMode, "CPU", "ExecutionMode",
                                              &Settings::ParseCPUExecutionMode, &Settings::GetCPUExecutionModeName,
@@ -2436,7 +2541,7 @@ void MainWindow::connectSignals()
     &Settings::GetDisplayCropModeDisplayName, Settings::DEFAULT_DISPLAY_CROP_MODE, DisplayCropMode::MaxCount);
   SettingWidgetBinder::BindMenuToEnumSetting(m_ui.menuLogLevel, "Logging", "LogLevel", &Settings::ParseLogLevelName,
                                              &Settings::GetLogLevelName, &Settings::GetLogLevelDisplayName,
-                                             Settings::DEFAULT_LOG_LEVEL, Log::Level::MaxCount);
+                                             Log::DEFAULT_LOG_LEVEL, Log::Level::MaxCount);
   connect(m_ui.menuLogChannels, &QMenu::aboutToShow, this, &MainWindow::onDebugLogChannelsMenuAboutToShow);
   SettingWidgetBinder::BindWidgetToBoolSetting(nullptr, m_ui.actionLogToSystemConsole, "Logging", "LogToConsole",
                                                false);
@@ -2485,18 +2590,16 @@ void MainWindow::connectSignals()
                                                false);
   SettingWidgetBinder::BindWidgetToBoolSetting(nullptr, m_ui.actionDebugShowMDECState, "DebugWindows", "MDEC", false);
   SettingWidgetBinder::BindWidgetToBoolSetting(nullptr, m_ui.actionDebugShowDMAState, "DebugWindows", "DMA", false);
-}
 
-void MainWindow::updateTheme()
-{
-  QtHost::UpdateApplicationTheme();
-  g_emu_thread->updateFullscreenUITheme();
-  reloadThemeSpecificImages();
-}
+  // Set status tip to the same as tooltip for accessibility.
+  for (QAction* action : findChildren<QAction*>())
+  {
+    if (action->menu())
+      continue;
 
-void MainWindow::reloadThemeSpecificImages()
-{
-  m_game_list_widget->reloadThemeSpecificImages();
+    if (const QString tip = action->toolTip(); !tip.isEmpty())
+      action->setStatusTip(tip);
+  }
 }
 
 void MainWindow::onSettingsThemeChanged()
@@ -2505,7 +2608,7 @@ void MainWindow::onSettingsThemeChanged()
   const QString old_style_name = qApp->style()->name();
 #endif
 
-  updateTheme();
+  QtHost::UpdateApplicationTheme();
 
 #ifdef _WIN32
   // Work around a bug where the background colour of menus is broken when changing to/from the windowsvista theme.
@@ -2605,18 +2708,22 @@ void MainWindow::openGamePropertiesForCurrentGame(const char* category /* = null
   if (!s_system_valid)
     return;
 
-  Host::RunOnCPUThread([category]() {
-    const std::string& path = System::GetGamePath();
-    const std::string& serial = System::GetGameSerial();
-    if (path.empty() || serial.empty())
-      return;
+  auto lock = GameList::GetLock();
+  const GameList::Entry* entry = GameList::GetEntryForPath(s_current_game_path.toStdString());
+  if (entry && entry->disc_set_member && !entry->dbentry->IsFirstDiscInSet() &&
+      !System::ShouldUseSeparateDiscSettingsForSerial(entry->serial))
+  {
+    // show for first disc instead
+    entry = GameList::GetFirstDiscSetMember(entry->dbentry->disc_set);
+  }
+  if (!entry)
+  {
+    lock.unlock();
+    QMessageBox::critical(this, tr("Error"), tr("Game properties is only available for scanned games."));
+    return;
+  }
 
-    Host::RunOnUIThread([title = std::string(System::GetGameTitle()), path = std::string(path),
-                         serial = std::string(serial), hash = System::GetGameHash(), region = System::GetDiscRegion(),
-                         category]() {
-      SettingsWindow::openGamePropertiesDialog(path, title, std::move(serial), hash, region, category);
-    });
-  });
+  SettingsWindow::openGamePropertiesDialog(entry, category);
 }
 
 ControllerSettingsWindow* MainWindow::getControllerSettingsWindow()
@@ -2625,6 +2732,20 @@ ControllerSettingsWindow* MainWindow::getControllerSettingsWindow()
     m_controller_settings_window = new ControllerSettingsWindow();
 
   return m_controller_settings_window;
+}
+
+MemoryEditorWindow* MainWindow::getMemoryEditorWindow()
+{
+  if (!m_memory_editor_window)
+  {
+    m_memory_editor_window = new MemoryEditorWindow();
+    connect(m_memory_editor_window, &MemoryEditorWindow::closed, this, [this]() {
+      m_memory_editor_window->deleteLater();
+      m_memory_editor_window = nullptr;
+    });
+  }
+
+  return m_memory_editor_window;
 }
 
 void MainWindow::doControllerSettings(
@@ -2643,17 +2764,14 @@ void MainWindow::onViewChangeGameListBackgroundTriggered()
   if (path.isEmpty())
     return;
 
-  std::string relative_path = Path::MakeRelative(QDir::toNativeSeparators(path).toStdString(), EmuFolders::DataRoot);
-  Host::SetBaseStringSettingValue("UI", "GameListBackgroundPath", relative_path.c_str());
-  Host::CommitBaseSettingChanges();
-  m_game_list_widget->updateBackground(true);
+  m_game_list_widget->setBackgroundPath(QDir::toNativeSeparators(path).toStdString());
+  m_ui.actionClearGameListBackground->setEnabled(true);
 }
 
 void MainWindow::onViewClearGameListBackgroundTriggered()
 {
-  Host::DeleteBaseSettingValue("UI", "GameListBackgroundPath");
-  Host::CommitBaseSettingChanges();
-  m_game_list_widget->updateBackground(true);
+  m_game_list_widget->setBackgroundPath({});
+  m_ui.actionClearGameListBackground->setEnabled(false);
 }
 
 void MainWindow::onSettingsTriggeredFromToolbar()
@@ -2718,7 +2836,7 @@ void MainWindow::changeEvent(QEvent* event)
   if (event->type() == QEvent::StyleChange)
   {
     QtHost::SetIconThemeFromStyle();
-    reloadThemeSpecificImages();
+    emit themeChanged(QtHost::IsDarkApplicationTheme());
   }
 
   QMainWindow::changeEvent(event);
@@ -2859,27 +2977,36 @@ void MainWindow::requestShutdown(bool allow_confirm, bool allow_save_to_state, b
 
     SystemLock lock(pauseAndLockSystem());
 
-    QMessageBox msgbox(lock.getDialogParent());
-    msgbox.setIcon(QMessageBox::Question);
-    msgbox.setWindowTitle(tr("Confirm Shutdown"));
-    msgbox.setWindowModality(Qt::WindowModal);
-    msgbox.setText(tr("Are you sure you want to shut down the virtual machine?"));
+    QMessageBox* msgbox = new QMessageBox(lock.getDialogParent());
+    msgbox->setWindowTitle(tr("Confirm Shutdown"));
+    msgbox->setWindowModality(Qt::WindowModal);
+    msgbox->setAttribute(Qt::WA_DeleteOnClose, true);
+    msgbox->setIcon(QMessageBox::Question);
+    msgbox->setText(tr("Are you sure you want to shut down the virtual machine?"));
 
-    QCheckBox* save_cb = new QCheckBox(tr("Save State For Resume"), &msgbox);
+    QCheckBox* const save_cb = new QCheckBox(tr("Save State For Resume"), msgbox);
     save_cb->setChecked(allow_save_to_state && save_state);
     save_cb->setEnabled(allow_save_to_state);
-    msgbox.setCheckBox(save_cb);
-    msgbox.addButton(QMessageBox::Yes);
-    msgbox.addButton(QMessageBox::No);
-    msgbox.setDefaultButton(QMessageBox::Yes);
-    if (msgbox.exec() != QMessageBox::Yes)
-      return;
+    msgbox->setCheckBox(save_cb);
+    msgbox->addButton(QMessageBox::Yes);
+    msgbox->addButton(QMessageBox::No);
+    msgbox->setDefaultButton(QMessageBox::Yes);
+    connect(msgbox, &QMessageBox::finished, this,
+            [this, lock = std::move(lock), save_cb, allow_save_to_state, check_safety, check_pause, exit_fullscreen_ui,
+             quit_afterwards](int result) mutable {
+              if (result != QMessageBox::Yes)
+                return;
 
-    save_state = save_cb->isChecked();
+              // Don't switch back to fullscreen when we're shutting down anyway.
+              if (!QtHost::IsFullscreenUIStarted())
+                lock.cancelResume();
 
-    // Don't switch back to fullscreen when we're shutting down anyway.
-    if (!QtHost::IsFullscreenUIStarted())
-      lock.cancelResume();
+              const bool save_state = save_cb->isChecked();
+              requestShutdown(false, allow_save_to_state, save_state, check_safety, check_pause, exit_fullscreen_ui,
+                              quit_afterwards);
+            });
+    msgbox->show();
+    return;
   }
 
   // If we're running in batch mode, don't show the main window after shutting down.
@@ -2931,7 +3058,10 @@ void MainWindow::checkForSettingChanges()
   }
 
   LogWindow::updateSettings();
-  updateWindowState();
+
+  // don't refresh window state while setup wizard is running, i.e. no game and hidden
+  if (isVisible() || s_system_valid || s_system_starting)
+    updateWindowState();
 }
 
 std::optional<WindowInfo> MainWindow::getWindowInfo()
@@ -3002,10 +3132,11 @@ void MainWindow::openMemoryCardEditor(const QString& card_a_path, const QString&
 
 void MainWindow::onAchievementsLoginRequested(Achievements::LoginRequestReason reason)
 {
-  const auto lock = pauseAndLockSystem();
+  auto lock = pauseAndLockSystem();
 
-  AchievementLoginDialog dlg(lock.getDialogParent(), reason);
-  dlg.exec();
+  AchievementLoginDialog* dlg = new AchievementLoginDialog(lock.getDialogParent(), reason);
+  connect(dlg, &AchievementLoginDialog::finished, this, [lock = std::move(lock)]() {});
+  dlg->show();
 }
 
 void MainWindow::onAchievementsLoginSuccess(const QString& username, quint32 points, quint32 sc_points,
@@ -3036,6 +3167,7 @@ void MainWindow::onAchievementsHardcoreModeChanged(bool enabled)
   if (enabled)
   {
     QtUtils::CloseAndDeleteWindow(m_debugger_window);
+    QtUtils::CloseAndDeleteWindow(m_memory_editor_window);
     QtUtils::CloseAndDeleteWindow(m_memory_scanner_window);
   }
 
@@ -3140,6 +3272,14 @@ void MainWindow::onToolsMediaCaptureToggled(bool checked)
   Host::RunOnCPUThread([path = path.toStdString()]() { System::StartMediaCapture(path); });
 }
 
+void MainWindow::onToolsMemoryEditorTriggered()
+{
+  if (s_achievements_hardcore_mode)
+    return;
+
+  QtUtils::ShowOrRaiseWindow(getMemoryEditorWindow());
+}
+
 void MainWindow::onToolsMemoryScannerTriggered()
 {
   if (s_achievements_hardcore_mode)
@@ -3203,7 +3343,6 @@ void MainWindow::checkForUpdates(bool display_message)
     {
       QMessageBox mbox(this);
       mbox.setWindowTitle(tr("Updater Error"));
-      mbox.setWindowModality(Qt::WindowModal);
       mbox.setTextFormat(Qt::RichText);
 
       QString message;
@@ -3308,20 +3447,26 @@ MainWindow::SystemLock MainWindow::pauseAndLockSystem()
 }
 
 MainWindow::SystemLock::SystemLock(QWidget* dialog_parent, bool was_paused, bool was_fullscreen)
-  : m_dialog_parent(dialog_parent), m_was_paused(was_paused), m_was_fullscreen(was_fullscreen)
+  : m_dialog_parent(dialog_parent), m_was_paused(was_paused), m_was_fullscreen(was_fullscreen), m_valid(true)
 {
 }
 
 MainWindow::SystemLock::SystemLock(SystemLock&& lock)
-  : m_dialog_parent(lock.m_dialog_parent), m_was_paused(lock.m_was_paused), m_was_fullscreen(lock.m_was_fullscreen)
+  : m_dialog_parent(lock.m_dialog_parent), m_was_paused(lock.m_was_paused), m_was_fullscreen(lock.m_was_fullscreen),
+    m_valid(true)
 {
+  Assert(lock.m_valid);
   lock.m_dialog_parent = nullptr;
   lock.m_was_paused = true;
   lock.m_was_fullscreen = false;
+  lock.m_valid = false;
 }
 
 MainWindow::SystemLock::~SystemLock()
 {
+  if (!m_valid)
+    return;
+
   DebugAssert(s_system_locked.load(std::memory_order_relaxed) > 0);
   s_system_locked.fetch_sub(1, std::memory_order_release);
   if (m_was_fullscreen)
@@ -3416,7 +3561,7 @@ void MainWindow::notifyRAIntegrationOfWindowChange()
 
 void Host::OnRAIntegrationMenuChanged()
 {
-  QMetaObject::invokeMethod(g_main_window, "onRAIntegrationMenuChanged", Qt::QueuedConnection);
+  QMetaObject::invokeMethod(g_main_window, &MainWindow::onRAIntegrationMenuChanged, Qt::QueuedConnection);
 }
 
 #else // RC_CLIENT_SUPPORTS_RAINTEGRATION

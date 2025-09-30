@@ -10,15 +10,20 @@
 #include "common/assert.h"
 #include "common/error.h"
 #include "common/file_system.h"
+#include "common/log.h"
 #include "common/path.h"
 #include "common/string_util.h"
 
 #include <QtCore/QFileInfo>
+#include <QtGui/QPainter>
 #include <QtWidgets/QFileDialog>
 #include <QtWidgets/QMenu>
 #include <QtWidgets/QMessageBox>
+#include <QtWidgets/QStyledItemDelegate>
 
 #include "moc_memorycardeditorwindow.cpp"
+
+LOG_CHANNEL(Host);
 
 static constexpr char MEMORY_CARD_IMAGE_FILTER[] =
   QT_TRANSLATE_NOOP("MemoryCardEditorWindow", "DuckStation Memory Card (*.mcd)");
@@ -32,6 +37,92 @@ static constexpr std::array<std::pair<ConsoleRegion, const char*>, 3> MEMORY_CAR
   {ConsoleRegion::NTSC_J, "BI"},
   {ConsoleRegion::PAL, "BE"},
 }};
+static constexpr int MEMORY_CARD_ICON_SIZE = MemoryCardImage::ICON_HEIGHT * 2;
+static constexpr int MEMORY_CARD_ICON_FRAME_DURATION_MS = 200;
+
+namespace {
+class MemoryCardEditorIconStyleDelegate final : public QStyledItemDelegate
+{
+public:
+  explicit MemoryCardEditorIconStyleDelegate(std::vector<MemoryCardImage::FileInfo>& files, qreal dpr,
+                                             u32& current_frame_index, QWidget* parent)
+    : QStyledItemDelegate(parent), m_files(files), m_dpr(dpr), m_current_frame_index(current_frame_index)
+  {
+  }
+  ~MemoryCardEditorIconStyleDelegate() = default;
+
+  void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override
+  {
+    const QRect& rc = option.rect;
+    if (const QPixmap* icon_frame = getIconFrame(static_cast<size_t>(index.row()), m_current_frame_index, rc))
+    {
+      // center the icon in the available space
+      const int x = rc.x() + std::max((rc.width() - MEMORY_CARD_ICON_SIZE) / 2, 0);
+      const int y = rc.y() + std::max((rc.height() - MEMORY_CARD_ICON_SIZE) / 2, 0);
+      painter->drawPixmap(x, y, *icon_frame);
+    }
+  }
+
+  void invalidateIconFrames()
+  {
+    m_icon_frames.clear();
+    m_icon_frames.resize(m_files.size());
+  }
+
+  const QPixmap* getIconFrame(size_t file_index, u32 frame_index, const QRect& rc) const
+  {
+    if (file_index >= m_icon_frames.size())
+      return nullptr;
+
+    const MemoryCardImage::FileInfo& fi = m_files[file_index];
+    if (fi.icon_frames.empty())
+      return nullptr;
+
+    std::vector<QPixmap>& frames = m_icon_frames[file_index];
+    if (frames.empty())
+      frames.resize(fi.icon_frames.size());
+
+    const size_t real_frame_index = frame_index % static_cast<u32>(frames.size());
+    QPixmap& pixmap = frames[real_frame_index];
+    if (pixmap.isNull())
+    {
+      // doing this on the UI thread is a bit ehh, but whatever, they're small images.
+      const MemoryCardImage::IconFrame& frame = fi.icon_frames[real_frame_index];
+      const int pixmap_size = static_cast<int>(std::ceil(static_cast<qreal>(MEMORY_CARD_ICON_SIZE) * m_dpr));
+
+      QImage image = QImage(reinterpret_cast<const uchar*>(frame.pixels), MemoryCardImage::ICON_WIDTH,
+                            MemoryCardImage::ICON_HEIGHT, QImage::Format_RGBA8888);
+      image.setDevicePixelRatio(m_dpr);
+      if (image.width() != pixmap_size || image.height() != pixmap_size)
+        QtUtils::ResizeSharpBilinear(image, pixmap_size, MemoryCardImage::ICON_HEIGHT);
+
+      pixmap = QPixmap::fromImage(image);
+    }
+
+    return &pixmap;
+  }
+
+  void setDevicePixelRatio(qreal dpr)
+  {
+    if (m_dpr == dpr)
+      return;
+
+    m_dpr = dpr;
+    invalidateIconFrames();
+  }
+
+  static MemoryCardEditorIconStyleDelegate* getForView(const QTableView* view)
+  {
+    return static_cast<MemoryCardEditorIconStyleDelegate*>(view->itemDelegateForColumn(0));
+  }
+
+private:
+  std::vector<MemoryCardImage::FileInfo>& m_files;
+  mutable std::vector<std::vector<QPixmap>> m_icon_frames;
+  qreal m_dpr = 1.0;
+  u32& m_current_frame_index;
+};
+} // namespace
 
 MemoryCardEditorWindow::MemoryCardEditorWindow() : QWidget()
 {
@@ -52,8 +143,10 @@ MemoryCardEditorWindow::MemoryCardEditorWindow() : QWidget()
   m_card_b.table = m_ui.cardB;
   m_card_b.blocks_free_label = m_ui.cardBUsage;
 
-  QtUtils::SetColumnWidthsForTableView(m_card_a.table, {32, -1, 155, 45});
-  QtUtils::SetColumnWidthsForTableView(m_card_b.table, {32, -1, 155, 45});
+  m_file_icon_width = MEMORY_CARD_ICON_SIZE + (m_card_a.table->showGrid() ? 1 : 0);
+  m_file_icon_height = MEMORY_CARD_ICON_SIZE + (m_card_a.table->showGrid() ? 1 : 0);
+  QtUtils::SetColumnWidthsForTableView(m_card_a.table, {m_file_icon_width, -1, 155, 45});
+  QtUtils::SetColumnWidthsForTableView(m_card_b.table, {m_file_icon_width, -1, 155, 45});
 
   createCardButtons(&m_card_a, m_ui.buttonBoxA);
   createCardButtons(&m_card_b, m_ui.buttonBoxB);
@@ -69,6 +162,10 @@ MemoryCardEditorWindow::MemoryCardEditorWindow() : QWidget()
   m_ui.newCardB->setToolTip(new_card_hover_text);
   m_ui.openCardA->setToolTip(open_card_hover_text);
   m_ui.openCardB->setToolTip(open_card_hover_text);
+
+  m_animation_timer = new QTimer(this);
+  m_animation_timer->setInterval(MEMORY_CARD_ICON_FRAME_DURATION_MS);
+  connect(m_animation_timer, &QTimer::timeout, this, &MemoryCardEditorWindow::incrementAnimationFrame);
 }
 
 MemoryCardEditorWindow::~MemoryCardEditorWindow() = default;
@@ -117,10 +214,21 @@ bool MemoryCardEditorWindow::createMemoryCard(const QString& path, Error* error)
   return MemoryCardImage::SaveToFile(*data.get(), path.toUtf8().constData(), error);
 }
 
-void MemoryCardEditorWindow::closeEvent(QCloseEvent* ev)
+bool MemoryCardEditorWindow::event(QEvent* event)
 {
-  m_card_a.path_cb->setCurrentIndex(0);
-  m_card_b.path_cb->setCurrentIndex(0);
+  if (event->type() == QEvent::Close)
+  {
+    m_card_a.path_cb->setCurrentIndex(0);
+    m_card_b.path_cb->setCurrentIndex(0);
+  }
+  else if (event->type() == QEvent::DevicePixelRatioChange)
+  {
+    const qreal dpr = QtUtils::GetDevicePixelRatioForWidget(this);
+    MemoryCardEditorIconStyleDelegate::getForView(m_card_a.table)->setDevicePixelRatio(dpr);
+    MemoryCardEditorIconStyleDelegate::getForView(m_card_b.table)->setDevicePixelRatio(dpr);
+  }
+
+  return QWidget::event(event);
 }
 
 void MemoryCardEditorWindow::createCardButtons(Card* card, QDialogButtonBox* buttonBox)
@@ -141,6 +249,12 @@ void MemoryCardEditorWindow::connectCardUi(Card* card, QDialogButtonBox* buttonB
 
 void MemoryCardEditorWindow::connectUi()
 {
+  const qreal dpr = QtUtils::GetDevicePixelRatioForWidget(this);
+  m_ui.cardA->setItemDelegateForColumn(
+    0, new MemoryCardEditorIconStyleDelegate(m_card_a.files, dpr, m_current_frame_index, m_ui.cardA));
+  m_ui.cardB->setItemDelegateForColumn(
+    0, new MemoryCardEditorIconStyleDelegate(m_card_b.files, dpr, m_current_frame_index, m_ui.cardB));
+
   connect(m_ui.cardA, &QTableWidget::itemSelectionChanged, this, &MemoryCardEditorWindow::onCardASelectionChanged);
   connect(m_ui.cardA, &QTableWidget::customContextMenuRequested, this,
           &MemoryCardEditorWindow::onCardContextMenuRequested);
@@ -257,6 +371,7 @@ bool MemoryCardEditorWindow::loadCard(const QString& filename, Card* card)
   updateCardTable(card);
   updateCardBlocksFree(card);
   updateButtonState();
+  updateAnimationTimerActive();
   return true;
 }
 
@@ -273,23 +388,15 @@ static void setCardTableItemProperties(QTableWidgetItem* item, const MemoryCardI
 void MemoryCardEditorWindow::updateCardTable(Card* card)
 {
   card->table->setRowCount(0);
-
   card->files = MemoryCardImage::EnumerateFiles(card->data, true);
+  MemoryCardEditorIconStyleDelegate::getForView(card->table)->invalidateIconFrames();
+
   for (const MemoryCardImage::FileInfo& fi : card->files)
   {
     const int row = card->table->rowCount();
     card->table->insertRow(row);
 
-    if (!fi.icon_frames.empty())
-    {
-      const QImage image(reinterpret_cast<const u8*>(fi.icon_frames[0].pixels), MemoryCardImage::ICON_WIDTH,
-                         MemoryCardImage::ICON_HEIGHT, QImage::Format_RGBA8888);
-
-      QTableWidgetItem* icon = new QTableWidgetItem();
-      setCardTableItemProperties(icon, fi);
-      icon->setIcon(QIcon(QPixmap::fromImage(image)));
-      card->table->setItem(row, 0, icon);
-    }
+    card->table->setRowHeight(row, m_file_icon_height);
 
     QString title_str(QString::fromStdString(fi.title));
     if (fi.deleted)
@@ -308,6 +415,51 @@ void MemoryCardEditorWindow::updateCardTable(Card* card)
     item->setTextAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
     setCardTableItemProperties(item, fi);
     card->table->setItem(row, 3, item);
+  }
+}
+
+void MemoryCardEditorWindow::updateAnimationTimerActive()
+{
+  bool has_animation_frames = false;
+  for (const Card& card : {m_card_a, m_card_b})
+  {
+    for (const MemoryCardImage::FileInfo& fi : card.files)
+    {
+      if (fi.icon_frames.size() > 1)
+      {
+        has_animation_frames = true;
+        break;
+      }
+    }
+
+    if (has_animation_frames)
+      break;
+  }
+
+  if (m_animation_timer->isActive() != has_animation_frames)
+  {
+    INFO_LOG("Animation timer is now {}", has_animation_frames ? "active" : "inactive");
+
+    m_current_frame_index = 0;
+    if (has_animation_frames)
+      m_animation_timer->start();
+    else
+      m_animation_timer->stop();
+  }
+}
+
+void MemoryCardEditorWindow::incrementAnimationFrame()
+{
+  m_current_frame_index++;
+
+  for (QTableWidget* table : {m_ui.cardA, m_ui.cardB})
+  {
+    const int row_count = table->rowCount();
+    if (row_count == 0)
+      continue;
+
+    emit table->model()->dataChanged(table->model()->index(0, 0), table->model()->index(row_count - 1, 0),
+                                     {Qt::DecorationRole});
   }
 }
 
@@ -347,6 +499,7 @@ void MemoryCardEditorWindow::newCard(Card* card)
   updateCardTable(card);
   updateCardBlocksFree(card);
   updateButtonState();
+  updateAnimationTimerActive();
   saveCard(card);
 }
 
@@ -379,6 +532,7 @@ void MemoryCardEditorWindow::openCard(Card* card)
   updateCardTable(card);
   updateCardBlocksFree(card);
   updateButtonState();
+  updateAnimationTimerActive();
 }
 
 void MemoryCardEditorWindow::saveCard(Card* card)
@@ -590,6 +744,7 @@ void MemoryCardEditorWindow::importCard(Card* card)
   updateCardTable(card);
   updateCardBlocksFree(card);
   updateButtonState();
+  updateAnimationTimerActive();
 }
 
 void MemoryCardEditorWindow::formatCard(Card* card)
@@ -613,6 +768,7 @@ void MemoryCardEditorWindow::formatCard(Card* card)
   updateCardTable(card);
   updateCardBlocksFree(card);
   updateButtonState();
+  updateAnimationTimerActive();
 }
 
 void MemoryCardEditorWindow::importSaveFile(Card* card)
@@ -636,6 +792,7 @@ void MemoryCardEditorWindow::importSaveFile(Card* card)
   setCardDirty(card);
   updateCardTable(card);
   updateCardBlocksFree(card);
+  updateAnimationTimerActive();
 }
 
 void MemoryCardEditorWindow::onCardContextMenuRequested(const QPoint& pos)

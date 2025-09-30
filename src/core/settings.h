@@ -7,16 +7,19 @@
 
 #include "util/audio_stream.h"
 
-#include "common/log.h"
+#include "common/small_string.h"
 
 #include <array>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
-#include <vector>
 
 class SettingsInterface;
+
+namespace Log {
+enum class Level : u32;
+}
 
 enum class RenderAPI : u8;
 enum class MediaCaptureBackend : u8;
@@ -66,7 +69,6 @@ struct GPUSettings
   GPURenderer gpu_renderer = DEFAULT_GPU_RENDERER;
   u8 gpu_resolution_scale = 1;
   u8 gpu_multisamples = 1;
-  u8 gpu_max_queued_frames = DEFAULT_GPU_MAX_QUEUED_FRAMES;
 
   ForceVideoTimingMode gpu_force_video_timing = DEFAULT_FORCE_VIDEO_TIMING_MODE;
   GPUTextureFilter gpu_texture_filter = DEFAULT_GPU_TEXTURE_FILTER;
@@ -77,26 +79,27 @@ struct GPUSettings
   u8 gpu_downsample_scale = 1;
   GPUWireframeMode gpu_wireframe_mode = DEFAULT_GPU_WIREFRAME_MODE;
   DisplayDeinterlacingMode display_deinterlacing_mode = DEFAULT_DISPLAY_DEINTERLACING_MODE;
-  DisplayCropMode display_crop_mode = DEFAULT_DISPLAY_CROP_MODE;
   DisplayAspectRatio display_aspect_ratio = DEFAULT_DISPLAY_ASPECT_RATIO;
+  DisplayCropMode display_crop_mode = DEFAULT_DISPLAY_CROP_MODE;
   DisplayAlignment display_alignment = DEFAULT_DISPLAY_ALIGNMENT;
   DisplayRotation display_rotation = DEFAULT_DISPLAY_ROTATION;
   DisplayScalingMode display_scaling = DEFAULT_DISPLAY_SCALING;
+  DisplayScalingMode display_scaling_24bit = DEFAULT_DISPLAY_SCALING;
   DisplayExclusiveFullscreenControl display_exclusive_fullscreen_control = DEFAULT_DISPLAY_EXCLUSIVE_FULLSCREEN_CONTROL;
   DisplayScreenshotMode display_screenshot_mode = DEFAULT_DISPLAY_SCREENSHOT_MODE;
   DisplayScreenshotFormat display_screenshot_format = DEFAULT_DISPLAY_SCREENSHOT_FORMAT;
   u8 display_screenshot_quality = DEFAULT_DISPLAY_SCREENSHOT_QUALITY;
-  u16 display_aspect_ratio_custom_numerator = 0;
-  u16 display_aspect_ratio_custom_denominator = 0;
   s16 display_active_start_offset = 0;
   s16 display_active_end_offset = 0;
   s8 display_line_start_offset = 0;
   s8 display_line_end_offset = 0;
 
+  u8 gpu_max_queued_frames = DEFAULT_GPU_MAX_QUEUED_FRAMES;
   bool gpu_use_thread : 1 = true;
   bool gpu_use_software_renderer_for_readbacks : 1 = false;
   bool gpu_use_debug_device : 1 = false;
   bool gpu_use_debug_device_gpu_validation : 1 = false;
+  bool gpu_prefer_gles_context : 1 = DEFAULT_GPU_PREFER_GLES_CONTEXT;
   bool gpu_disable_shader_cache : 1 = false;
   bool gpu_disable_dual_source_blend : 1 = false;
   bool gpu_disable_framebuffer_fetch : 1 = false;
@@ -110,6 +113,7 @@ struct GPUSettings
   bool gpu_per_sample_shading : 1 = false;
   bool gpu_scaled_interlacing : 1 = true;
   bool gpu_force_round_texcoords : 1 = false;
+  bool gpu_widescreen_rendering : 1 = false;
   bool gpu_widescreen_hack : 1 = false;
   bool gpu_texture_cache : 1 = false;
   bool gpu_show_vram : 1 = false;
@@ -210,7 +214,6 @@ struct GPUSettings
 
   std::string overlay_image_path;
 
-  float GetDisplayAspectRatioValue() const;
   float GetPGXPDepthClearThreshold() const;
   void SetPGXPDepthClearThreshold(float value);
 
@@ -227,10 +230,10 @@ struct GPUSettings
     return (gpu_dithering_mode == GPUDitheringMode::Scaled ||
             gpu_dithering_mode == GPUDitheringMode::ScaledShaderBlend);
   }
-  ALWAYS_INLINE bool IsUsingIntegerDisplayScaling() const
+  ALWAYS_INLINE bool IsUsingIntegerDisplayScaling(bool is_24bit) const
   {
-    return (display_scaling == DisplayScalingMode::NearestInteger ||
-            display_scaling == DisplayScalingMode::BilinearInteger);
+    const DisplayScalingMode mode = is_24bit ? display_scaling_24bit : display_scaling;
+    return (mode == DisplayScalingMode::NearestInteger || mode == DisplayScalingMode::BilinearInteger);
   }
 
   ALWAYS_INLINE bool UsingPGXPCPUMode() const { return gpu_pgxp_enable && gpu_pgxp_cpu; }
@@ -248,7 +251,7 @@ struct GPUSettings
 
   static constexpr DisplayDeinterlacingMode DEFAULT_DISPLAY_DEINTERLACING_MODE = DisplayDeinterlacingMode::Progressive;
   static constexpr DisplayCropMode DEFAULT_DISPLAY_CROP_MODE = DisplayCropMode::Overscan;
-  static constexpr DisplayAspectRatio DEFAULT_DISPLAY_ASPECT_RATIO = DisplayAspectRatio::Auto;
+  static constexpr DisplayAspectRatio DEFAULT_DISPLAY_ASPECT_RATIO = DisplayAspectRatio::Auto();
   static constexpr DisplayAlignment DEFAULT_DISPLAY_ALIGNMENT = DisplayAlignment::Center;
   static constexpr DisplayRotation DEFAULT_DISPLAY_ROTATION = DisplayRotation::Normal;
   static constexpr DisplayScalingMode DEFAULT_DISPLAY_SCALING = DisplayScalingMode::BilinearSmooth;
@@ -263,8 +266,10 @@ struct GPUSettings
 
 #ifndef __ANDROID__
   static constexpr u8 DEFAULT_GPU_MAX_QUEUED_FRAMES = 2;
+  static constexpr bool DEFAULT_GPU_PREFER_GLES_CONTEXT = false;
 #else
   static constexpr u8 DEFAULT_GPU_MAX_QUEUED_FRAMES = 3;
+  static constexpr bool DEFAULT_GPU_PREFER_GLES_CONTEXT = true;
 #endif
 };
 
@@ -453,6 +458,7 @@ struct Settings : public GPUSettings
   void Save(SettingsInterface& si, bool ignore_base) const;
   static void Clear(SettingsInterface& si);
 
+  void ApplySettingRestrictions();
   void FixIncompatibleSettings(const SettingsInterface& si, bool display_osd_messages);
 
   bool AreGPUDeviceSettingsChanged(const Settings& old_settings) const;
@@ -523,9 +529,10 @@ struct Settings : public GPUSettings
   static const char* GetDisplayCropModeName(DisplayCropMode crop_mode);
   static const char* GetDisplayCropModeDisplayName(DisplayCropMode crop_mode);
 
-  static std::optional<DisplayAspectRatio> ParseDisplayAspectRatio(const char* str);
-  static const char* GetDisplayAspectRatioName(DisplayAspectRatio ar);
-  static const char* GetDisplayAspectRatioDisplayName(DisplayAspectRatio ar);
+  static std::optional<DisplayAspectRatio> ParseDisplayAspectRatio(std::string_view str);
+  static TinyString GetDisplayAspectRatioName(DisplayAspectRatio ar);
+  static TinyString GetDisplayAspectRatioDisplayName(DisplayAspectRatio ar);
+  static std::span<const DisplayAspectRatio> GetPredefinedDisplayAspectRatios();
 
   static std::optional<DisplayAlignment> ParseDisplayAlignment(const char* str);
   static const char* GetDisplayAlignmentName(DisplayAlignment alignment);
@@ -612,11 +619,9 @@ struct Settings : public GPUSettings
   static constexpr PIODeviceType DEFAULT_PIO_DEVICE_TYPE = PIODeviceType::None;
 
   static constexpr AchievementChallengeIndicatorMode DEFAULT_ACHIEVEMENT_CHALLENGE_INDICATOR_MODE =
-    AchievementChallengeIndicatorMode::PersistentIcon;
+    AchievementChallengeIndicatorMode::Notification;
   static constexpr u8 DEFAULT_ACHIEVEMENT_NOTIFICATION_TIME = 5;
   static constexpr u8 DEFAULT_LEADERBOARD_NOTIFICATION_TIME = 10;
-
-  static constexpr Log::Level DEFAULT_LOG_LEVEL = Log::Level::Info;
 
   static constexpr SaveStateCompressionMode DEFAULT_SAVE_STATE_COMPRESSION_MODE = SaveStateCompressionMode::ZstDefault;
 

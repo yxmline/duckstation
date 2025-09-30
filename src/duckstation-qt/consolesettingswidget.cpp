@@ -25,33 +25,19 @@ ConsoleSettingsWidget::ConsoleSettingsWidget(SettingsWindow* dialog, QWidget* pa
 
   m_ui.setupUi(this);
 
-  for (u32 i = 0; i < static_cast<u32>(ConsoleRegion::Count); i++)
-  {
-    m_ui.region->addItem(QtUtils::GetIconForRegion(static_cast<ConsoleRegion>(i)),
-                         QString::fromUtf8(Settings::GetConsoleRegionDisplayName(static_cast<ConsoleRegion>(i))));
-  }
-
-  for (u32 i = 0; i < static_cast<u32>(ForceVideoTimingMode::Count); i++)
-  {
-    const ForceVideoTimingMode mode = static_cast<ForceVideoTimingMode>(i);
-    const QIcon region_icon =
-      QtUtils::GetIconForRegion((mode == ForceVideoTimingMode::Disabled) ?
-                                  ConsoleRegion::Auto :
-                                  ((mode == ForceVideoTimingMode::NTSC) ? ConsoleRegion::NTSC_U : ConsoleRegion::PAL));
-    m_ui.forceVideoTiming->addItem(region_icon, QString::fromUtf8(Settings::GetForceVideoTimingDisplayName(mode)));
-  }
-
-  for (u32 i = 0; i < static_cast<u32>(CPUExecutionMode::Count); i++)
-  {
-    m_ui.cpuExecutionMode->addItem(
-      QString::fromUtf8(Settings::GetCPUExecutionModeDisplayName(static_cast<CPUExecutionMode>(i))));
-  }
-
   SettingWidgetBinder::BindWidgetToEnumSetting(sif, m_ui.region, "Console", "Region", &Settings::ParseConsoleRegionName,
-                                               &Settings::GetConsoleRegionName, Settings::DEFAULT_CONSOLE_REGION);
-  SettingWidgetBinder::BindWidgetToEnumSetting(sif, m_ui.forceVideoTiming, "GPU", "ForceVideoTiming",
-                                               &Settings::ParseForceVideoTimingName, &Settings::GetForceVideoTimingName,
-                                               Settings::DEFAULT_FORCE_VIDEO_TIMING_MODE);
+                                               &Settings::GetConsoleRegionName, &Settings::GetConsoleRegionDisplayName,
+                                               Settings::DEFAULT_CONSOLE_REGION, ConsoleRegion::Count,
+                                               &QtUtils::GetIconForRegion);
+  SettingWidgetBinder::BindWidgetToEnumSetting(
+    sif, m_ui.forceVideoTiming, "GPU", "ForceVideoTiming", &Settings::ParseForceVideoTimingName,
+    &Settings::GetForceVideoTimingName, &Settings::GetForceVideoTimingDisplayName,
+    Settings::DEFAULT_FORCE_VIDEO_TIMING_MODE, ForceVideoTimingMode::Count, +[](ForceVideoTimingMode mode) {
+      return QtUtils::GetIconForRegion(
+        (mode == ForceVideoTimingMode::Disabled) ?
+          ConsoleRegion::Auto :
+          ((mode == ForceVideoTimingMode::NTSC) ? ConsoleRegion::NTSC_U : ConsoleRegion::PAL));
+    });
   SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.fastBoot, "BIOS", "PatchFastBoot", false);
   SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.fastForwardBoot, "BIOS", "FastForwardBoot", false);
   SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.enable8MBRAM, "Console", "Enable8MBRAM", false);
@@ -62,7 +48,8 @@ ConsoleSettingsWidget::ConsoleSettingsWidget(SettingsWindow* dialog, QWidget* pa
 
   SettingWidgetBinder::BindWidgetToEnumSetting(sif, m_ui.cpuExecutionMode, "CPU", "ExecutionMode",
                                                &Settings::ParseCPUExecutionMode, &Settings::GetCPUExecutionModeName,
-                                               Settings::DEFAULT_CPU_EXECUTION_MODE);
+                                               &Settings::GetCPUExecutionModeDisplayName,
+                                               Settings::DEFAULT_CPU_EXECUTION_MODE, CPUExecutionMode::Count);
   SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.enableCPUClockSpeedControl, "CPU", "OverclockEnable", false);
   SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.recompilerICache, "CPU", "RecompilerICache", false);
   SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.cdromLoadImageToRAM, "CDROM", "LoadImageToRAM", false);
@@ -154,8 +141,19 @@ ConsoleSettingsWidget::ConsoleSettingsWidget(SettingsWindow* dialog, QWidget* pa
           &ConsoleSettingsWidget::onEnableCPUClockSpeedControlChecked);
   connect(m_ui.cpuClockSpeed, &QSlider::valueChanged, this, &ConsoleSettingsWidget::onCPUClockSpeedValueChanged);
 
+  SettingWidgetBinder::SetAvailability(m_ui.fastBoot, !m_dialog->hasGameTrait(GameDatabase::Trait::ForceFullBoot));
+  SettingWidgetBinder::SetAvailability(m_ui.fastForwardBoot,
+                                       !m_dialog->hasGameTrait(GameDatabase::Trait::ForceFullBoot));
   SettingWidgetBinder::SetAvailability(
     m_ui.cpuExecutionMode, !m_dialog->hasGameTrait(GameDatabase::Trait::ForceInterpreter), m_ui.cpuExecutionModeLabel);
+  SettingWidgetBinder::SetAvailability(m_ui.cdromReadSpeedup,
+                                       !m_dialog->hasGameTrait(GameDatabase::Trait::DisableCDROMReadSpeedup),
+                                       m_ui.cdromReadSpeedupLabel);
+  SettingWidgetBinder::SetAvailability(m_ui.cdromSeekSpeedup,
+                                       !m_dialog->hasGameTrait(GameDatabase::Trait::DisableCDROMSeekSpeedup),
+                                       m_ui.cdromSeekSpeedupLabel);
+  SettingWidgetBinder::SetForceEnabled(m_ui.recompilerICache,
+                                       m_dialog->hasGameTrait(GameDatabase::Trait::ForceRecompilerICache));
 
   calculateCPUClockValue();
 }
@@ -178,7 +176,8 @@ void ConsoleSettingsWidget::updateRecompilerICacheEnabled()
                                   Settings::GetCPUExecutionModeName(Settings::DEFAULT_CPU_EXECUTION_MODE))
         .c_str())
       .value_or(Settings::DEFAULT_CPU_EXECUTION_MODE);
-  m_ui.recompilerICache->setEnabled(mode != CPUExecutionMode::Interpreter);
+  m_ui.recompilerICache->setEnabled(mode != CPUExecutionMode::Interpreter &&
+                                    !m_dialog->hasGameTrait(GameDatabase::Trait::ForceRecompilerICache));
 }
 
 void ConsoleSettingsWidget::onEnableCPUClockSpeedControlChecked(int state)
@@ -192,15 +191,14 @@ void ConsoleSettingsWidget::onEnableCPUClockSpeedControlChecked(int state)
          "system requirements.\n\nBy enabling this option you are agreeing to not create any bug reports unless you "
          "have confirmed the bug also occurs with overclocking disabled.\n\nThis warning will only be shown once.");
 
-    QMessageBox mb(QMessageBox::Warning, tr("CPU Overclocking Warning"), message, QMessageBox::NoButton, this);
-    mb.setWindowModality(Qt::WindowModal);
-    const QAbstractButton* const yes_button =
-      mb.addButton(tr("Yes, I will confirm bugs without overclocking before reporting."), QMessageBox::YesRole);
-    mb.addButton(tr("No, take me back to safety."), QMessageBox::NoRole);
-    mb.exec();
-
-    if (mb.clickedButton() != yes_button)
-    {
+    QMessageBox* mb =
+      new QMessageBox(QMessageBox::Warning, tr("CPU Overclocking Warning"), message, QMessageBox::NoButton, this);
+    mb->setAttribute(Qt::WA_DeleteOnClose, true);
+    mb->setWindowModality(Qt::WindowModal);
+    const QPushButton* const yes_button =
+      mb->addButton(tr("Yes, I will confirm bugs without overclocking before reporting."), QMessageBox::YesRole);
+    const QPushButton* const no_button = mb->addButton(tr("No, take me back to safety."), QMessageBox::NoRole);
+    connect(no_button, &QPushButton::clicked, this, [this]() {
       QSignalBlocker sb(m_ui.enableCPUClockSpeedControl);
       if (m_dialog->isPerGameSettings())
       {
@@ -213,11 +211,14 @@ void ConsoleSettingsWidget::onEnableCPUClockSpeedControlChecked(int state)
         m_dialog->setBoolSettingValue("CPU", "OverclockEnable", false);
       }
 
-      return;
-    }
-
-    Host::SetBaseBoolSettingValue("UI", "CPUOverclockingWarningShown", true);
-    Host::CommitBaseSettingChanges();
+      m_ui.cpuClockSpeed->setEnabled(m_dialog->getEffectiveBoolValue("CPU", "OverclockEnable", false));
+      updateCPUClockSpeedLabel();
+    });
+    connect(yes_button, &QPushButton::clicked, this, []() {
+      Host::SetBaseBoolSettingValue("UI", "CPUOverclockingWarningShown", true);
+      Host::CommitBaseSettingChanges();
+    });
+    mb->show();
   }
 
   m_ui.cpuClockSpeed->setEnabled(m_dialog->getEffectiveBoolValue("CPU", "OverclockEnable", false));

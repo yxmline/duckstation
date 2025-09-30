@@ -258,6 +258,13 @@
          <item row="1" column="1">
           <widget class="QComboBox" name="theme"/>
          </item>
+         <item row="2" column="0" colspan="2">
+          <widget class="QCheckBox" name="autoUpdateEnabled">
+           <property name="text">
+            <string>Enable Automatic Updates</string>
+           </property>
+          </widget>
+         </item>
          <item row="3" column="1">
           <spacer name="verticalSpacer_3">
            <property name="orientation">
@@ -270,13 +277,6 @@
             </size>
            </property>
           </spacer>
-         </item>
-         <item row="2" column="0" colspan="2">
-          <widget class="QCheckBox" name="autoUpdateEnabled">
-           <property name="text">
-            <string>Enable Automatic Updates</string>
-           </property>
-          </widget>
          </item>
         </layout>
        </item>
@@ -576,6 +576,13 @@
           <string>Controller Port 1</string>
          </property>
          <layout class="QFormLayout" name="formLayout">
+          <item row="0" column="0">
+           <widget class="QLabel" name="label_11">
+            <property name="text">
+             <string>Controller Type:</string>
+            </property>
+           </widget>
+          </item>
           <item row="0" column="1">
            <widget class="QComboBox" name="controller1Type"/>
           </item>
@@ -583,13 +590,6 @@
            <widget class="QLabel" name="label_12">
             <property name="text">
              <string>Controller Mapped To:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="0">
-           <widget class="QLabel" name="label_11">
-            <property name="text">
-             <string>Controller Type:</string>
             </property>
            </widget>
           </item>
@@ -881,18 +881,18 @@
            </property>
           </widget>
          </item>
-         <item row="7" column="0" colspan="2">
+         <item row="7" column="0">
+          <widget class="QLabel" name="label_22">
+           <property name="text">
+            <string>FMV Scaling:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="7" column="1">
+          <widget class="QComboBox" name="displayScaling24Bit"/>
+         </item>
+         <item row="8" column="0" colspan="2">
           <layout class="QGridLayout" name="gridLayout_2">
-           <item row="0" column="1">
-            <widget class="QCheckBox" name="widescreenHack">
-             <property name="toolTip">
-              <string>Scales vertex positions in screen-space to a widescreen aspect ratio, essentially increasing the field of view from 4:3 to the chosen display aspect ratio in 3D games. &lt;b&gt;&lt;u&gt;May not be compatible with all games.&lt;/u&gt;&lt;/b&gt;</string>
-             </property>
-             <property name="text">
-              <string>Widescreen Rendering</string>
-             </property>
-            </widget>
-           </item>
            <item row="0" column="0">
             <widget class="QCheckBox" name="pgxpEnable">
              <property name="toolTip">
@@ -900,6 +900,16 @@
              </property>
              <property name="text">
               <string>PGXP Geometry Correction</string>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="1">
+            <widget class="QCheckBox" name="widescreenHack">
+             <property name="toolTip">
+              <string>Scales vertex positions in screen-space to a widescreen aspect ratio, essentially increasing the field of view from 4:3 to the chosen display aspect ratio in 3D games. &lt;b&gt;&lt;u&gt;May not be compatible with all games.&lt;/u&gt;&lt;/b&gt;</string>
+             </property>
+             <property name="text">
+              <string>Widescreen Rendering</string>
              </property>
             </widget>
            </item>

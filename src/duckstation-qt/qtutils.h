@@ -77,8 +77,7 @@ void SetColumnWidthsForTableView(QTableView* view, const std::initializer_list<i
 void SetColumnWidthsForTreeView(QTreeView* view, const std::initializer_list<int>& widths);
 
 /// Returns a key id for a key event, including any modifiers that we need (e.g. Keypad).
-/// NOTE: Defined in QtKeyCodes.cpp, not QtUtils.cpp.
-u32 KeyEventToCode(const QKeyEvent* ev);
+std::optional<u32> KeyEventToCode(const QKeyEvent* ev);
 
 /// Opens a URL with the default handler.
 void OpenURL(QWidget* parent, const QUrl& qurl);
@@ -115,6 +114,10 @@ QIcon GetIconForRegion(DiscRegion region);
 QIcon GetIconForEntryType(GameList::EntryType type);
 QIcon GetIconForCompatibility(GameDatabase::CompatibilityRating rating);
 QIcon GetIconForLanguage(std::string_view language_name);
+
+/// Scales a Memory Card Icon (QPixmap or QImage) using Sharp Bilinear scaling
+void ResizeSharpBilinear(QPixmap& pm, int size, int base_size);
+void ResizeSharpBilinear(QImage& pm, int size, int base_size);
 
 /// Returns the pixel ratio/scaling factor for a widget.
 qreal GetDevicePixelRatioForWidget(const QWidget* widget);

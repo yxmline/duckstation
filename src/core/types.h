@@ -163,19 +163,6 @@ enum class DisplayCropMode : u8
   MaxCount
 };
 
-enum class DisplayAspectRatio : u8
-{
-  Auto,
-  MatchWindow,
-  Custom,
-  R4_3,
-  R16_9,
-  R19_9,
-  R20_9,
-  PAR1_1,
-  Count
-};
-
 enum class DisplayAlignment : u8
 {
   LeftOrTop,
@@ -198,6 +185,7 @@ enum class DisplayScalingMode : u8
   Nearest,
   NearestInteger,
   BilinearSmooth,
+  BilinearHybrid,
   BilinearSharp,
   BilinearInteger,
   Lanczos,
@@ -318,6 +306,9 @@ enum class SaveStateCompressionMode : u8
   ZstLow,
   ZstDefault,
   ZstHigh,
+  XZLow,
+  XZDefault,
+  XZHigh,
 
   Count,
 };
@@ -327,7 +318,7 @@ enum class ForceVideoTimingMode : u8
   Disabled,
   NTSC,
   PAL,
-  
+
   Count,
 };
 
@@ -336,4 +327,24 @@ enum class PIODeviceType : u8
   None,
   XplorerCart,
   MaxCount,
+};
+
+struct DisplayAspectRatio
+{
+  s16 numerator;
+  s16 denominator;
+
+  static constexpr DisplayAspectRatio Auto() { return {0, 0}; }
+  static constexpr DisplayAspectRatio Stretch() { return {-1, -1}; }
+  static constexpr DisplayAspectRatio PAR1_1() { return {-1, 0}; }
+
+  ALWAYS_INLINE bool operator==(const DisplayAspectRatio& rhs) const
+  {
+    return (std::memcmp(this, &rhs, sizeof(DisplayAspectRatio)) == 0);
+  }
+  ALWAYS_INLINE bool operator!=(const DisplayAspectRatio& rhs) const
+  {
+    return (std::memcmp(this, &rhs, sizeof(DisplayAspectRatio)) != 0);
+  }
+  ALWAYS_INLINE bool IsValid() const { return (numerator > 0 && denominator > 0); }
 };

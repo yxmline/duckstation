@@ -9,34 +9,60 @@
 
 #include <QtCore/QFile>
 #include <QtGui/QPalette>
+#include <QtGui/QStyleHints>
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QStyle>
 #include <QtWidgets/QStyleFactory>
 
 namespace QtHost {
+static void SetThemeAttributes(bool is_stylesheet_theme, bool is_variable_color_theme, bool is_dark_theme);
 static void SetStyleFromSettings();
-} // namespace QtHost
 
-static QString s_unthemed_style_name;
-static QPalette s_unthemed_palette;
-static bool s_unthemed_style_name_set;
+namespace {
+struct State
+{
+  std::string current_theme_name;
+  QString unthemed_style_name;
+  QPalette unthemed_palette;
+  bool is_stylesheet_theme = false;
+  bool is_variable_color_theme = false;
+  bool is_dark_theme = false;
+  bool unthemed_style_name_set = false;
+};
+} // namespace
+
+static State s_state;
+
+} // namespace QtHost
 
 const char* QtHost::GetDefaultThemeName()
 {
-  return "darkfusion";
+  return "darkerfusion";
 }
 
 void QtHost::UpdateApplicationTheme()
 {
-  if (!s_unthemed_style_name_set)
+  if (!s_state.unthemed_style_name_set)
   {
-    s_unthemed_style_name_set = true;
-    s_unthemed_style_name = QApplication::style()->objectName();
-    s_unthemed_palette = QApplication::palette();
+    s_state.unthemed_style_name_set = true;
+    s_state.unthemed_style_name = QApplication::style()->objectName();
+    s_state.unthemed_palette = QApplication::palette();
   }
 
   SetStyleFromSettings();
   SetIconThemeFromStyle();
+}
+
+void QtHost::SetThemeAttributes(bool is_stylesheet_theme, bool is_variable_color_theme, bool is_dark_theme)
+{
+  s_state.is_stylesheet_theme = is_stylesheet_theme;
+  s_state.is_variable_color_theme = is_variable_color_theme;
+  s_state.is_dark_theme = is_dark_theme;
+
+  if (is_variable_color_theme)
+    qApp->styleHints()->unsetColorScheme();
+  else
+    qApp->styleHints()->setColorScheme(is_dark_theme ? Qt::ColorScheme::Dark : Qt::ColorScheme::Light);
 }
 
 void QtHost::SetStyleFromSettings()
@@ -45,8 +71,9 @@ void QtHost::SetStyleFromSettings()
 
   if (theme == "qdarkstyle")
   {
-    qApp->setStyle(s_unthemed_style_name);
-    qApp->setPalette(s_unthemed_palette);
+    SetThemeAttributes(true, false, true);
+    qApp->setStyle(s_state.unthemed_style_name);
+    qApp->setPalette(s_state.unthemed_palette);
     qApp->setStyleSheet(QString());
 
     QFile f(QStringLiteral(":qdarkstyle/style.qss"));
@@ -55,20 +82,22 @@ void QtHost::SetStyleFromSettings()
   }
   else if (theme == "fusion")
   {
+    SetThemeAttributes(false, true, false);
     qApp->setStyle(QStyleFactory::create("Fusion"));
-    qApp->setPalette(s_unthemed_palette);
+    qApp->setPalette(s_state.unthemed_palette);
     qApp->setStyleSheet(QString());
   }
   else if (theme == "darkfusion")
   {
     // adapted from https://gist.github.com/QuantumCD/6245215
+    SetThemeAttributes(false, false, true);
     qApp->setStyle(QStyleFactory::create("Fusion"));
 
-    const QColor lighterGray(75, 75, 75);
-    const QColor darkGray(53, 53, 53);
-    const QColor gray(128, 128, 128);
-    const QColor black(25, 25, 25);
-    const QColor blue(198, 238, 255);
+    static constexpr QColor lighterGray(75, 75, 75);
+    static constexpr QColor darkGray(53, 53, 53);
+    static constexpr QColor gray(128, 128, 128);
+    static constexpr QColor black(25, 25, 25);
+    static constexpr QColor blue(198, 238, 255);
 
     QPalette darkPalette;
     darkPalette.setColor(QPalette::Window, darkGray);
@@ -97,14 +126,15 @@ void QtHost::SetStyleFromSettings()
   else if (theme == "darkfusionblue")
   {
     // adapted from https://gist.github.com/QuantumCD/6245215
+    SetThemeAttributes(false, false, true);
     qApp->setStyle(QStyleFactory::create("Fusion"));
 
-    // const QColor lighterGray(75, 75, 75);
-    const QColor darkGray(53, 53, 53);
-    const QColor gray(128, 128, 128);
-    const QColor black(25, 25, 25);
-    const QColor blue(198, 238, 255);
-    const QColor blue2(0, 88, 208);
+    // static constexpr QColor lighterGray(75, 75, 75);
+    static constexpr QColor darkGray(53, 53, 53);
+    static constexpr QColor gray(128, 128, 128);
+    static constexpr QColor black(25, 25, 25);
+    static constexpr QColor blue(198, 238, 255);
+    static constexpr QColor blue2(0, 88, 208);
 
     QPalette darkPalette;
     darkPalette.setColor(QPalette::Window, darkGray);
@@ -130,19 +160,105 @@ void QtHost::SetStyleFromSettings()
     qApp->setPalette(darkPalette);
     qApp->setStyleSheet(QString());
   }
+  else if (theme == "darkerfusion")
+  {
+    SetThemeAttributes(true, false, true);
+    qApp->setStyle(QStyleFactory::create("Fusion"));
+
+    static constexpr QColor window_color(36, 36, 36);
+    static constexpr QColor base_color(43, 43, 43);
+    static constexpr QColor button_color(40, 40, 40); // qt makes this lighter
+    static constexpr QColor text(255, 255, 255);
+    static constexpr QColor highlight_background(65, 65, 65);
+    static constexpr QColor highlight_text(255, 255, 255);
+    static constexpr QColor disabled_text(200, 200, 200);
+    static constexpr QColor placeholder_text(200, 200, 200);
+    static constexpr QColor link_text(198, 238, 255);
+
+    QPalette darkPalette;
+    darkPalette.setColor(QPalette::Window, window_color);
+    darkPalette.setColor(QPalette::WindowText, text);
+    darkPalette.setColor(QPalette::Base, base_color);
+    darkPalette.setColor(QPalette::AlternateBase, window_color);
+    darkPalette.setColor(QPalette::ToolTipBase, window_color);
+    darkPalette.setColor(QPalette::ToolTipText, text);
+    darkPalette.setColor(QPalette::Text, text);
+    darkPalette.setColor(QPalette::Button, button_color);
+    darkPalette.setColor(QPalette::ButtonText, text);
+    darkPalette.setColor(QPalette::Link, link_text);
+    darkPalette.setColor(QPalette::Highlight, highlight_background);
+    darkPalette.setColor(QPalette::HighlightedText, highlight_text);
+    darkPalette.setColor(QPalette::PlaceholderText, placeholder_text);
+
+    darkPalette.setColor(QPalette::Active, QPalette::Button, button_color);
+    darkPalette.setColor(QPalette::Disabled, QPalette::ButtonText, disabled_text);
+    darkPalette.setColor(QPalette::Disabled, QPalette::WindowText, disabled_text);
+    darkPalette.setColor(QPalette::Disabled, QPalette::Text, disabled_text);
+    darkPalette.setColor(QPalette::Disabled, QPalette::Light, window_color);
+
+    qApp->setPalette(darkPalette);
+    qApp->setStyleSheet(QString());
+
+    // menus are by far the ugliest part of fusion, so we style them manually
+    const QString stylesheet = QStringLiteral(R"(
+QMenu {
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 6px 10px;
+    background-color: #232323;
+}
+QMenu::icon,
+QMenu::indicator {
+    left: 8px;
+}
+QMenu::item {
+    padding: 6px 18px;
+    border-radius: 8px;
+}
+QMenu::item:selected {
+    background-color: #414141;
+}
+QMenu::icon:checked {
+    background: #414141;
+    border: 1px solid #777;
+    border-radius: 4px;
+}
+QMenuBar::item {
+    padding: 4px 6px;
+    border-radius: 6px;
+}
+QMenuBar::item:selected, QMenuBar::item:pressed {
+    background: #414141;
+    border-radius: 4px;
+}
+QToolTip {
+    color: #ffffff;
+    background-color: #232323;
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 2px;
+}
+QToolBar {
+    border: none;
+}
+    )");
+
+    qApp->setStyleSheet(stylesheet);
+  }
   else if (theme == "cobaltsky")
   {
     // Custom palette by KamFretoZ, A soothing deep royal blue
     // that are meant to be easy on the eyes as the main color.
     // Alternative dark theme.
+    SetThemeAttributes(false, false, true);
     qApp->setStyle(QStyleFactory::create("Fusion"));
 
-    const QColor gray(150, 150, 150);
-    const QColor royalBlue(29, 41, 81);
-    const QColor darkishBlue(17, 30, 108);
-    const QColor lighterBlue(25, 32, 130);
-    const QColor highlight(36, 93, 218);
-    const QColor link(0, 202, 255);
+    static constexpr QColor gray(150, 150, 150);
+    static constexpr QColor royalBlue(29, 41, 81);
+    static constexpr QColor darkishBlue(17, 30, 108);
+    static constexpr QColor lighterBlue(25, 32, 130);
+    static constexpr QColor highlight(36, 93, 218);
+    static constexpr QColor link(0, 202, 255);
 
     QPalette darkPalette;
     darkPalette.setColor(QPalette::Window, royalBlue);
@@ -169,12 +285,13 @@ void QtHost::SetStyleFromSettings()
   }
   else if (theme == "greymatter")
   {
+    SetThemeAttributes(false, false, true);
     qApp->setStyle(QStyleFactory::create("Fusion"));
 
-    const QColor darkGray(46, 52, 64);
-    const QColor lighterGray(59, 66, 82);
-    const QColor gray(111, 111, 111);
-    const QColor blue(198, 238, 255);
+    static constexpr QColor darkGray(46, 52, 64);
+    static constexpr QColor lighterGray(59, 66, 82);
+    static constexpr QColor gray(111, 111, 111);
+    static constexpr QColor blue(198, 238, 255);
 
     QPalette darkPalette;
     darkPalette.setColor(QPalette::Window, darkGray);
@@ -204,13 +321,14 @@ void QtHost::SetStyleFromSettings()
   {
     // Custom palette by RedDevilus, Tame (Light/Washed out) Green as main color and Grayish Blue as complimentary.
     // Alternative white theme.
+    SetThemeAttributes(false, false, false);
     qApp->setStyle(QStyleFactory::create("Fusion"));
 
-    const QColor black(25, 25, 25);
-    const QColor gray(111, 111, 111);
-    const QColor limerick(176, 196, 0);
-    const QColor brown(135, 100, 50);
-    const QColor pear(213, 222, 46);
+    static constexpr QColor black(25, 25, 25);
+    static constexpr QColor gray(111, 111, 111);
+    static constexpr QColor limerick(176, 196, 0);
+    static constexpr QColor brown(135, 100, 50);
+    static constexpr QColor pear(213, 222, 46);
 
     QPalette greenGiantPalette;
     greenGiantPalette.setColor(QPalette::Window, pear);
@@ -236,13 +354,14 @@ void QtHost::SetStyleFromSettings()
   }
   else if (theme == "pinkypals")
   {
+    SetThemeAttributes(false, false, false);
     qApp->setStyle(QStyleFactory::create("Fusion"));
 
-    const QColor black(25, 25, 25);
-    const QColor pink(255, 174, 201);
-    const QColor darkerPink(214, 145, 168);
-    const QColor brightPink(224, 88, 133);
-    const QColor congoPink(255, 127, 121);
+    static constexpr QColor black(25, 25, 25);
+    static constexpr QColor pink(255, 174, 201);
+    static constexpr QColor darkerPink(214, 145, 168);
+    static constexpr QColor brightPink(224, 88, 133);
+    static constexpr QColor congoPink(255, 127, 121);
 
     QPalette PinkyPalsPalette;
     PinkyPalsPalette.setColor(QPalette::Window, pink);
@@ -272,12 +391,13 @@ void QtHost::SetStyleFromSettings()
     // Custom palette by KamFretoZ, A pure concentrated darkness
     // of a theme designed for maximum eye comfort and benefits
     // OLED screens.
+    SetThemeAttributes(false, false, true);
     qApp->setStyle(QStyleFactory::create("Fusion"));
 
-    const QColor black(0, 0, 0);
-    const QColor gray(25, 25, 25);
-    const QColor lighterGray(75, 75, 75);
-    const QColor blue(198, 238, 255);
+    static constexpr QColor black(0, 0, 0);
+    static constexpr QColor gray(25, 25, 25);
+    static constexpr QColor lighterGray(75, 75, 75);
+    static constexpr QColor blue(198, 238, 255);
 
     QPalette AMOLEDPalette;
     AMOLEDPalette.setColor(QPalette::Window, black);
@@ -305,11 +425,12 @@ void QtHost::SetStyleFromSettings()
   }
   else if (theme == "darkruby")
   {
+    SetThemeAttributes(false, false, true);
     qApp->setStyle(QStyleFactory::create("Fusion"));
 
-    const QColor gray(128, 128, 128);
-    const QColor slate(18, 18, 18);
-    const QColor rubyish(172, 21, 31);
+    static constexpr QColor gray(128, 128, 128);
+    static constexpr QColor slate(18, 18, 18);
+    static constexpr QColor rubyish(172, 21, 31);
 
     QPalette darkPalette;
     darkPalette.setColor(QPalette::Window, slate);
@@ -336,11 +457,12 @@ void QtHost::SetStyleFromSettings()
   }
   else if (theme == "purplerain")
   {
+    SetThemeAttributes(false, false, true);
     qApp->setStyle(QStyleFactory::create("Fusion"));
 
-    const QColor darkPurple(73, 41, 121);
-    const QColor darkerPurple(53, 29, 87);
-    const QColor gold(250, 207, 0);
+    static constexpr QColor darkPurple(73, 41, 121);
+    static constexpr QColor darkerPurple(53, 29, 87);
+    static constexpr QColor gold(250, 207, 0);
 
     QPalette darkPalette;
     darkPalette.setColor(QPalette::Window, darkPurple);
@@ -364,38 +486,53 @@ void QtHost::SetStyleFromSettings()
     darkPalette.setColor(QPalette::Disabled, QPalette::Light, darkPurple);
 
     qApp->setPalette(darkPalette);
-    qApp->setStyleSheet("QToolTip { color: #ffffff; background-color: #505a70; border: 1px solid white; }");
+    qApp->setStyleSheet(QString());
   }
 #ifdef _WIN32
   else if (theme == "windowsvista")
   {
+    SetThemeAttributes(false, false, false);
     qApp->setStyle(QStyleFactory::create("windowsvista"));
-    qApp->setPalette(s_unthemed_palette);
+    qApp->setPalette(s_state.unthemed_palette);
     qApp->setStyleSheet(QString());
   }
 #endif
   else
   {
-    qApp->setStyle(s_unthemed_style_name);
-    qApp->setPalette(s_unthemed_palette);
+    SetThemeAttributes(false, true, false);
+    qApp->setStyle(s_state.unthemed_style_name);
+    qApp->setPalette(s_state.unthemed_palette);
     qApp->setStyleSheet(QString());
   }
 }
 
 bool QtHost::IsDarkApplicationTheme()
 {
-  QPalette palette = qApp->palette();
+  if (!s_state.is_variable_color_theme)
+    return s_state.is_dark_theme;
+
+  const Qt::ColorScheme system_color_scheme = qApp->styleHints()->colorScheme();
+  if (system_color_scheme != Qt::ColorScheme::Unknown) [[likely]]
+    return (system_color_scheme == Qt::ColorScheme::Dark);
+
+  const QPalette palette = qApp->palette();
   return (palette.windowText().color().value() > palette.window().color().value());
+}
+
+bool QtHost::IsStyleSheetApplicationTheme()
+{
+  return s_state.is_stylesheet_theme;
 }
 
 void QtHost::SetIconThemeFromStyle()
 {
-  const bool dark = IsDarkApplicationTheme();
-  QIcon::setThemeName(dark ? QStringLiteral("white") : QStringLiteral("black"));
+  QIcon::setThemeName(IsDarkApplicationTheme() ? QStringLiteral("white") : QStringLiteral("black"));
 }
 
 const char* Host::GetDefaultFullscreenUITheme()
 {
+  using namespace QtHost;
+
   const TinyString theme = Host::GetBaseTinyStringSettingValue("UI", "Theme", QtHost::GetDefaultThemeName());
 
   if (theme == "cobaltsky")
@@ -412,8 +549,6 @@ const char* Host::GetDefaultFullscreenUITheme()
     return "DarkRuby";
   else if (theme == "AMOLED")
     return "AMOLED";
-  else if (theme == "windowsvista")
-    return "Light";
-  else // if (theme == "fusion" || theme == "darkfusion" || theme == "darkfusionblue" || theme == "darkruby")
-    return "Dark";
+  else
+    return IsDarkApplicationTheme() ? "Dark" : "Light";
 }

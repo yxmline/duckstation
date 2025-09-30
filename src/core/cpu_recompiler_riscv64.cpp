@@ -241,6 +241,7 @@ u32 CPU::CodeCache::EmitASMFunctions(void* code, u32 code_size)
   Assembler* rvAsm = &actual_asm;
 
   Label dispatch;
+  Label run_events_and_dispatch;
 
   g_enter_recompiler = reinterpret_cast<decltype(g_enter_recompiler)>(rvAsm->GetCursorPointer());
   {
@@ -257,13 +258,13 @@ u32 CPU::CodeCache::EmitASMFunctions(void* code, u32 code_size)
   }
 
   // check events then for frame done
-  g_check_events_and_dispatch = rvAsm->GetCursorPointer();
   {
     Label skip_event_check;
     rvAsm->LW(RARG1, PTR(&g_state.pending_ticks));
     rvAsm->LW(RARG2, PTR(&g_state.downcount));
     rvAsm->BLTU(RARG1, RARG2, &skip_event_check);
 
+    rvAsm->Bind(&run_events_and_dispatch);
     g_run_events_and_dispatch = rvAsm->GetCursorPointer();
     rvEmitCall(rvAsm, reinterpret_cast<const void*>(&TimingEvents::RunEvents));
 
@@ -276,9 +277,9 @@ u32 CPU::CodeCache::EmitASMFunctions(void* code, u32 code_size)
     rvAsm->Bind(&dispatch);
 
     // x9 <- s_fast_map[pc >> 16]
-    rvAsm->LWU(RARG1, PTR(&g_state.pc));
+    rvAsm->LW(RARG1, PTR(&g_state.pc));
     rvMoveAddressToReg(rvAsm, RARG3, g_code_lut.data());
-    rvAsm->SRLI(RARG2, RARG1, 16);
+    rvAsm->SRLIW(RARG2, RARG1, 16);
     rvAsm->SLLI(RARG2, RARG2, 3);
     rvAsm->ADD(RARG2, RARG2, RARG3);
     rvAsm->LD(RARG2, 0, RARG2);
@@ -309,6 +310,9 @@ u32 CPU::CodeCache::EmitASMFunctions(void* code, u32 code_size)
   g_interpret_block = rvAsm->GetCursorPointer();
   {
     rvEmitCall(rvAsm, CodeCache::GetInterpretUncachedBlockFunction());
+    rvAsm->LW(RARG1, PTR(&g_state.pending_ticks));
+    rvAsm->LW(RARG2, PTR(&g_state.downcount));
+    rvAsm->BGE(RARG1, RARG2, &run_events_and_dispatch);
     rvAsm->J(&dispatch);
   }
 
@@ -537,8 +541,8 @@ void CPU::RISCV64Recompiler::GenerateBlockProtectCheck(const u8* ram_ptr, const 
 
   while (size >= 4)
   {
-    rvAsm->LWU(RARG3, offset, RARG1);
-    rvAsm->LWU(RSCRATCH, offset, RARG2);
+    rvAsm->LW(RARG3, offset, RARG1);
+    rvAsm->LW(RSCRATCH, offset, RARG2);
     rvAsm->BNE(RARG3, RSCRATCH, &block_changed);
     offset += 4;
     size -= 4;
@@ -560,7 +564,7 @@ void CPU::RISCV64Recompiler::GenerateICacheCheckAndUpdate()
     if (m_block->HasFlag(CodeCache::BlockFlags::NeedsDynamicFetchTicks))
     {
       rvEmitFarLoad(rvAsm, RARG2, GetFetchMemoryAccessTimePtr());
-      rvAsm->LWU(RARG1, PTR(&g_state.pending_ticks));
+      rvAsm->LW(RARG1, PTR(&g_state.pending_ticks));
       rvEmitMov(rvAsm, RARG3, m_block->size);
       rvAsm->MULW(RARG2, RARG2, RARG3);
       rvAsm->ADD(RARG1, RARG1, RARG2);
@@ -568,7 +572,7 @@ void CPU::RISCV64Recompiler::GenerateICacheCheckAndUpdate()
     }
     else
     {
-      rvAsm->LWU(RARG1, PTR(&g_state.pending_ticks));
+      rvAsm->LW(RARG1, PTR(&g_state.pending_ticks));
       SafeADDIW(RARG1, RARG1, static_cast<u32>(m_block->uncached_fetch_ticks));
       rvAsm->SW(RARG1, PTR(&g_state.pending_ticks));
     }
@@ -584,7 +588,7 @@ void CPU::RISCV64Recompiler::GenerateICacheCheckAndUpdate()
     DebugAssert(!IsHostRegAllocated(maddr_reg.Index()));
 
     VirtualMemoryAddress current_pc = m_block->pc & ICACHE_TAG_ADDRESS_MASK;
-    rvAsm->LWU(ticks_reg, PTR(&g_state.pending_ticks));
+    rvAsm->LW(ticks_reg, PTR(&g_state.pending_ticks));
     rvEmitMov(rvAsm, current_tag_reg, current_pc);
 
     for (u32 i = 0; i < m_block->icache_line_count; i++, current_pc += ICACHE_LINE_SIZE)
@@ -907,15 +911,28 @@ void CPU::RISCV64Recompiler::MoveTToReg(const biscuit::GPR& dst, CompileFlags cf
   }
 }
 
-void CPU::RISCV64Recompiler::MoveMIPSRegToReg(const biscuit::GPR& dst, Reg reg)
+void CPU::RISCV64Recompiler::MoveMIPSRegToReg(const biscuit::GPR& dst, Reg reg, bool ignore_load_delays)
 {
   DebugAssert(reg < Reg::count);
-  if (const std::optional<u32> hreg = CheckHostReg(0, Recompiler::HR_TYPE_CPU_REG, reg))
+  if (ignore_load_delays && m_load_delay_register == reg)
+  {
+    if (m_load_delay_value_register == NUM_HOST_REGS)
+      rvAsm->LW(dst, PTR(&g_state.load_delay_value));
+    else
+      rvAsm->MV(dst, GPR(m_load_delay_value_register));
+  }
+  else if (const std::optional<u32> hreg = CheckHostReg(0, Recompiler::HR_TYPE_CPU_REG, reg))
+  {
     rvAsm->MV(dst, GPR(hreg.value()));
+  }
   else if (HasConstantReg(reg))
+  {
     EmitMov(dst, GetConstantRegU32(reg));
+  }
   else
+  {
     rvAsm->LW(dst, PTR(&g_state.regs.r[static_cast<u8>(reg)]));
+  }
 }
 
 void CPU::RISCV64Recompiler::GeneratePGXPCallWithMIPSRegs(const void* func, u32 arg1val, Reg arg2reg /* = Reg::count */,
@@ -1938,6 +1955,17 @@ void CPU::RISCV64Recompiler::Compile_lwx(CompileFlags cf, MemoryAccessSize size,
 
   // We'd need to be careful here if we weren't overwriting it..
   ComputeLoadStoreAddressArg(cf, address, addr);
+
+  // Do PGXP first, it does its own load.
+  if (g_settings.gpu_pgxp_enable && inst->r.rt != Reg::zero)
+  {
+    Flush(FLUSH_FOR_C_CALL);
+    EmitMov(RARG1, inst->bits);
+    rvAsm->MV(RARG2, addr);
+    MoveMIPSRegToReg(RARG3, inst->r.rt, true);
+    EmitCall(reinterpret_cast<const void*>(&PGXP::CPU_LWx));
+  }
+
   rvAsm->ANDI(RARG1, addr, ~0x3u);
   GenerateLoad(RARG1, MemoryAccessSize::Word, false, use_fastmem, []() { return RRET; });
 
@@ -2005,15 +2033,6 @@ void CPU::RISCV64Recompiler::Compile_lwx(CompileFlags cf, MemoryAccessSize size,
   }
 
   FreeHostReg(addr.Index());
-
-  if (g_settings.gpu_pgxp_enable)
-  {
-    Flush(FLUSH_FOR_C_CALL);
-    rvAsm->MV(RARG3, value);
-    rvAsm->ANDI(RARG2, addr, ~0x3u);
-    EmitMov(RARG1, inst->bits);
-    EmitCall(reinterpret_cast<const void*>(&PGXP::CPU_LW));
-  }
 }
 
 void CPU::RISCV64Recompiler::Compile_lwc2(CompileFlags cf, MemoryAccessSize size, bool sign, bool use_fastmem,
@@ -2136,15 +2155,22 @@ void CPU::RISCV64Recompiler::Compile_swx(CompileFlags cf, MemoryAccessSize size,
   // TODO: this can take over rt's value if it's no longer needed
   // NOTE: can't trust T in cf because of the alloc
   const GPR addr = GPR(AllocateTempHostReg(HR_CALLEE_SAVED));
-  const GPR value = g_settings.gpu_pgxp_enable ? GPR(AllocateTempHostReg(HR_CALLEE_SAVED)) : RARG2;
-  if (g_settings.gpu_pgxp_enable)
-    MoveMIPSRegToReg(value, inst->r.rt);
 
   FlushForLoadStore(address, true, use_fastmem);
 
   // TODO: if address is constant, this can be simplified..
   // We'd need to be careful here if we weren't overwriting it..
   ComputeLoadStoreAddressArg(cf, address, addr);
+
+  if (g_settings.gpu_pgxp_enable)
+  {
+    Flush(FLUSH_FOR_C_CALL);
+    EmitMov(RARG1, inst->bits);
+    rvAsm->MV(RARG2, addr);
+    MoveMIPSRegToReg(RARG3, inst->r.rt);
+    EmitCall(reinterpret_cast<const void*>(&PGXP::CPU_SWx));
+  }
+
   rvAsm->ANDI(RARG1, addr, ~0x3u);
   GenerateLoad(RARG1, MemoryAccessSize::Word, false, use_fastmem, []() { return RRET; });
 
@@ -2154,7 +2180,7 @@ void CPU::RISCV64Recompiler::Compile_swx(CompileFlags cf, MemoryAccessSize size,
 
   // Need to load down here for PGXP-off, because it's in a volatile reg that can get overwritten by flush.
   if (!g_settings.gpu_pgxp_enable)
-    MoveMIPSRegToReg(value, inst->r.rt);
+    MoveMIPSRegToReg(RARG2, inst->r.rt);
 
   if (inst->op == InstructionOp::swl)
   {
@@ -2166,40 +2192,25 @@ void CPU::RISCV64Recompiler::Compile_swx(CompileFlags cf, MemoryAccessSize size,
 
     EmitMov(RARG3, 24);
     rvAsm->SUBW(RARG3, RARG3, RSCRATCH);
-    rvAsm->SRLW(value, value, RARG3);
-    rvAsm->OR(value, value, RRET);
+    rvAsm->SRLW(RARG2, RARG2, RARG3);
+    rvAsm->OR(RARG2, RARG2, RRET);
   }
   else
   {
     // const u32 mem_mask = UINT32_C(0x00FFFFFF) >> (24 - shift);
     // new_value = (RWRET & mem_mask) | (value << shift);
-    rvAsm->SLLW(value, value, RSCRATCH);
+    rvAsm->SLLW(RARG2, RARG2, RSCRATCH);
 
     EmitMov(RARG3, 24);
     rvAsm->SUBW(RARG3, RARG3, RSCRATCH);
     EmitMov(RSCRATCH, 0x00FFFFFFu);
     rvAsm->SRLW(RSCRATCH, RSCRATCH, RARG3);
     rvAsm->AND(RRET, RRET, RSCRATCH);
-    rvAsm->OR(value, value, RRET);
+    rvAsm->OR(RARG2, RARG2, RRET);
   }
 
-  if (!g_settings.gpu_pgxp_enable)
-  {
-    GenerateStore(addr, value, MemoryAccessSize::Word, use_fastmem);
-    FreeHostReg(addr.Index());
-  }
-  else
-  {
-    GenerateStore(addr, value, MemoryAccessSize::Word, use_fastmem);
-
-    Flush(FLUSH_FOR_C_CALL);
-    rvAsm->MV(RARG3, value);
-    FreeHostReg(value.Index());
-    rvAsm->MV(RARG2, addr);
-    FreeHostReg(addr.Index());
-    EmitMov(RARG1, inst->bits);
-    EmitCall(reinterpret_cast<const void*>(&PGXP::CPU_SW));
-  }
+  GenerateStore(addr, RARG2, MemoryAccessSize::Word, use_fastmem);
+  FreeHostReg(addr.Index());
 }
 
 void CPU::RISCV64Recompiler::Compile_swc2(CompileFlags cf, MemoryAccessSize size, bool sign, bool use_fastmem,

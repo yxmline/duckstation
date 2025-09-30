@@ -138,9 +138,8 @@ Q_SIGNALS:
   void systemDestroyed();
   void systemPaused();
   void systemResumed();
-  void systemGameChanged(const QString& filename, const QString& game_serial, const QString& game_title);
+  void systemGameChanged(const QString& path, const QString& game_serial, const QString& game_title);
   void systemUndoStateAvailabilityChanged(bool available, quint64 timestamp);
-  void gameListRefreshed();
   void gameListRowsChanged(const QList<int>& rows_changed);
   std::optional<WindowInfo> onAcquireRenderWindowRequested(RenderAPI render_api, bool fullscreen,
                                                            bool exclusive_fullscreen, bool surfaceless, Error* error);
@@ -168,7 +167,7 @@ Q_SIGNALS:
   /// Big Picture UI requests.
   void onCoverDownloaderOpenRequested();
 
-public Q_SLOTS:
+public:
   void setDefaultSettings(bool system = true, bool controller = true);
   void applySettings(bool display_osd_messages = false);
   void reloadGameSettings(bool display_osd_messages = false);
@@ -189,19 +188,19 @@ public Q_SLOTS:
   void shutdownSystem(bool save_state, bool check_memcard_busy);
   void resetSystem(bool check_memcard_busy);
   void setSystemPaused(bool paused, bool wait_until_paused = false);
-  void changeDisc(const QString& new_disc_filename, bool reset_system, bool check_memcard_busy);
+  void changeDisc(const QString& new_disc_path, bool reset_system, bool check_memcard_busy);
   void changeDiscFromPlaylist(quint32 index);
-  void loadState(const QString& filename);
+  void loadState(const QString& path);
   void loadState(bool global, qint32 slot);
-  void saveState(const QString& filename, bool block_until_done = false);
+  void saveState(const QString& path, bool block_until_done = false);
   void saveState(bool global, qint32 slot, bool block_until_done = false);
   void undoLoadState();
   void setAudioOutputVolume(int volume, int fast_forward_volume);
   void setAudioOutputMuted(bool muted);
   void singleStepCPU();
-  void dumpRAM(const QString& filename);
-  void dumpVRAM(const QString& filename);
-  void dumpSPURAM(const QString& filename);
+  void dumpRAM(const QString& path);
+  void dumpVRAM(const QString& path);
+  void dumpSPURAM(const QString& path);
   void saveScreenshot();
   void redrawDisplayWindow();
   void toggleFullscreen();
@@ -218,8 +217,12 @@ public Q_SLOTS:
   void startControllerTest();
   void setGPUThreadRunIdle(bool active);
   void updateFullscreenUITheme();
+  void runOnEmuThread(const std::function<void()>& callback);
 
-private Q_SLOTS:
+protected:
+  void run() override;
+
+private:
   void stopInThread();
   void onDisplayWindowMouseButtonEvent(int button, bool pressed);
   void onDisplayWindowMouseWheelEvent(float dx, float dy);
@@ -227,14 +230,9 @@ private Q_SLOTS:
   void onDisplayWindowKeyEvent(int key, bool pressed);
   void onDisplayWindowTextEntered(const QString& text);
   void doBackgroundControllerPoll();
-  void runOnEmuThread(const std::function<void()>& callback);
   void processAuxiliaryRenderWindowInputEvent(void* userdata, quint32 event, quint32 param1, quint32 param2,
                                               quint32 param3);
 
-protected:
-  void run() override;
-
-private:
   void createBackgroundControllerPollTimer();
   void destroyBackgroundControllerPollTimer();
   void confirmActionIfMemoryCardBusy(const QString& action, bool cancel_resume_on_accept,
@@ -295,15 +293,13 @@ public:
   // NOTE: Should only be called on EmuThread.
   void enumerateDevices();
 
-public Q_SLOTS:
   void onDeviceConnected(const InputBindingKey& key, const QString& identifier, const QString& device_name,
                          const QStringList& vibration_motors);
   void onDeviceDisconnected(const InputBindingKey& key, const QString& identifier);
 
-private Q_SLOTS:
+private:
   void resetLists(const DeviceList& devices, const QStringList& motors);
 
-private:
   DeviceList m_devices;
   QStringList m_vibration_motors;
 };
@@ -344,6 +340,9 @@ void UpdateApplicationTheme();
 /// Returns true if the application theme is using dark colours.
 bool IsDarkApplicationTheme();
 
+/// Returns true if the application theme is using stylesheet overrides.
+bool IsStyleSheetApplicationTheme();
+
 /// Sets the icon theme, based on the current style (light/dark).
 void SetIconThemeFromStyle();
 
@@ -379,6 +378,9 @@ QString GetResourcesBasePath();
 
 /// Returns the path to the specified resource.
 std::string GetResourcePath(std::string_view name, bool allow_override);
+
+/// Returns the font family for the bundled Roboto font.
+const QStringList& GetRobotoFontFamilies();
 
 /// Returns the base settings interface. Should lock before manipulating.
 INISettingsInterface* GetBaseSettingsInterface();

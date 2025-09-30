@@ -23,7 +23,7 @@ GamePatchDetailsWidget::GamePatchDetailsWidget(std::string name, const std::stri
   m_ui.setupUi(this);
 
   QFont title_font(m_ui.name->font());
-  title_font.setPointSizeF(title_font.pointSizeF() + 4.0f);
+  title_font.setPixelSize(17);
   title_font.setBold(true);
   m_ui.name->setFont(title_font);
   m_ui.name->setText(QString::fromStdString(m_name));
@@ -36,7 +36,7 @@ GamePatchDetailsWidget::GamePatchDetailsWidget(std::string name, const std::stri
 
   DebugAssert(dialog->getSettingsInterface());
   m_ui.enabled->setChecked(enabled);
-  connect(m_ui.enabled, &QCheckBox::checkStateChanged, this, &GamePatchDetailsWidget::onEnabledStateChanged);
+  connect(m_ui.enabled, &ToggleButton::checkStateChanged, this, &GamePatchDetailsWidget::onEnabledStateChanged);
 }
 
 GamePatchDetailsWidget::~GamePatchDetailsWidget() = default;
@@ -49,7 +49,7 @@ void GamePatchDetailsWidget::onEnabledStateChanged(Qt::CheckState state)
   else
     si->RemoveFromStringList("Patches", "Enable", m_name.c_str());
 
-  si->Save();
+  QtHost::SaveGameSettings(si, true);
   g_emu_thread->reloadGameSettings();
 }
 
@@ -120,7 +120,7 @@ void GamePatchSettingsWidget::reloadList()
   {
     QLabel* label = new QLabel(tr("No patches are available for this game."), container);
     QFont font(label->font());
-    font.setPointSizeF(font.pointSizeF() + 2.0f);
+    font.setPixelSize(15);
     font.setBold(true);
     label->setFont(font);
     layout->addWidget(label);

@@ -240,6 +240,7 @@ void Settings::Load(const SettingsInterface& si, const SettingsInterface& contro
   gpu_multisamples = static_cast<u8>(si.GetUIntValue("GPU", "Multisamples", 1u));
   gpu_use_debug_device = si.GetBoolValue("GPU", "UseDebugDevice", false);
   gpu_use_debug_device_gpu_validation = si.GetBoolValue("GPU", "UseGPUBasedValidation", false);
+  gpu_prefer_gles_context = si.GetBoolValue("GPU", "PreferGLESContext", DEFAULT_GPU_PREFER_GLES_CONTEXT);
   gpu_disable_shader_cache = si.GetBoolValue("GPU", "DisableShaderCache", false);
   gpu_disable_dual_source_blend = si.GetBoolValue("GPU", "DisableDualSourceBlend", false);
   gpu_disable_framebuffer_fetch = si.GetBoolValue("GPU", "DisableFramebufferFetch", false);
@@ -284,7 +285,7 @@ void Settings::Load(const SettingsInterface& si, const SettingsInterface& contro
     ParseForceVideoTimingName(
       si.GetStringValue("GPU", "ForceVideoTiming", GetForceVideoTimingName(DEFAULT_FORCE_VIDEO_TIMING_MODE)).c_str())
       .value_or(DEFAULT_FORCE_VIDEO_TIMING_MODE);
-  gpu_widescreen_hack = si.GetBoolValue("GPU", "WidescreenHack", false);
+  gpu_widescreen_rendering = gpu_widescreen_hack = si.GetBoolValue("GPU", "WidescreenHack", false);
   gpu_texture_cache = si.GetBoolValue("GPU", "EnableTextureCache", false);
   display_24bit_chroma_smoothing = si.GetBoolValue("GPU", "ChromaSmoothing24Bit", false);
   gpu_pgxp_enable = si.GetBoolValue("GPU", "PGXPEnable", false);
@@ -304,13 +305,7 @@ void Settings::Load(const SettingsInterface& si, const SettingsInterface& contro
       si.GetStringValue("Display", "CropMode", GetDisplayCropModeName(DEFAULT_DISPLAY_CROP_MODE)).c_str())
       .value_or(DEFAULT_DISPLAY_CROP_MODE);
   display_aspect_ratio =
-    ParseDisplayAspectRatio(
-      si.GetStringValue("Display", "AspectRatio", GetDisplayAspectRatioName(DEFAULT_DISPLAY_ASPECT_RATIO)).c_str())
-      .value_or(DEFAULT_DISPLAY_ASPECT_RATIO);
-  display_aspect_ratio_custom_numerator = static_cast<u16>(
-    std::clamp<int>(si.GetIntValue("Display", "CustomAspectRatioNumerator", 4), 1, std::numeric_limits<u16>::max()));
-  display_aspect_ratio_custom_denominator = static_cast<u16>(
-    std::clamp<int>(si.GetIntValue("Display", "CustomAspectRatioDenominator", 3), 1, std::numeric_limits<u16>::max()));
+    ParseDisplayAspectRatio(si.GetStringValue("Display", "AspectRatio")).value_or(DEFAULT_DISPLAY_ASPECT_RATIO);
   display_alignment =
     ParseDisplayAlignment(
       si.GetStringValue("Display", "Alignment", GetDisplayAlignmentName(DEFAULT_DISPLAY_ALIGNMENT)).c_str())
@@ -321,6 +316,10 @@ void Settings::Load(const SettingsInterface& si, const SettingsInterface& contro
       .value_or(DEFAULT_DISPLAY_ROTATION);
   display_scaling =
     ParseDisplayScaling(si.GetStringValue("Display", "Scaling", GetDisplayScalingName(DEFAULT_DISPLAY_SCALING)).c_str())
+      .value_or(DEFAULT_DISPLAY_SCALING);
+  display_scaling_24bit =
+    ParseDisplayScaling(
+      si.GetStringValue("Display", "Scaling24Bit", GetDisplayScalingName(DEFAULT_DISPLAY_SCALING)).c_str())
       .value_or(DEFAULT_DISPLAY_SCALING);
   display_exclusive_fullscreen_control =
     ParseDisplayExclusiveFullscreenControl(
@@ -618,6 +617,7 @@ void Settings::Save(SettingsInterface& si, bool ignore_base) const
   {
     si.SetBoolValue("GPU", "UseDebugDevice", gpu_use_debug_device);
     si.SetBoolValue("GPU", "UseGPUBasedValidation", gpu_use_debug_device_gpu_validation);
+    si.SetBoolValue("GPU", "PreferGLESContext", gpu_prefer_gles_context);
     si.SetBoolValue("GPU", "DisableShaderCache", gpu_disable_shader_cache);
     si.SetBoolValue("GPU", "DisableDualSourceBlend", gpu_disable_dual_source_blend);
     si.SetBoolValue("GPU", "DisableFramebufferFetch", gpu_disable_framebuffer_fetch);
@@ -643,7 +643,7 @@ void Settings::Save(SettingsInterface& si, bool ignore_base) const
   si.SetUIntValue("GPU", "DownsampleScale", gpu_downsample_scale);
   si.SetStringValue("GPU", "WireframeMode", GetGPUWireframeModeName(gpu_wireframe_mode));
   si.SetStringValue("GPU", "ForceVideoTiming", GetForceVideoTimingName(gpu_force_video_timing));
-  si.SetBoolValue("GPU", "WidescreenHack", gpu_widescreen_hack);
+  si.SetBoolValue("GPU", "WidescreenHack", gpu_widescreen_rendering);
   si.SetBoolValue("GPU", "EnableTextureCache", gpu_texture_cache);
   si.SetBoolValue("GPU", "ChromaSmoothing24Bit", display_24bit_chroma_smoothing);
   si.SetBoolValue("GPU", "PGXPEnable", gpu_pgxp_enable);
@@ -670,10 +670,11 @@ void Settings::Save(SettingsInterface& si, bool ignore_base) const
   si.SetIntValue("Display", "LineStartOffset", display_line_start_offset);
   si.SetIntValue("Display", "LineEndOffset", display_line_end_offset);
   si.SetBoolValue("Display", "Force4_3For24Bit", display_force_4_3_for_24bit);
-  si.SetStringValue("Display", "AspectRatio", GetDisplayAspectRatioName(display_aspect_ratio));
+  si.SetStringValue("Display", "AspectRatio", GetDisplayAspectRatioName(display_aspect_ratio).c_str());
   si.SetStringValue("Display", "Alignment", GetDisplayAlignmentName(display_alignment));
   si.SetStringValue("Display", "Rotation", GetDisplayRotationName(display_rotation));
   si.SetStringValue("Display", "Scaling", GetDisplayScalingName(display_scaling));
+  si.SetStringValue("Display", "Scaling24Bit", GetDisplayScalingName(display_scaling_24bit));
   si.SetBoolValue("Display", "OptimalFramePacing", display_optimal_frame_pacing);
   si.SetBoolValue("Display", "PreFrameSleep", display_pre_frame_sleep);
   si.SetBoolValue("Display", "SkipPresentingDuplicateFrames", display_skip_presenting_duplicate_frames);
@@ -685,8 +686,6 @@ void Settings::Save(SettingsInterface& si, bool ignore_base) const
   si.SetStringValue("Display", "ScreenshotMode", GetDisplayScreenshotModeName(display_screenshot_mode));
   si.SetStringValue("Display", "ScreenshotFormat", GetDisplayScreenshotFormatName(display_screenshot_format));
   si.SetUIntValue("Display", "ScreenshotQuality", display_screenshot_quality);
-  si.SetIntValue("Display", "CustomAspectRatioNumerator", display_aspect_ratio_custom_numerator);
-  si.GetIntValue("Display", "CustomAspectRatioDenominator", display_aspect_ratio_custom_denominator);
   if (!ignore_base)
   {
     si.SetBoolValue("Display", "ShowOSDMessages", display_show_messages);
@@ -1031,7 +1030,7 @@ std::string Settings::TextureReplacementSettings::Configuration::ExportToYAML(bo
                      comment_str, replacement_scale_linear_filter);    // ReplacementScaleLinearFilter
 }
 
-void Settings::FixIncompatibleSettings(const SettingsInterface& si, bool display_osd_messages)
+void Settings::ApplySettingRestrictions()
 {
   if (g_settings.disable_all_enhancements)
   {
@@ -1049,6 +1048,7 @@ void Settings::FixIncompatibleSettings(const SettingsInterface& si, bool display
     g_settings.gpu_dithering_mode = GPUDitheringMode::Unscaled;
     g_settings.gpu_line_detect_mode = GPULineDetectMode::Disabled;
     g_settings.gpu_force_video_timing = ForceVideoTimingMode::Disabled;
+    g_settings.gpu_widescreen_rendering = false;
     g_settings.gpu_widescreen_hack = false;
     g_settings.gpu_texture_cache = false;
     g_settings.gpu_pgxp_enable = false;
@@ -1066,6 +1066,33 @@ void Settings::FixIncompatibleSettings(const SettingsInterface& si, bool display
     g_settings.pcdrv_enable = false;
   }
 
+  // if challenge mode is enabled, disable things like rewind since they use save states
+  if (Achievements::IsHardcoreModeActive())
+  {
+    g_settings.emulation_speed =
+      (g_settings.emulation_speed != 0.0f) ? std::max(g_settings.emulation_speed, 1.0f) : 0.0f;
+    g_settings.fast_forward_speed =
+      (g_settings.fast_forward_speed != 0.0f) ? std::max(g_settings.fast_forward_speed, 1.0f) : 0.0f;
+    g_settings.turbo_speed = (g_settings.turbo_speed != 0.0f) ? std::max(g_settings.turbo_speed, 1.0f) : 0.0f;
+    g_settings.rewind_enable = false;
+    if (g_settings.cpu_overclock_enable && g_settings.GetCPUOverclockPercent() < 100)
+    {
+      g_settings.cpu_overclock_enable = false;
+      g_settings.UpdateOverclockActive();
+    }
+
+#ifndef __ANDROID__
+    g_settings.enable_gdb_server = false;
+#endif
+
+    g_settings.gpu_show_vram = false;
+    g_settings.gpu_dump_cpu_to_vram_copies = false;
+    g_settings.gpu_dump_vram_to_cpu_copies = false;
+  }
+}
+
+void Settings::FixIncompatibleSettings(const SettingsInterface& si, bool display_osd_messages)
+{
   // fast forward boot requires fast boot
   g_settings.bios_fast_forward_boot = g_settings.bios_patch_fast_boot && g_settings.bios_fast_forward_boot;
 
@@ -1145,30 +1172,6 @@ void Settings::FixIncompatibleSettings(const SettingsInterface& si, bool display
       g_settings.cpu_recompiler_block_linking = false;
     }
   }
-
-  // if challenge mode is enabled, disable things like rewind since they use save states
-  if (Achievements::IsHardcoreModeActive())
-  {
-    g_settings.emulation_speed =
-      (g_settings.emulation_speed != 0.0f) ? std::max(g_settings.emulation_speed, 1.0f) : 0.0f;
-    g_settings.fast_forward_speed =
-      (g_settings.fast_forward_speed != 0.0f) ? std::max(g_settings.fast_forward_speed, 1.0f) : 0.0f;
-    g_settings.turbo_speed = (g_settings.turbo_speed != 0.0f) ? std::max(g_settings.turbo_speed, 1.0f) : 0.0f;
-    g_settings.rewind_enable = false;
-    if (g_settings.cpu_overclock_enable && g_settings.GetCPUOverclockPercent() < 100)
-    {
-      g_settings.cpu_overclock_enable = false;
-      g_settings.UpdateOverclockActive();
-    }
-
-#ifndef __ANDROID__
-    g_settings.enable_gdb_server = false;
-#endif
-
-    g_settings.gpu_show_vram = false;
-    g_settings.gpu_dump_cpu_to_vram_copies = false;
-    g_settings.gpu_dump_vram_to_cpu_copies = false;
-  }
 }
 
 bool Settings::AreGPUDeviceSettingsChanged(const Settings& old_settings) const
@@ -1176,6 +1179,7 @@ bool Settings::AreGPUDeviceSettingsChanged(const Settings& old_settings) const
   return (gpu_adapter != old_settings.gpu_adapter || gpu_use_thread != old_settings.gpu_use_thread ||
           gpu_use_debug_device != old_settings.gpu_use_debug_device ||
           gpu_use_debug_device_gpu_validation != old_settings.gpu_use_debug_device_gpu_validation ||
+          gpu_prefer_gles_context != old_settings.gpu_prefer_gles_context ||
           gpu_disable_shader_cache != old_settings.gpu_disable_shader_cache ||
           gpu_disable_dual_source_blend != old_settings.gpu_disable_dual_source_blend ||
           gpu_disable_framebuffer_fetch != old_settings.gpu_disable_framebuffer_fetch ||
@@ -1190,7 +1194,7 @@ bool Settings::AreGPUDeviceSettingsChanged(const Settings& old_settings) const
 
 void Settings::SetDefaultLogConfig(SettingsInterface& si)
 {
-  si.SetStringValue("Logging", "LogLevel", GetLogLevelName(DEFAULT_LOG_LEVEL));
+  si.SetStringValue("Logging", "LogLevel", GetLogLevelName(Log::DEFAULT_LOG_LEVEL));
   si.SetBoolValue("Logging", "LogTimestamps", true);
 
 #if !defined(_WIN32) && !defined(__ANDROID__)
@@ -1212,8 +1216,8 @@ void Settings::SetDefaultLogConfig(SettingsInterface& si)
 void Settings::UpdateLogConfig(const SettingsInterface& si)
 {
   const Log::Level log_level =
-    ParseLogLevelName(si.GetStringValue("Logging", "LogLevel", GetLogLevelName(DEFAULT_LOG_LEVEL)).c_str())
-      .value_or(DEFAULT_LOG_LEVEL);
+    ParseLogLevelName(si.GetStringValue("Logging", "LogLevel", GetLogLevelName(Log::DEFAULT_LOG_LEVEL)).c_str())
+      .value_or(Log::DEFAULT_LOG_LEVEL);
   const bool log_timestamps = si.GetBoolValue("Logging", "LogTimestamps", true);
   const bool log_to_console = si.GetBoolValue("Logging", "LogToConsole", false);
   const bool log_to_debug = si.GetBoolValue("Logging", "LogToDebug", false);
@@ -1870,52 +1874,91 @@ const char* Settings::GetDisplayCropModeDisplayName(DisplayCropMode crop_mode)
                                   "DisplayCropMode");
 }
 
-static constexpr const std::array s_display_aspect_ratio_names = {
+static constexpr const std::string_view s_auto_aspect_ratio_name =
+  TRANSLATE_DISAMBIG_NOOP("Settings", "Auto (Game Native)", "DisplayAspectRatio");
+static constexpr const std::string_view s_stretch_aspect_ratio_name =
 #ifndef __ANDROID__
-  TRANSLATE_DISAMBIG_NOOP("Settings", "Auto (Game Native)", "DisplayAspectRatio"),
-  TRANSLATE_DISAMBIG_NOOP("Settings", "Stretch To Fill", "DisplayAspectRatio"),
-  TRANSLATE_DISAMBIG_NOOP("Settings", "Custom", "DisplayAspectRatio"),
+  TRANSLATE_DISAMBIG_NOOP("Settings", "Stretch To Fill", "DisplayAspectRatio");
 #else
-  "Auto (Game Native)",
-  "Auto (Match Window)",
-  "Custom",
+  "Auto (Match Window)";
 #endif
-  "4:3",
-  "16:9",
-  "19:9",
-  "20:9",
-  "PAR 1:1"};
-static constexpr const std::array s_display_aspect_ratio_values = {
-  4.0f / 3.0f, 4.0f / 3.0f, 4.0f / 3.0f, 4.0f / 3.0f, 16.0f / 9.0f, 19.0f / 9.0f, 20.0f / 9.0f, -1.0f};
+static constexpr const std::string_view s_par_1_1_aspect_ratio_name =
+  TRANSLATE_DISAMBIG_NOOP("Settings", "PAR 1:1", "DisplayAspectRatio");
 
-std::optional<DisplayAspectRatio> Settings::ParseDisplayAspectRatio(const char* str)
+std::optional<DisplayAspectRatio> Settings::ParseDisplayAspectRatio(std::string_view str)
 {
-  int index = 0;
-  for (const char* name : s_display_aspect_ratio_names)
-  {
-    if (StringUtil::Strcasecmp(name, str) == 0)
-      return static_cast<DisplayAspectRatio>(index);
+  std::optional<DisplayAspectRatio> ret;
 
-    index++;
+  // Special cases.
+  if (str == s_auto_aspect_ratio_name)
+  {
+    ret.emplace(DisplayAspectRatio::Auto());
+  }
+  else if (str == s_stretch_aspect_ratio_name)
+  {
+    ret.emplace(DisplayAspectRatio::Stretch());
+  }
+  else if (str == s_par_1_1_aspect_ratio_name)
+  {
+    ret.emplace(DisplayAspectRatio::PAR1_1());
+  }
+  else
+  {
+    const std::string_view::size_type pos = str.find(':');
+    if (pos != std::string_view::npos)
+    {
+      const std::optional<s16> num = StringUtil::FromChars<s16>(str.substr(0, pos));
+      const std::optional<s16> denom = StringUtil::FromChars<s16>(str.substr(pos + 1));
+      if (num.has_value() && denom.has_value() && num.value() > 0 && denom.value() > 0)
+        ret.emplace(num.value(), denom.value());
+    }
   }
 
-  return std::nullopt;
+  return ret;
 }
 
-const char* Settings::GetDisplayAspectRatioName(DisplayAspectRatio ar)
+TinyString Settings::GetDisplayAspectRatioName(DisplayAspectRatio ar)
 {
-  return s_display_aspect_ratio_names[static_cast<size_t>(ar)];
+  TinyString ret;
+
+  // Special cases.
+  if (ar == DisplayAspectRatio::Auto())
+    ret = s_auto_aspect_ratio_name;
+  else if (ar == DisplayAspectRatio::Stretch())
+    ret = s_stretch_aspect_ratio_name;
+  else if (ar == DisplayAspectRatio::PAR1_1())
+    ret = s_par_1_1_aspect_ratio_name;
+  else
+    ret.format("{}:{}", ar.numerator, ar.denominator);
+
+  return ret;
 }
 
-const char* Settings::GetDisplayAspectRatioDisplayName(DisplayAspectRatio ar)
+TinyString Settings::GetDisplayAspectRatioDisplayName(DisplayAspectRatio ar)
 {
-  return Host::TranslateToCString("Settings", s_display_aspect_ratio_names[static_cast<size_t>(ar)],
-                                  "DisplayAspectRatio");
+  TinyString ret;
+
+  // Special cases.
+  if (ar == DisplayAspectRatio::Auto())
+    ret = Host::TranslateToStringView("Settings", s_auto_aspect_ratio_name, "DisplayAspectRatio");
+  else if (ar == DisplayAspectRatio::Stretch())
+    ret = Host::TranslateToStringView("Settings", s_stretch_aspect_ratio_name, "DisplayAspectRatio");
+  else if (ar == DisplayAspectRatio::PAR1_1())
+    ret = Host::TranslateToStringView("Settings", s_par_1_1_aspect_ratio_name, "DisplayAspectRatio");
+  else
+    ret.format("{}:{}", ar.numerator, ar.denominator);
+
+  return ret;
 }
 
-float GPUSettings::GetDisplayAspectRatioValue() const
+std::span<const DisplayAspectRatio> Settings::GetPredefinedDisplayAspectRatios()
 {
-  return s_display_aspect_ratio_values[static_cast<size_t>(display_aspect_ratio)];
+  static constexpr const std::array s_predefined_aspect_ratios = {
+    DisplayAspectRatio::Auto(), DisplayAspectRatio::Stretch(), DisplayAspectRatio{4, 3},
+    DisplayAspectRatio{16, 9},  DisplayAspectRatio{19, 9},     DisplayAspectRatio{20, 9},
+    DisplayAspectRatio{21, 9},  DisplayAspectRatio{16, 10},    DisplayAspectRatio::PAR1_1(),
+  };
+  return s_predefined_aspect_ratios;
 }
 
 static constexpr const std::array s_display_alignment_names = {"LeftOrTop", "Center", "RightOrBottom"};
@@ -2021,12 +2064,13 @@ const char* Settings::GetForceVideoTimingDisplayName(ForceVideoTimingMode mode)
 }
 
 static constexpr const std::array s_display_scaling_names = {
-  "Nearest", "NearestInteger", "BilinearSmooth", "BilinearSharp", "BilinearInteger", "Lanczos",
+  "Nearest", "NearestInteger", "BilinearSmooth", "BilinearHybrid", "BilinearSharp", "BilinearInteger", "Lanczos",
 };
 static constexpr const std::array s_display_scaling_display_names = {
   TRANSLATE_DISAMBIG_NOOP("Settings", "Nearest-Neighbor", "DisplayScalingMode"),
   TRANSLATE_DISAMBIG_NOOP("Settings", "Nearest-Neighbor (Integer)", "DisplayScalingMode"),
   TRANSLATE_DISAMBIG_NOOP("Settings", "Bilinear (Smooth)", "DisplayScalingMode"),
+  TRANSLATE_DISAMBIG_NOOP("Settings", "Bilinear (Hybrid)", "DisplayScalingMode"),
   TRANSLATE_DISAMBIG_NOOP("Settings", "Bilinear (Sharp)", "DisplayScalingMode"),
   TRANSLATE_DISAMBIG_NOOP("Settings", "Bilinear (Integer)", "DisplayScalingMode"),
   TRANSLATE_DISAMBIG_NOOP("Settings", "Lanczos (Sharp)", "DisplayScalingMode"),
@@ -2365,7 +2409,8 @@ const char* Settings::GetCDROMMechVersionDisplayName(CDROMMechaconVersion mode)
 }
 
 static constexpr const std::array s_save_state_compression_mode_names = {
-  "Uncompressed", "DeflateLow", "DeflateDefault", "DeflateHigh", "ZstLow", "ZstDefault", "ZstHigh",
+  "Uncompressed", "DeflateLow", "DeflateDefault", "DeflateHigh", "ZstLow",
+  "ZstDefault",   "ZstHigh",    "XZLow",          "XZDefault",   "XZHigh",
 };
 static constexpr const std::array s_save_state_compression_mode_display_names = {
   TRANSLATE_DISAMBIG_NOOP("Settings", "Uncompressed", "SaveStateCompressionMode"),
@@ -2375,6 +2420,9 @@ static constexpr const std::array s_save_state_compression_mode_display_names = 
   TRANSLATE_DISAMBIG_NOOP("Settings", "Zstandard (Low)", "SaveStateCompressionMode"),
   TRANSLATE_DISAMBIG_NOOP("Settings", "Zstandard (Default)", "SaveStateCompressionMode"),
   TRANSLATE_DISAMBIG_NOOP("Settings", "Zstandard (High)", "SaveStateCompressionMode"),
+  TRANSLATE_DISAMBIG_NOOP("Settings", "XZ (Low)", "SaveStateCompressionMode"),
+  TRANSLATE_DISAMBIG_NOOP("Settings", "XZ (Default)", "SaveStateCompressionMode"),
+  TRANSLATE_DISAMBIG_NOOP("Settings", "XZ (High)", "SaveStateCompressionMode"),
 };
 static_assert(s_save_state_compression_mode_names.size() == static_cast<size_t>(SaveStateCompressionMode::Count));
 static_assert(s_save_state_compression_mode_display_names.size() ==
@@ -2575,7 +2623,7 @@ void EmuFolders::Update()
     System::ReloadGameSettings(false);
 
   if (System::IsValid() && old_memorycards != EmuFolders::MemoryCards)
-    System::UpdateMemoryCardTypes();
+    System::UpdateMemoryCards();
 }
 
 void EmuFolders::EnsureFolderExists(const std::string& path)

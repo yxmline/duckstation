@@ -8,11 +8,11 @@
 #include "core/system.h"
 
 #include "util/gpu_device.h"
+#include "util/input_manager.h"
 
 #include "common/error.h"
 #include "common/log.h"
 
-#include <QtCore/QCoreApplication>
 #include <QtCore/QMetaObject>
 #include <QtGui/QDesktopServices>
 #include <QtGui/QGuiApplication>
@@ -35,13 +35,14 @@
 #include <cstdlib>
 #include <cstring>
 #include <map>
+#include <cmath>
 
-#if !defined(_WIN32) && !defined(APPLE)
-#include <qpa/qplatformnativeinterface.h>
-#endif
-
-#ifdef _WIN32
+#if defined(_WIN32)
 #include "common/windows_headers.h"
+#elif defined(__APPLE__)
+#include "common/thirdparty/usb_key_code_data.h"
+#else
+#include <qpa/qplatformnativeinterface.h>
 #endif
 
 LOG_CHANNEL(Host);
@@ -304,8 +305,9 @@ QIcon QtUtils::GetIconForEntryType(GameList::EntryType type)
     case GameList::EntryType::Disc:
       return QIcon::fromTheme(QStringLiteral("disc-line"));
     case GameList::EntryType::Playlist:
-    case GameList::EntryType::DiscSet:
       return QIcon::fromTheme(QStringLiteral("play-list-2-line"));
+    case GameList::EntryType::DiscSet:
+      return QIcon::fromTheme(QStringLiteral("multi-discs"));
     case GameList::EntryType::PSF:
       return QIcon::fromTheme(QStringLiteral("file-music-line"));
     case GameList::EntryType::PSExe:
@@ -324,6 +326,30 @@ QIcon QtUtils::GetIconForLanguage(std::string_view language_name)
 {
   return QIcon(
     QString::fromStdString(QtHost::GetResourcePath(GameDatabase::GetLanguageFlagResourceName(language_name), true)));
+}
+
+template<typename T>
+static void ResizeSharpBilinearT(T& pm, int size, int base_size)
+{
+  // Sharp Bilinear scaling
+  // First, scale the icon by the next largest integer size using nearest-neighbor...
+  const int integer_icon_size = static_cast<int>(std::ceil(static_cast<float>(size) / base_size) * base_size);
+  if (pm.width() != integer_icon_size || pm.height() != integer_icon_size)
+    pm = pm.scaled(integer_icon_size, integer_icon_size, Qt::IgnoreAspectRatio, Qt::FastTransformation);
+
+  // ...then scale down any remainder using bilinear interpolation.
+  if ((integer_icon_size - size) > 0)
+    pm = pm.scaled(size, size, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+}
+
+void QtUtils::ResizeSharpBilinear(QPixmap& pm, int size, int base_size)
+{
+  ResizeSharpBilinearT(pm, size, base_size);
+}
+
+void QtUtils::ResizeSharpBilinear(QImage& pm, int size, int base_size)
+{
+  ResizeSharpBilinearT(pm, size, base_size);
 }
 
 qreal QtUtils::GetDevicePixelRatioForWidget(const QWidget* widget)
@@ -479,6 +505,41 @@ bool QtUtils::RestoreWindowGeometry(std::string_view window_name, QWidget* widge
     return TryMigrateWindowGeometry(si, window_name, widget);
   }
 
+  // Ensure that the geometry is not off-screen. This is quite painful to do, but better than spawning the
+  // window off-screen. It also won't work on Wankland, and apparently doesn't support multiple monitors
+  // on X11, but who cares. I'm just going to disable the whole thing on Linux, because I don't want to
+  // deal with people moaning that their window manager's behavior is causing positions to revert to the
+  // primary monitor, so just yolo it and hope for the best....
+#ifndef __linux__
+  bool window_is_offscreen = true;
+  for (const QScreen* screen : qApp->screens())
+  {
+    const QRect screen_geometry = screen->geometry();
+    if (screen_geometry.contains(x, y))
+    {
+      window_is_offscreen = false;
+      break;
+    }
+  }
+  if (window_is_offscreen)
+  {
+    // If the window is off-screen, we will just center it on the primary screen.
+    const QScreen* primary_screen = QGuiApplication::primaryScreen();
+    if (primary_screen)
+    {
+      // Might be a different monitor, clamp to size.
+      const QRect screen_geometry = primary_screen->availableGeometry();
+      w = std::min(w, screen_geometry.width());
+      h = std::min(h, screen_geometry.height());
+      x = screen_geometry.x() + (screen_geometry.width() - w) / 2;
+      y = screen_geometry.y() + (screen_geometry.height() - h) / 2;
+    }
+
+    WARNING_LOG("Saved window position for {} is off-screen, centering to primary screen ({},{} w={},h={})",
+                window_name, x, y, w, h);
+  }
+#endif // __linux__
+
   widget->setGeometry(x, y, w, h);
   if (maximized)
     widget->setWindowState(widget->windowState() | Qt::WindowMaximized);
@@ -513,4 +574,59 @@ bool QtUtils::TryMigrateWindowGeometry(SettingsInterface* si, std::string_view w
   si->DeleteValue(WINDOW_GEOMETRY_CONFIG_SECTION, config_key.c_str());
   Host::CommitBaseSettingChanges();
   return true;
+}
+
+std::optional<u32> QtUtils::KeyEventToCode(const QKeyEvent* ev)
+{
+  u32 scancode = ev->nativeScanCode();
+
+#if defined(_WIN32)
+  // According to https://github.com/nyanpasu64/qkeycode/blob/master/src/qkeycode/qkeycode.cpp#L151,
+  // we need to convert the bit flag here.
+  if (scancode & 0x100)
+    scancode = (scancode - 0x100) | 0xe000;
+
+#elif defined(__APPLE__)
+#if 0
+  // On macOS, Qt applies the Keypad modifier regardless of whether the arrow keys, or numpad was pressed.
+  // The only way to differentiate between the keypad and the arrow keys is by the text.
+  // Hopefully some keyboard layouts don't change the numpad positioning...
+  Qt::KeyboardModifiers modifiers = ev->modifiers();
+  if (modifiers & Qt::KeypadModifier && key >= Qt::Key_Insert && key <= Qt::Key_PageDown)
+  {
+    if (ev->text().isEmpty())
+    {
+      // Drop the modifier, because it's probably not actually a numpad push.
+      modifiers &= ~Qt::KeypadModifier;
+    }
+  }
+#endif
+
+  // Stored in virtual key not scancode.
+  if (scancode == 0)
+    scancode = ev->nativeVirtualKey();
+
+  // Undo Qt swapping of control/meta.
+  // It also can't differentiate between left and right control/meta keys...
+  const int qt_key = ev->key();
+  switch (qt_key)
+  {
+    case Qt::Key_Shift:
+      return static_cast<u32>(USBKeyCode::ShiftLeft);
+    case Qt::Key_Meta:
+      return static_cast<u32>(USBKeyCode::ControlLeft);
+    case Qt::Key_Control:
+      return static_cast<u32>(USBKeyCode::MetaLeft);
+    case Qt::Key_Alt:
+      return static_cast<u32>(USBKeyCode::AltLeft);
+    case Qt::Key_CapsLock:
+      return static_cast<u32>(USBKeyCode::CapsLock);
+    default:
+      break;
+  }
+#else
+
+#endif
+
+  return InputManager::ConvertHostNativeKeyCodeToKeyCode(scancode);
 }

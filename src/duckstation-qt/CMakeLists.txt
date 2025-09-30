@@ -57,6 +57,8 @@ set(SRCS
   coverdownloadwindow.h
   coverdownloadwindow.ui
   debuggeraddbreakpointdialog.ui
+  debuggercodeview.cpp
+  debuggercodeview.h
   debuggermodels.cpp
   debuggermodels.h
   debuggerwindow.cpp
@@ -118,6 +120,9 @@ set(SRCS
   memorycardrenamefiledialog.ui
   memorycardsettingswidget.cpp
   memorycardsettingswidget.h
+  memoryeditorwindow.cpp
+  memoryeditorwindow.h
+  memoryeditorwindow.ui
   memoryscannerwindow.cpp
   memoryscannerwindow.h
   memoryscannerwindow.ui
@@ -129,7 +134,6 @@ set(SRCS
   postprocessingoverlayconfigwidget.ui
   qthost.cpp
   qthost.h
-  qtkeycodes.cpp
   qtprogresscallback.cpp
   qtprogresscallback.h
   qtthemes.cpp
@@ -148,6 +152,8 @@ set(SRCS
   setupwizarddialog.h
   setupwizarddialog.ui
   texturereplacementsettingsdialog.ui
+  togglebutton.cpp
+  togglebutton.h
 )
 
 set(TS_FILES
@@ -203,6 +209,9 @@ if(WIN32)
     vcruntimecheck.cpp
   )
 
+  # Needed to enable RAIntegration.
+  target_link_libraries(duckstation-qt PRIVATE rcheevos)
+
   # We want a Windows subsystem application not console.
   set_target_properties(duckstation-qt PROPERTIES
     WIN32_EXECUTABLE TRUE
@@ -230,7 +239,7 @@ if(WIN32)
 
   set(DEPS_TO_COPY cpuinfo.dll discord-rpc.dll dxcompiler.dll dxil.dll freetype.dll harfbuzz.dll jpeg62.dll libpng16.dll
                    libsharpyuv.dll libwebp.dll libwebpdemux.dll libwebpmux.dll plutosvg.dll SDL3.dll shaderc_shared.dll
-                   soundtouch.dll spirv-cross-c-shared.dll zlib1.dll zstd.dll)
+                   soundtouch.dll spirv-cross-c-shared.dll zip.dll zlib1.dll zstd.dll)
   foreach(DEP ${DEPS_TO_COPY})
     list(APPEND DEP_BINS "${CMAKE_PREFIX_PATH}/bin/${DEP}")
   endforeach()
@@ -270,11 +279,6 @@ elseif(APPLE)
   set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/DuckStation.icns" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 endif()
 
-if(ALLOW_INSTALL)
-  # Install main binary.
-  install(TARGETS duckstation-qt RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
-endif()
-
 # Compile qrc to a binary file.
 if(NOT APPLE)
   set(RCC_FILE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/resources/duckstation-qt.rcc")
@@ -297,9 +301,6 @@ if(NOT APPLE)
   foreach (QM_FILE IN LISTS QM_FILES)
     get_filename_component(QM_FILE_NAME ${QM_FILE} NAME)
     add_custom_command(TARGET duckstation-qt POST_BUILD COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${QM_FILE}" "${QM_OUTPUT_DIR}/${QM_FILE_NAME}")
-    if(ALLOW_INSTALL)
-      install(FILES "${QM_FILE}" DESTINATION "${CMAKE_INSTALL_BINDIR}/translations")
-    endif()
   endforeach()
 else()
   foreach (QM_FILE IN LISTS QM_FILES)

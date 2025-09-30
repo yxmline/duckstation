@@ -65,7 +65,7 @@ private:
   bool m_cursor_hidden = false;
   bool m_destroying = false;
 
-  std::vector<u32> m_keys_pressed_with_modifiers;
+  std::vector<int> m_keys_pressed_with_modifiers;
 
   u32 m_last_window_width = 0;
   u32 m_last_window_height = 0;
@@ -76,8 +76,6 @@ private:
 
 class DisplayContainer final : public QStackedWidget
 {
-  Q_OBJECT
-
 public:
   DisplayContainer();
   ~DisplayContainer();
@@ -96,8 +94,6 @@ private:
 
 class AuxiliaryDisplayWidget final : public QWidget
 {
-  Q_OBJECT
-
 public:
   explicit AuxiliaryDisplayWidget(QWidget* parent, u32 width, u32 height, const QString& title, void* userdata);
   ~AuxiliaryDisplayWidget();

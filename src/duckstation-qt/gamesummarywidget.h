@@ -9,7 +9,7 @@
 
 enum class DiscRegion : u8;
 
-namespace GameDatabase {
+namespace GameList {
 struct Entry;
 }
 
@@ -20,30 +20,25 @@ class GameSummaryWidget : public QWidget
   Q_OBJECT
 
 public:
-  GameSummaryWidget(const std::string& path, const std::string& serial, DiscRegion region,
-                    const GameDatabase::Entry* entry, SettingsWindow* dialog, QWidget* parent);
+  GameSummaryWidget(const GameList::Entry* entry, SettingsWindow* dialog, QWidget* parent);
   ~GameSummaryWidget();
 
   void reloadGameSettings();
 
-private Q_SLOTS:
+private:
+  void populateUi(const GameList::Entry* entry);
+  void setCustomTitle(const std::string& text);
+  void setCustomRegion(int region);
+  void setRevisionText(const QString& text);
+
+  void populateTracksInfo();
+
   void onSeparateDiscSettingsChanged(Qt::CheckState state);
   void onCustomLanguageChanged(int language);
   void onCompatibilityCommentsClicked();
   void onInputProfileChanged(int index);
   void onEditInputProfileClicked();
   void onComputeHashClicked();
-
-private:
-  void populateUi(const std::string& path, const std::string& serial, DiscRegion region,
-                  const GameDatabase::Entry* entry);
-  void populateCustomAttributes();
-  void updateWindowTitle();
-  void setCustomTitle(const std::string& text);
-  void setCustomRegion(int region);
-  void setRevisionText(const QString& text);
-
-  void populateTracksInfo();
 
   Ui::GameSummaryWidget m_ui;
   SettingsWindow* m_dialog;

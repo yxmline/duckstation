@@ -92,14 +92,18 @@ else()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions -fno-rtti")
 endif()
 
+# Rewrite paths in macros to be relative to the source directory.
+# Helpful for reproducible builds.
+if(COMPILER_CLANG OR COMPILER_CLANG_CL OR COMPILER_GCC)
+  file(RELATIVE_PATH source_dir_remap "${CMAKE_BINARY_DIR}" "${CMAKE_SOURCE_DIR}")
+  string(REGEX REPLACE "\/+$" "" source_dir_remap "${source_dir_remap}")
+  set(source_dir_remap_str "\"${CMAKE_SOURCE_DIR}\"=\"${source_dir_remap}\"")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fmacro-prefix-map=${source_dir_remap_str} -ffile-prefix-map=${source_dir_remap_str}")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fmacro-prefix-map=${source_dir_remap_str} -ffile-prefix-map=${source_dir_remap_str}")
+endif()
+
 # Write binaries to a seperate directory.
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/bin")
-
-# Installation directories. Everything goes into one directory.
-if(ALLOW_INSTALL)
-  set(CMAKE_INSTALL_BINDIR "${CMAKE_INSTALL_PREFIX}")
-  set(CMAKE_INSTALL_LIBDIR "${CMAKE_INSTALL_PREFIX}")
-endif()
 
 # Enable large file support on Linux 32-bit platforms.
 if(CMAKE_SIZEOF_VOID_P EQUAL 4)

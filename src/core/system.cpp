@@ -43,6 +43,7 @@
 
 #include "util/audio_stream.h"
 #include "util/cd_image.h"
+#include "util/compress_helpers.h"
 #include "util/gpu_device.h"
 #include "util/imgui_manager.h"
 #include "util/ini_settings_interface.h"
@@ -66,6 +67,7 @@
 #include "common/ryml_helpers.h"
 #include "common/string_util.h"
 #include "common/task_queue.h"
+#include "common/time_helpers.h"
 #include "common/timer.h"
 
 #include "IconsEmoji.h"
@@ -79,14 +81,12 @@
 #include "xxhash.h"
 
 #include <cctype>
+#include <chrono>
 #include <cinttypes>
 #include <cmath>
 #include <cstdio>
 #include <limits>
 #include <thread>
-#include <zlib.h>
-#include <zstd.h>
-#include <zstd_errors.h>
 
 LOG_CHANNEL(System);
 
@@ -199,11 +199,11 @@ static void UpdateInputSettingsLayer(std::string input_profile_name, std::unique
 static void UpdateRunningGame(const std::string& path, CDImage* image, bool booting);
 static bool CheckForRequiredSubQ(Error* error);
 static bool SwitchDiscFromSet(s32 direction, bool show_osd_message);
+static std::string_view GetCurrentGameSaveTitle();
 
 static void UpdateControllers();
 static void ResetControllers();
-static void UpdatePerGameMemoryCards();
-static std::unique_ptr<MemoryCard> GetMemoryCardForSlot(u32 slot, MemoryCardType type);
+static std::string GetMemoryCardPathForSlot(u32 slot, MemoryCardType type);
 static void UpdateMultitaps();
 
 static std::string GetMediaPathFromSaveState(const char* path);
@@ -312,7 +312,7 @@ struct ALIGN_TO_CACHE_LINE StateVars
   std::string running_game_title;
   std::string exe_override;
   const GameDatabase::Entry* running_game_entry = nullptr;
-  GameHash running_game_hash;
+  GameHash running_game_hash = 0;
   bool running_game_custom_title = false;
 
   std::atomic_bool startup_cancelled{false};
@@ -353,7 +353,7 @@ static StateVars s_state;
 
 static TinyString GetTimestampStringForFileName()
 {
-  return TinyString::from_format("{:%Y-%m-%d-%H-%M-%S}", fmt::localtime(std::time(nullptr)));
+  return TinyString::from_format("{:%Y-%m-%d-%H-%M-%S}", Common::LocalTime(std::time(nullptr)));
 }
 
 bool System::PerformEarlyHardwareChecks(Error* error)
@@ -461,7 +461,6 @@ void System::LogStartupInformation()
   INFO_LOG("DuckStation for {} ({}){}", TARGET_OS_STR, CPU_ARCH_STR, suffix);
   INFO_LOG("Version: {} [{}]", g_scm_tag_str, g_scm_branch_str);
   INFO_LOG("SCM Timestamp: {}", g_scm_date_str);
-  INFO_LOG("Build Timestamp: {} {}", __DATE__, __TIME__);
   if (const cpuinfo_package* package = cpuinfo_initialize() ? cpuinfo_get_package(0) : nullptr) [[likely]]
   {
     INFO_LOG("Host CPU: {}", package->name);
@@ -498,6 +497,15 @@ bool System::ProcessStartup(Error* error)
 
   // Initialize rapidyaml before anything can use it.
   SetRymlCallbacks();
+
+#ifdef __linux__
+  // Running DuckStation out of /usr/lib is not supported and makes no sense.
+  if (std::memcmp(EmuFolders::AppRoot.data(),
+                  "/usr/"
+                  "lib",
+                  8) == 0)
+    return false;
+#endif
 
   return true;
 }
@@ -954,10 +962,15 @@ GameHash System::GetGameHashFromBuffer(const std::string_view path, const std::s
 
 std::string System::GetExecutableNameForImage(IsoReader& iso, bool strip_subdirectories)
 {
+  std::string code;
+
   // Read SYSTEM.CNF
   std::vector<u8> system_cnf_data;
   if (!iso.ReadFile("SYSTEM.CNF", &system_cnf_data, IsoReader::ReadMode::Data))
-    return FALLBACK_EXE_NAME;
+  {
+    code = FALLBACK_EXE_NAME;
+    return code;
+  }
 
   // Parse lines
   std::vector<std::pair<std::string, std::string>> lines;
@@ -1001,10 +1014,11 @@ std::string System::GetExecutableNameForImage(IsoReader& iso, bool strip_subdire
   if (iter == lines.end())
   {
     // Fallback to PSX.EXE
-    return FALLBACK_EXE_NAME;
+    code = FALLBACK_EXE_NAME;
+    return code;
   }
 
-  std::string code = iter->second;
+  code = iter->second;
   std::string::size_type pos;
   if (strip_subdirectories)
   {
@@ -1225,14 +1239,17 @@ void System::LoadSettings(bool display_osd_messages)
   if (g_settings.gpu_automatic_resolution_scale && IsValid())
     g_settings.gpu_resolution_scale = g_gpu.CalculateAutomaticResolutionScale();
 
+  // show safe mode warning if it's toggled on, or on startup
+  if (IsValidOrInitializing() && (display_osd_messages || (!previous_safe_mode && g_settings.disable_all_enhancements)))
+    WarnAboutUnsafeSettings();
+
+  // safe mode, cheevos hardcore mode, etc.
+  g_settings.ApplySettingRestrictions();
+
   Settings::UpdateLogConfig(si);
   Host::LoadSettings(si, lock);
   InputManager::ReloadSources(controller_si, lock);
   InputManager::ReloadBindings(controller_si, hotkey_si);
-
-  // show safe mode warning if it's toggled on, or on startup
-  if (IsValidOrInitializing() && (display_osd_messages || (!previous_safe_mode && g_settings.disable_all_enhancements)))
-    WarnAboutUnsafeSettings();
 
   // apply compatibility settings
   if (g_settings.apply_compatibility_settings && s_state.running_game_entry)
@@ -1369,6 +1386,29 @@ void System::ApplySettings(bool display_osd_messages)
     LoadSettings(display_osd_messages);
   }
 
+  // If safe mode is changed, patches need to be disabled and settings potentially reloaded.
+  if (g_settings.disable_all_enhancements != old_settings.disable_all_enhancements)
+  {
+    const bool had_setting_overrides = Cheats::HasAnySettingOverrides();
+    Cheats::ReloadCheats(false, true, false, true, true);
+    if (had_setting_overrides != Cheats::HasAnySettingOverrides())
+      LoadSettings(false);
+  }
+
+  // Reload patches if widescreen rendering setting changed.
+  if (IsValid() &&
+      (g_settings.gpu_widescreen_rendering != old_settings.gpu_widescreen_rendering ||
+       (g_settings.gpu_widescreen_rendering && g_settings.display_aspect_ratio != old_settings.display_aspect_ratio)))
+  {
+    const bool prev_widescreen_patch = Cheats::IsWidescreenPatchActive();
+    Cheats::ReloadCheats(false, true, false, true, true);
+    if (prev_widescreen_patch != Cheats::IsWidescreenPatchActive() ||
+        g_settings.display_aspect_ratio != old_settings.display_aspect_ratio)
+    {
+      LoadSettings(false);
+    }
+  }
+
   CheckForSettingsChanges(old_settings);
   Host::CheckForSettingsChanges(old_settings);
 }
@@ -1416,9 +1456,16 @@ std::string System::GetGameSettingsPath(std::string_view game_serial, bool ignor
 {
   // multi-disc games => always use the first disc
   const GameDatabase::Entry* entry = ignore_disc_set ? nullptr : GameDatabase::GetEntryForSerial(game_serial);
-  const std::string_view serial_for_path =
-    (entry && !entry->disc_set_serials.empty()) ? entry->disc_set_serials.front() : game_serial;
+  const std::string_view serial_for_path = (entry && entry->disc_set) ? entry->disc_set->GetFirstSerial() : game_serial;
   return Path::Combine(EmuFolders::GameSettings, fmt::format("{}.ini", Path::SanitizeFileName(serial_for_path)));
+}
+
+bool System::ShouldUseSeparateDiscSettingsForSerial(std::string_view game_serial)
+{
+  const std::string path = GetGameSettingsPath(game_serial, false);
+  INISettingsInterface ini(path);
+  ini.Load();
+  return ini.GetBoolValue("Main", "UseSeparateConfigForDiscSet", false);
 }
 
 std::unique_ptr<INISettingsInterface> System::GetGameSettingsInterface(const GameDatabase::Entry* dbentry,
@@ -1437,14 +1484,14 @@ std::unique_ptr<INISettingsInterface> System::GetGameSettingsInterface(const Gam
     if (ret->Load(&error))
     {
       // Check for separate disc configuration.
-      if (dbentry && !dbentry->disc_set_serials.empty() && dbentry->disc_set_serials.front() != serial)
+      if (dbentry && !dbentry->IsFirstDiscInSet())
       {
         if (ret->GetBoolValue("Main", "UseSeparateConfigForDiscSet", false))
         {
           if (!quiet)
           {
             INFO_COLOR_LOG(StrongCyan, "Using separate disc game settings serial {} for disc set {}", serial,
-                           dbentry->disc_set_serials.front());
+                           dbentry->disc_set->title);
           }
 
           // Load the disc specific ini.
@@ -1834,7 +1881,7 @@ bool System::BootSystem(SystemBootParameters parameters, Error* error)
   s_state.exe_override = std::move(exe_override);
 
   UpdateControllers();
-  UpdateMemoryCardTypes();
+  UpdateMemoryCards();
   UpdateMultitaps();
   InternalReset();
 
@@ -1924,8 +1971,11 @@ bool System::Initialize(std::unique_ptr<CDImage> disc, DiscRegion disc_region, b
     return false;
 
   // CDROM before GPU, that way we don't modeswitch.
-  if (disc && !CDROM::InsertMedia(disc, disc_region, s_state.running_game_serial, s_state.running_game_title, error))
+  if (disc && !CDROM::InsertMedia(disc, disc_region, s_state.running_game_serial, s_state.running_game_title,
+                                  GetCurrentGameSaveTitle(), error))
+  {
     return false;
+  }
 
   // TODO: Drop class
   g_gpu.Initialize();
@@ -2948,7 +2998,7 @@ bool System::LoadStateFromBuffer(const SaveStateBuffer& buffer, Error* error, bo
            !new_disc->SwitchSubImage(media_subimage_index, error ? error : &local_error)) ||
           (UpdateRunningGame(buffer.media_path, new_disc.get(), false),
            !CDROM::InsertMedia(new_disc, new_disc_region, s_state.running_game_serial, s_state.running_game_title,
-                               error ? error : &local_error)))
+                               GetCurrentGameSaveTitle(), error ? error : &local_error)))
       {
         if (CDROM::HasMedia())
         {
@@ -2975,12 +3025,9 @@ bool System::LoadStateFromBuffer(const SaveStateBuffer& buffer, Error* error, bo
   else
   {
     // state has no disc
-    CDROM::RemoveMedia(false);
+    if (CDROM::RemoveMedia(false))
+      UpdateRunningGame(std::string(), nullptr, false);
   }
-
-  // ensure the correct card is loaded
-  if (g_settings.HasAnyPerGameMemoryCards())
-    UpdatePerGameMemoryCards();
 
   ClearMemorySaveStates(false, false);
 
@@ -3142,49 +3189,32 @@ bool System::ReadAndDecompressStateData(std::FILE* fp, std::span<u8> dst, u32 fi
     return false;
   }
 
-  if (method == SAVE_STATE_HEADER::CompressionType::Deflate)
+  CompressHelpers::CompressType type;
+  switch (method)
   {
-    uLong source_len = compressed_size;
-    uLong dest_len = static_cast<uLong>(dst.size());
-    const int err = uncompress2(dst.data(), &dest_len, compressed_data.data(), &source_len);
-    if (err != Z_OK) [[unlikely]]
-    {
-      Error::SetStringFmt(error, "uncompress2() failed: ", err);
-      return false;
-    }
-    else if (dest_len < dst.size()) [[unlikely]]
-    {
-      Error::SetStringFmt(error, "Only decompressed {} of {} bytes", dest_len, dst.size());
-      return false;
-    }
+    case SAVE_STATE_HEADER::CompressionType::Deflate:
+      type = CompressHelpers::CompressType::Deflate;
+      break;
 
-    if (source_len < compressed_size) [[unlikely]]
-      WARNING_LOG("Only consumed {} of {} compressed bytes", source_len, compressed_size);
+    case SAVE_STATE_HEADER::CompressionType::Zstandard:
+      type = CompressHelpers::CompressType::Zstandard;
+      break;
 
-    return true;
+    case SAVE_STATE_HEADER::CompressionType::XZ:
+      type = CompressHelpers::CompressType::XZ;
+      break;
+
+    default:
+      Error::SetStringFmt(error, "Unknown compression method {}", static_cast<u32>(method));
+      return false;
   }
-  else if (method == SAVE_STATE_HEADER::CompressionType::Zstandard)
-  {
-    const size_t result = ZSTD_decompress(dst.data(), dst.size(), compressed_data.data(), compressed_size);
-    if (ZSTD_isError(result)) [[unlikely]]
-    {
-      const char* errstr = ZSTD_getErrorString(ZSTD_getErrorCode(result));
-      Error::SetStringFmt(error, "ZSTD_decompress() failed: {}", errstr ? errstr : "<unknown>");
-      return false;
-    }
-    else if (result < dst.size())
-    {
-      Error::SetStringFmt(error, "Only decompressed {} of {} bytes", result, dst.size());
-      return false;
-    }
 
-    return true;
-  }
-  else [[unlikely]]
-  {
-    Error::SetStringView(error, "Unknown method.");
+  const std::optional<size_t> decompressed_size =
+    CompressHelpers::DecompressBuffer(dst, type, compressed_data.cspan(), dst.size(), error);
+  if (!decompressed_size.has_value() || decompressed_size.value() != dst.size())
     return false;
-  }
+
+  return true;
 }
 
 bool System::SaveState(std::string path, Error* error, bool backup_existing_save, bool ignore_memcard_busy)
@@ -3440,59 +3470,47 @@ u32 System::CompressAndWriteStateData(std::FILE* fp, std::span<const u8> src, Sa
     return static_cast<u32>(src.size());
   }
 
-  DynamicHeapArray<u8> buffer;
-  u32 write_size;
+  CompressHelpers::CompressType ctype;
+  int clevel;
   if (method >= SaveStateCompressionMode::DeflateLow && method <= SaveStateCompressionMode::DeflateHigh)
   {
-    const size_t buffer_size = compressBound(static_cast<uLong>(src.size()));
-    buffer.resize(buffer_size);
-
-    uLongf compressed_size = static_cast<uLongf>(buffer_size);
-    const int level =
-      ((method == SaveStateCompressionMode::DeflateLow) ?
-         Z_BEST_SPEED :
-         ((method == SaveStateCompressionMode::DeflateHigh) ? Z_BEST_COMPRESSION : Z_DEFAULT_COMPRESSION));
-    const int err = compress2(buffer.data(), &compressed_size, src.data(), static_cast<uLong>(src.size()), level);
-    if (err != Z_OK) [[unlikely]]
-    {
-      Error::SetStringFmt(error, "compress2() failed: {}", err);
-      return 0;
-    }
-
+    ctype = CompressHelpers::CompressType::Deflate;
     *header_type = static_cast<u32>(SAVE_STATE_HEADER::CompressionType::Deflate);
-    write_size = static_cast<u32>(compressed_size);
+    clevel =
+      ((method == SaveStateCompressionMode::DeflateLow) ? 1 :
+                                                          ((method == SaveStateCompressionMode::DeflateHigh) ? 9 : -1));
   }
   else if (method >= SaveStateCompressionMode::ZstLow && method <= SaveStateCompressionMode::ZstHigh)
   {
-    const size_t buffer_size = ZSTD_compressBound(src.size());
-    buffer.resize(buffer_size);
-
-    const int level =
-      ((method == SaveStateCompressionMode::ZstLow) ? 1 : ((method == SaveStateCompressionMode::ZstHigh) ? 18 : 0));
-    const size_t compressed_size = ZSTD_compress(buffer.data(), buffer_size, src.data(), src.size(), level);
-    if (ZSTD_isError(compressed_size)) [[unlikely]]
-    {
-      const char* errstr = ZSTD_getErrorString(ZSTD_getErrorCode(compressed_size));
-      Error::SetStringFmt(error, "ZSTD_compress() failed: {}", errstr ? errstr : "<unknown>");
-      return 0;
-    }
-
+    ctype = CompressHelpers::CompressType::Zstandard;
     *header_type = static_cast<u32>(SAVE_STATE_HEADER::CompressionType::Zstandard);
-    write_size = static_cast<u32>(compressed_size);
+    clevel =
+      ((method == SaveStateCompressionMode::ZstLow) ? 1 : ((method == SaveStateCompressionMode::ZstHigh) ? 18 : 0));
   }
-  else [[unlikely]]
+  else if (method >= SaveStateCompressionMode::XZLow && method <= SaveStateCompressionMode::XZHigh)
   {
-    Error::SetStringView(error, "Unknown method.");
+    ctype = CompressHelpers::CompressType::XZ;
+    *header_type = static_cast<u32>(SAVE_STATE_HEADER::CompressionType::XZ);
+    clevel = ((method == SaveStateCompressionMode::XZLow) ? 1 : ((method == SaveStateCompressionMode::XZHigh) ? 9 : 5));
+  }
+  else
+  {
+    Error::SetStringFmt(error, "Unknown compression type {}", static_cast<u32>(method));
     return 0;
   }
 
-  if (std::fwrite(buffer.data(), write_size, 1, fp) != 1) [[unlikely]]
+  const CompressHelpers::OptionalByteBuffer compressed_data =
+    CompressHelpers::CompressToBuffer(ctype, src, clevel, error);
+  if (!compressed_data.has_value())
+    return 0;
+
+  if (std::fwrite(compressed_data->data(), compressed_data->size(), 1, fp) != 1) [[unlikely]]
   {
     Error::SetStringFmt(error, "fwrite() failed: {}", errno);
     return 0;
   }
 
-  return write_size;
+  return static_cast<u32>(compressed_data->size());
 }
 
 float System::GetTargetSpeed()
@@ -3791,171 +3809,44 @@ void System::ResetControllers()
   }
 }
 
-std::unique_ptr<MemoryCard> System::GetMemoryCardForSlot(u32 slot, MemoryCardType type)
+void System::UpdateMemoryCards()
 {
-  // Disable memory cards when running PSFs.
-  const bool is_running_psf = !s_state.running_game_path.empty() && IsPsfPath(s_state.running_game_path.c_str());
-  if (is_running_psf)
-    return nullptr;
+  // Disable memory cards when running PSFs/GPU dumps.
+  if ((!s_state.running_game_path.empty() && IsPsfPath(s_state.running_game_path.c_str())) || IsReplayingGPUDump())
+    return;
 
-  std::string message_key = fmt::format("MemoryCard{}SharedWarning", slot);
-
-  switch (type)
-  {
-    case MemoryCardType::PerGame:
-    {
-      if (s_state.running_game_serial.empty())
-      {
-        Host::AddIconOSDMessage(
-          std::move(message_key), ICON_PF_MEMORY_CARD,
-          fmt::format(TRANSLATE_FS("System", "Per-game memory card cannot be used for slot {} as the running "
-                                             "game has no code. Using shared card instead."),
-                      slot + 1u),
-          Host::OSD_INFO_DURATION);
-        return MemoryCard::Open(g_settings.GetSharedMemoryCardPath(slot));
-      }
-      else
-      {
-        Host::RemoveKeyedOSDMessage(std::move(message_key));
-        return MemoryCard::Open(g_settings.GetGameMemoryCardPath(s_state.running_game_serial.c_str(), slot));
-      }
-    }
-
-    case MemoryCardType::PerGameTitle:
-    {
-      if (s_state.running_game_title.empty())
-      {
-        Host::AddIconOSDMessage(
-          std::move(message_key), ICON_PF_MEMORY_CARD,
-          fmt::format(TRANSLATE_FS("System", "Per-game memory card cannot be used for slot {} as the running "
-                                             "game has no title. Using shared card instead."),
-                      slot + 1u),
-          Host::OSD_INFO_DURATION);
-        return MemoryCard::Open(g_settings.GetSharedMemoryCardPath(slot));
-      }
-      else
-      {
-        std::string card_path;
-
-        // Playlist - use title if different.
-        if (HasMediaSubImages() && s_state.running_game_entry &&
-            s_state.running_game_title != s_state.running_game_entry->title)
-        {
-          card_path = g_settings.GetGameMemoryCardPath(Path::SanitizeFileName(s_state.running_game_title), slot);
-        }
-        // Multi-disc game - use disc set name.
-        else if (s_state.running_game_entry && !s_state.running_game_entry->disc_set_name.empty())
-        {
-          card_path =
-            g_settings.GetGameMemoryCardPath(Path::SanitizeFileName(s_state.running_game_entry->disc_set_name), slot);
-        }
-
-        // But prefer a disc-specific card if one already exists.
-        std::string disc_card_path = g_settings.GetGameMemoryCardPath(
-          Path::SanitizeFileName((s_state.running_game_entry && !s_state.running_game_custom_title) ?
-                                   s_state.running_game_entry->title :
-                                   s_state.running_game_title),
-          slot);
-        if (disc_card_path != card_path)
-        {
-          if (card_path.empty() || !g_settings.memory_card_use_playlist_title ||
-              FileSystem::FileExists(disc_card_path.c_str()))
-          {
-            if (g_settings.memory_card_use_playlist_title && !card_path.empty())
-            {
-              Host::AddIconOSDMessage(
-                fmt::format("DiscSpecificMC{}", slot), ICON_PF_MEMORY_CARD,
-                fmt::format(TRANSLATE_FS("System", "Using disc-specific memory card '{}' instead of per-game card."),
-                            Path::GetFileName(disc_card_path)),
-                Host::OSD_INFO_DURATION);
-            }
-
-            card_path = std::move(disc_card_path);
-          }
-        }
-
-        Host::RemoveKeyedOSDMessage(std::move(message_key));
-        return MemoryCard::Open(card_path.c_str());
-      }
-    }
-
-    case MemoryCardType::PerGameFileTitle:
-    {
-      const std::string display_name(FileSystem::GetDisplayNameFromPath(s_state.running_game_path));
-      const std::string_view file_title(Path::GetFileTitle(display_name));
-      if (file_title.empty())
-      {
-        Host::AddIconOSDMessage(
-          std::move(message_key), ICON_PF_MEMORY_CARD,
-          fmt::format(TRANSLATE_FS("System", "Per-game memory card cannot be used for slot {} as the running "
-                                             "game has no path. Using shared card instead."),
-                      slot + 1u));
-        return MemoryCard::Open(g_settings.GetSharedMemoryCardPath(slot));
-      }
-      else
-      {
-        Host::RemoveKeyedOSDMessage(std::move(message_key));
-        return MemoryCard::Open(g_settings.GetGameMemoryCardPath(Path::SanitizeFileName(file_title).c_str(), slot));
-      }
-    }
-
-    case MemoryCardType::Shared:
-    {
-      Host::RemoveKeyedOSDMessage(std::move(message_key));
-      return MemoryCard::Open(g_settings.GetSharedMemoryCardPath(slot));
-    }
-
-    case MemoryCardType::NonPersistent:
-    {
-      Host::RemoveKeyedOSDMessage(std::move(message_key));
-      return MemoryCard::Create();
-    }
-
-    case MemoryCardType::None:
-    default:
-    {
-      Host::RemoveKeyedOSDMessage(std::move(message_key));
-      return nullptr;
-    }
-  }
-}
-
-void System::UpdateMemoryCardTypes()
-{
-  for (u32 i = 0; i < NUM_CONTROLLER_AND_CARD_PORTS; i++)
-  {
-    Pad::SetMemoryCard(i, nullptr);
-
-    const MemoryCardType type = g_settings.memory_card_types[i];
-    std::unique_ptr<MemoryCard> card = GetMemoryCardForSlot(i, type);
-    if (card)
-    {
-      if (const std::string& path = card->GetPath(); !path.empty())
-        INFO_LOG("Memory Card Slot {}: {}", i + 1, path);
-
-      Pad::SetMemoryCard(i, std::move(card));
-    }
-  }
-}
-
-void System::UpdatePerGameMemoryCards()
-{
   for (u32 i = 0; i < NUM_CONTROLLER_AND_CARD_PORTS; i++)
   {
     const MemoryCardType type = g_settings.memory_card_types[i];
-    if (!Settings::IsPerGameMemoryCardType(type))
+    if (type == MemoryCardType::None)
+    {
+      Pad::SetMemoryCard(i, {});
+      continue;
+    }
+
+    std::string path = GetMemoryCardPathForSlot(i, type);
+
+    const MemoryCard* current_card = Pad::GetMemoryCard(i);
+    const bool path_changed = (!current_card || current_card->GetPath() != path);
+    INFO_LOG("Memory Card {}: {}{}", i + 1, path, path_changed ? "" : " [UNCHANGED]");
+    if (!path_changed)
       continue;
 
-    Pad::SetMemoryCard(i, nullptr);
-
-    std::unique_ptr<MemoryCard> card = GetMemoryCardForSlot(i, type);
-    if (card)
+    if (current_card)
     {
-      if (const std::string& path = card->GetPath(); !path.empty())
-        INFO_LOG("Memory Card Slot {}: {}", i + 1, path);
-
-      Pad::SetMemoryCard(i, std::move(card));
+      Host::AddIconOSDMessage(fmt::format("MemoryCardChange{}", i), ICON_PF_MEMORY_CARD,
+                              fmt::format(TRANSLATE_FS("OSDMessage", "Memory card in slot {} changed to '{}'."), i + 1,
+                                          Path::GetFileName(path)),
+                              Host::OSD_INFO_DURATION);
     }
+
+    std::unique_ptr<MemoryCard> card;
+    if (!path.empty())
+      card = MemoryCard::Open(std::move(path));
+    else
+      card = MemoryCard::Create();
+
+    Pad::SetMemoryCard(i, std::move(card));
   }
 }
 
@@ -4104,7 +3995,8 @@ bool System::InsertMedia(const char* path)
   const DiscRegion region =
     image ? GameList::GetCustomRegionForPath(path).value_or(GetRegionForImage(image.get())) : DiscRegion::NonPS1;
   if (!image || (UpdateRunningGame(path, image.get(), false),
-                 !CDROM::InsertMedia(image, region, s_state.running_game_serial, s_state.running_game_title, &error)))
+                 !CDROM::InsertMedia(image, region, s_state.running_game_serial, s_state.running_game_title,
+                                     GetCurrentGameSaveTitle(), &error)))
   {
     Host::AddIconOSDWarning(
       "DiscInserted", ICON_FA_COMPACT_DISC,
@@ -4123,13 +4015,6 @@ bool System::InsertMedia(const char* path)
                                       s_state.running_game_title, s_state.running_game_serial),
                           Host::OSD_INFO_DURATION);
 
-  if (g_settings.HasAnyPerGameMemoryCards())
-  {
-    Host::AddIconOSDMessage("ReloadMemoryCardsFromGameChange", ICON_PF_MEMORY_CARD,
-                            TRANSLATE_STR("System", "Game changed, reloading memory cards."), Host::OSD_INFO_DURATION);
-    UpdatePerGameMemoryCards();
-  }
-
   return true;
 }
 
@@ -4141,9 +4026,6 @@ void System::RemoveMedia()
 
 void System::UpdateRunningGame(const std::string& path, CDImage* image, bool booting)
 {
-  if (!booting && s_state.running_game_path == path)
-    return;
-
   const std::string prev_serial = std::move(s_state.running_game_serial);
 
   s_state.running_game_path.clear();
@@ -4184,9 +4066,14 @@ void System::UpdateRunningGame(const std::string& path, CDImage* image, bool boo
         {
           s_state.running_game_entry = GameDatabase::GetEntryForSerial(s_state.running_game_serial);
           if (s_state.running_game_entry && s_state.running_game_title.empty())
-            s_state.running_game_title = s_state.running_game_entry->title;
+          {
+            s_state.running_game_title =
+              s_state.running_game_entry->GetDisplayTitle(GameList::ShouldShowLocalizedTitles());
+          }
           else if (s_state.running_game_title.empty())
+          {
             s_state.running_game_title = s_state.running_game_serial;
+          }
         }
       }
     }
@@ -4203,7 +4090,10 @@ void System::UpdateRunningGame(const std::string& path, CDImage* image, bool boo
         {
           s_state.running_game_serial = s_state.running_game_entry->serial;
           if (s_state.running_game_title.empty())
-            s_state.running_game_title = s_state.running_game_entry->title;
+          {
+            s_state.running_game_title =
+              s_state.running_game_entry->GetDisplayTitle(GameList::ShouldShowLocalizedTitles());
+          }
         }
         else
         {
@@ -4212,16 +4102,6 @@ void System::UpdateRunningGame(const std::string& path, CDImage* image, bool boo
           // Don't display device names for unknown physical discs.
           if (s_state.running_game_title.empty() && !CDImage::IsDeviceName(path.c_str()))
             s_state.running_game_title = Path::GetFileTitle(FileSystem::GetDisplayNameFromPath(path));
-        }
-
-        if (image->HasSubImages())
-        {
-          std::string image_title = image->GetMetadata("title");
-          if (!image_title.empty())
-          {
-            s_state.running_game_title = std::move(image_title);
-            s_state.running_game_custom_title = false;
-          }
         }
       }
       else
@@ -4242,7 +4122,14 @@ void System::UpdateRunningGame(const std::string& path, CDImage* image, bool boo
     if (!booting)
     {
       Achievements::GameChanged(image);
+
+      const bool had_setting_overrides = Cheats::HasAnySettingOverrides();
       Cheats::ReloadCheats(true, true, false, true, true);
+      if (had_setting_overrides)
+        ApplySettings(true);
+
+      if (g_settings.HasAnyPerGameMemoryCards())
+        UpdateMemoryCards();
     }
   }
 
@@ -4314,29 +4201,13 @@ u32 System::GetMediaSubImageIndex()
   return cdi ? cdi->GetCurrentSubImage() : 0;
 }
 
-u32 System::GetMediaSubImageIndexForTitle(std::string_view title)
-{
-  const CDImage* cdi = CDROM::GetMedia();
-  if (!cdi)
-    return 0;
-
-  const u32 count = cdi->GetSubImageCount();
-  for (u32 i = 0; i < count; i++)
-  {
-    if (title == cdi->GetSubImageMetadata(i, "title"))
-      return i;
-  }
-
-  return std::numeric_limits<u32>::max();
-}
-
 std::string System::GetMediaSubImageTitle(u32 index)
 {
   const CDImage* cdi = CDROM::GetMedia();
   if (!cdi)
     return {};
 
-  return cdi->GetSubImageMetadata(index, "title");
+  return cdi->GetSubImageTitle(index);
 }
 
 bool System::SwitchMediaSubImage(u32 index)
@@ -4356,10 +4227,11 @@ bool System::SwitchMediaSubImage(u32 index)
   {
     const DiscRegion region =
       GameList::GetCustomRegionForPath(image->GetPath()).value_or(GetRegionForImage(image.get()));
-    subimage_title = image->GetSubImageMetadata(index, "title");
-    title = image->GetMetadata("title");
+    subimage_title = image->GetSubImageTitle(index);
+    title = FileSystem::GetDisplayNameFromPath(image->GetPath());
     UpdateRunningGame(image->GetPath(), image.get(), false);
-    okay = CDROM::InsertMedia(image, region, s_state.running_game_serial, s_state.running_game_title, &error);
+    okay = CDROM::InsertMedia(image, region, s_state.running_game_serial, s_state.running_game_title,
+                              GetCurrentGameSaveTitle(), &error);
   }
   if (!okay)
   {
@@ -4373,7 +4245,8 @@ bool System::SwitchMediaSubImage(u32 index)
     const DiscRegion region =
       GameList::GetCustomRegionForPath(image->GetPath()).value_or(GetRegionForImage(image.get()));
     UpdateRunningGame(image->GetPath(), image.get(), false);
-    CDROM::InsertMedia(image, region, s_state.running_game_serial, s_state.running_game_title, nullptr);
+    CDROM::InsertMedia(image, region, s_state.running_game_serial, s_state.running_game_title,
+                       GetCurrentGameSaveTitle(), nullptr);
     return false;
   }
 
@@ -4386,7 +4259,7 @@ bool System::SwitchMediaSubImage(u32 index)
 
 bool System::SwitchDiscFromSet(s32 direction, bool display_osd_message)
 {
-  if (!IsValid() || !s_state.running_game_entry || s_state.running_game_entry->disc_set_serials.empty())
+  if (!IsValid() || !s_state.running_game_entry || !s_state.running_game_entry->disc_set)
   {
     if (display_osd_message)
     {
@@ -4398,17 +4271,17 @@ bool System::SwitchDiscFromSet(s32 direction, bool display_osd_message)
     return false;
   }
 
-  s32 current_index = static_cast<s32>(s_state.running_game_entry->disc_set_serials.size());
-  for (size_t i = 0; i < s_state.running_game_entry->disc_set_serials.size(); i++)
+  s32 current_index = static_cast<s32>(s_state.running_game_entry->disc_set->serials.size());
+  for (size_t i = 0; i < s_state.running_game_entry->disc_set->serials.size(); i++)
   {
-    if (s_state.running_game_entry->disc_set_serials[i] == s_state.running_game_serial)
+    if (s_state.running_game_entry->disc_set->serials[i] == s_state.running_game_serial)
     {
       current_index = static_cast<s32>(i);
       break;
     }
   }
 
-  if (current_index == static_cast<s32>(s_state.running_game_entry->disc_set_serials.size()))
+  if (current_index == static_cast<s32>(s_state.running_game_entry->disc_set->serials.size()))
   {
     if (display_osd_message)
     {
@@ -4421,7 +4294,7 @@ bool System::SwitchDiscFromSet(s32 direction, bool display_osd_message)
   }
 
   current_index += direction;
-  if (current_index < 0 || current_index >= static_cast<s32>(s_state.running_game_entry->disc_set_serials.size()))
+  if (current_index < 0 || current_index >= static_cast<s32>(s_state.running_game_entry->disc_set->serials.size()))
   {
     if (display_osd_message)
     {
@@ -4434,7 +4307,7 @@ bool System::SwitchDiscFromSet(s32 direction, bool display_osd_message)
     return false;
   }
 
-  const std::string_view& next_serial = s_state.running_game_entry->disc_set_serials[current_index];
+  const std::string_view& next_serial = s_state.running_game_entry->disc_set->serials[current_index];
   const auto lock = GameList::GetLock();
   const GameList::Entry* entry = GameList::GetEntryBySerial(next_serial);
   if (!entry)
@@ -4450,6 +4323,17 @@ bool System::SwitchDiscFromSet(s32 direction, bool display_osd_message)
   }
 
   return InsertMedia(entry->path.c_str());
+}
+
+std::string_view System::GetCurrentGameSaveTitle()
+{
+  std::string_view ret;
+  if (s_state.running_game_custom_title || !s_state.running_game_entry)
+    ret = s_state.running_game_title;
+  else
+    ret = s_state.running_game_entry->GetSaveTitle();
+
+  return ret;
 }
 
 bool System::SwitchToPreviousDisc(bool display_osd_message)
@@ -4477,9 +4361,6 @@ void System::CheckForSettingsChanges(const Settings& old_settings)
   if (IsValid())
   {
     ClearMemorySaveStates(false, false);
-
-    if (g_settings.disable_all_enhancements != old_settings.disable_all_enhancements)
-      Cheats::ReloadCheats(false, true, false, true, true);
 
     if (g_settings.cpu_overclock_active != old_settings.cpu_overclock_active ||
         (g_settings.cpu_overclock_active &&
@@ -4596,6 +4477,7 @@ void System::CheckForSettingsChanges(const Settings& old_settings)
              g_settings.display_24bit_chroma_smoothing != old_settings.display_24bit_chroma_smoothing ||
              g_settings.display_aspect_ratio != old_settings.display_aspect_ratio ||
              g_settings.display_scaling != old_settings.display_scaling ||
+             g_settings.display_scaling_24bit != old_settings.display_scaling_24bit ||
              g_settings.display_alignment != old_settings.display_alignment ||
              g_settings.display_rotation != old_settings.display_rotation ||
              g_settings.display_deinterlacing_mode != old_settings.display_deinterlacing_mode ||
@@ -4676,10 +4558,7 @@ void System::CheckForSettingsChanges(const Settings& old_settings)
     }
 
     if (g_settings.gpu_widescreen_hack != old_settings.gpu_widescreen_hack ||
-        g_settings.display_aspect_ratio != old_settings.display_aspect_ratio ||
-        (g_settings.display_aspect_ratio == DisplayAspectRatio::Custom &&
-         (g_settings.display_aspect_ratio_custom_numerator != old_settings.display_aspect_ratio_custom_numerator ||
-          g_settings.display_aspect_ratio_custom_denominator != old_settings.display_aspect_ratio_custom_denominator)))
+        g_settings.display_aspect_ratio != old_settings.display_aspect_ratio)
     {
       UpdateGTEAspectRatio();
     }
@@ -4722,7 +4601,7 @@ void System::CheckForSettingsChanges(const Settings& old_settings)
         g_settings.memory_card_paths != old_settings.memory_card_paths ||
         (g_settings.memory_card_use_playlist_title != old_settings.memory_card_use_playlist_title))
     {
-      UpdateMemoryCardTypes();
+      UpdateMemoryCards();
     }
 
     if (g_settings.rewind_enable != old_settings.rewind_enable ||
@@ -4778,11 +4657,12 @@ void System::CheckForSettingsChanges(const Settings& old_settings)
   }
   else
   {
-    if (GPUThread::IsFullscreenUIRequested())
+    const bool thread_changed = (g_settings.gpu_use_thread != old_settings.gpu_use_thread);
+    if (GPUThread::IsFullscreenUIRequested() || thread_changed)
     {
       // handle device setting updates as well
       if (g_settings.gpu_renderer != old_settings.gpu_renderer || g_settings.AreGPUDeviceSettingsChanged(old_settings))
-        GPUThread::UpdateSettings(false, true, g_settings.gpu_use_thread != old_settings.gpu_use_thread);
+        GPUThread::UpdateSettings(false, true, thread_changed);
 
       if (g_settings.display_vsync != old_settings.display_vsync ||
           g_settings.display_disable_mailbox_presentation != old_settings.display_disable_mailbox_presentation)
@@ -4913,6 +4793,12 @@ void System::WarnAboutUnsafeSettings()
         append(
           ICON_EMOJI_WARNING,
           TRANSLATE_SV("System", "Round upscaled texture coordinates is enabled. This may cause rendering errors."));
+      }
+      if (g_settings.gpu_pgxp_tolerance >= 0.0f)
+      {
+        append(
+          ICON_EMOJI_WARNING,
+          TRANSLATE_SV("System", "PGXP Geometry Tolerance is not set to default. This may cause rendering errors."));
       }
     }
     if (g_settings.enable_8mb_ram)
@@ -5418,15 +5304,7 @@ void System::SaveScreenshot(const char* path, DisplayScreenshotMode mode, Displa
 
   std::string auto_path;
   if (!path || path[0] == '\0')
-  {
     path = (auto_path = GetScreenshotPath(Settings::GetDisplayScreenshotFormatExtension(format))).c_str();
-  }
-  else
-  {
-    // If the user chose a specific format, use that.
-    format =
-      Settings::GetDisplayScreenshotFormatFromFileName(FileSystem::GetDisplayNameFromPath(path)).value_or(format);
-  }
 
   GPUBackend::RenderScreenshotToFile(path, mode, quality, true);
 }
@@ -5798,22 +5676,24 @@ std::string System::GetGameMemoryCardPath(std::string_view serial, std::string_v
 
     case MemoryCardType::PerGameTitle:
     {
+      const std::string custom_title = GameList::GetCustomTitleForPath(path);
       const GameDatabase::Entry* entry = GameDatabase::GetEntryForSerial(serial);
-      if (entry)
-      {
-        ret = g_settings.GetGameMemoryCardPath(Path::SanitizeFileName(entry->title), slot);
+      const std::string_view game_title =
+        (!custom_title.empty() || !entry) ? std::string_view(custom_title) : entry->GetSaveTitle();
 
-        // Use disc set name if there isn't a per-disc card present.
+      // Multi-disc game - use disc set name.
+      if (entry && entry->disc_set)
+        ret = g_settings.GetGameMemoryCardPath(Path::SanitizeFileName(entry->disc_set->GetSaveTitle()), slot);
+
+      // But prefer a disc-specific card if one already exists.
+      std::string disc_card_path = g_settings.GetGameMemoryCardPath(Path::SanitizeFileName(game_title), slot);
+      if (disc_card_path != ret)
+      {
         const bool global_use_playlist_title = Host::GetBaseBoolSettingValue(section, "UsePlaylistTitle", true);
         const bool use_playlist_title =
           ini ? ini->GetBoolValue(section, "UsePlaylistTitle", global_use_playlist_title) : global_use_playlist_title;
-        if (!entry->disc_set_name.empty() && use_playlist_title && !FileSystem::FileExists(ret.c_str()))
-          ret = g_settings.GetGameMemoryCardPath(Path::SanitizeFileName(entry->disc_set_name), slot);
-      }
-      else
-      {
-        ret = g_settings.GetGameMemoryCardPath(
-          Path::SanitizeFileName(Path::GetFileTitle(FileSystem::GetDisplayNameFromPath(path))), slot);
+        if (ret.empty() || !use_playlist_title || FileSystem::FileExists(disc_card_path.c_str()))
+          ret = std::move(disc_card_path);
       }
     }
     break;
@@ -5826,6 +5706,130 @@ std::string System::GetGameMemoryCardPath(std::string_view serial, std::string_v
     break;
     default:
       break;
+  }
+
+  return ret;
+}
+
+std::string System::GetMemoryCardPathForSlot(u32 slot, MemoryCardType type)
+{
+  std::string ret;
+  std::string message_key = fmt::format("MemoryCard{}SharedWarning", slot);
+
+  switch (type)
+  {
+    case MemoryCardType::PerGame:
+    {
+      if (s_state.running_game_serial.empty())
+      {
+        Host::AddIconOSDMessage(
+          std::move(message_key), ICON_PF_MEMORY_CARD,
+          fmt::format(TRANSLATE_FS("System", "Per-game memory card cannot be used for slot {} as the running "
+                                             "game has no code. Using shared card instead."),
+                      slot + 1u),
+          Host::OSD_INFO_DURATION);
+        ret = g_settings.GetSharedMemoryCardPath(slot);
+      }
+      else
+      {
+        Host::RemoveKeyedOSDMessage(std::move(message_key));
+        ret = g_settings.GetGameMemoryCardPath(s_state.running_game_serial, slot);
+      }
+    }
+    break;
+
+    case MemoryCardType::PerGameTitle:
+    {
+      if (s_state.running_game_title.empty())
+      {
+        Host::AddIconOSDMessage(
+          std::move(message_key), ICON_PF_MEMORY_CARD,
+          fmt::format(TRANSLATE_FS("System", "Per-game memory card cannot be used for slot {} as the running "
+                                             "game has no title. Using shared card instead."),
+                      slot + 1u),
+          Host::OSD_INFO_DURATION);
+        ret = g_settings.GetSharedMemoryCardPath(slot);
+      }
+      else
+      {
+        const std::string_view game_title = (s_state.running_game_custom_title || !s_state.running_game_entry) ?
+                                              std::string_view(s_state.running_game_title) :
+                                              s_state.running_game_entry->GetSaveTitle();
+        std::string card_path;
+
+        // Multi-disc game - use disc set name.
+        if (s_state.running_game_entry && s_state.running_game_entry->disc_set)
+        {
+          card_path = g_settings.GetGameMemoryCardPath(
+            Path::SanitizeFileName(s_state.running_game_entry->disc_set->GetSaveTitle()), slot);
+        }
+
+        // But prefer a disc-specific card if one already exists.
+        std::string disc_card_path = g_settings.GetGameMemoryCardPath(Path::SanitizeFileName(game_title), slot);
+        if (disc_card_path != card_path)
+        {
+          if (card_path.empty() || !g_settings.memory_card_use_playlist_title ||
+              FileSystem::FileExists(disc_card_path.c_str()))
+          {
+            if (g_settings.memory_card_use_playlist_title && !card_path.empty())
+            {
+              Host::AddIconOSDMessage(
+                fmt::format("DiscSpecificMC{}", slot), ICON_PF_MEMORY_CARD,
+                fmt::format(TRANSLATE_FS("System", "Using disc-specific memory card '{}' instead of per-game card."),
+                            Path::GetFileName(disc_card_path)),
+                Host::OSD_INFO_DURATION);
+            }
+
+            card_path = std::move(disc_card_path);
+          }
+        }
+
+        Host::RemoveKeyedOSDMessage(std::move(message_key));
+        ret = card_path;
+      }
+    }
+    break;
+
+    case MemoryCardType::PerGameFileTitle:
+    {
+      const std::string display_name(FileSystem::GetDisplayNameFromPath(s_state.running_game_path));
+      const std::string_view file_title(Path::GetFileTitle(display_name));
+      if (file_title.empty())
+      {
+        Host::AddIconOSDMessage(
+          std::move(message_key), ICON_PF_MEMORY_CARD,
+          fmt::format(TRANSLATE_FS("System", "Per-game memory card cannot be used for slot {} as the running "
+                                             "game has no path. Using shared card instead."),
+                      slot + 1u));
+        ret = g_settings.GetSharedMemoryCardPath(slot);
+      }
+      else
+      {
+        Host::RemoveKeyedOSDMessage(std::move(message_key));
+        ret = g_settings.GetGameMemoryCardPath(Path::SanitizeFileName(file_title).c_str(), slot);
+      }
+    }
+    break;
+
+    case MemoryCardType::Shared:
+    {
+      Host::RemoveKeyedOSDMessage(std::move(message_key));
+      ret = g_settings.GetSharedMemoryCardPath(slot);
+    }
+    break;
+
+    case MemoryCardType::NonPersistent:
+    {
+      Host::RemoveKeyedOSDMessage(std::move(message_key));
+    }
+    break;
+
+    case MemoryCardType::None:
+    default:
+    {
+      Host::RemoveKeyedOSDMessage(std::move(message_key));
+    }
+    break;
   }
 
   return ret;
@@ -5857,21 +5861,17 @@ void System::ToggleWidescreen()
   g_settings.gpu_widescreen_hack = !g_settings.gpu_widescreen_hack;
 
   const DisplayAspectRatio user_ratio =
-    Settings::ParseDisplayAspectRatio(
-      Host::GetStringSettingValue("Display", "AspectRatio",
-                                  Settings::GetDisplayAspectRatioName(Settings::DEFAULT_DISPLAY_ASPECT_RATIO))
-        .c_str())
-      .value_or(DisplayAspectRatio::Auto);
-  ;
+    Settings::ParseDisplayAspectRatio(Host::GetStringSettingValue("Display", "AspectRatio"))
+      .value_or(Settings::DEFAULT_DISPLAY_ASPECT_RATIO);
 
-  if (user_ratio == DisplayAspectRatio::Auto || user_ratio == DisplayAspectRatio::PAR1_1 ||
-      user_ratio == DisplayAspectRatio::R4_3)
+  if (user_ratio == DisplayAspectRatio::Auto() || user_ratio == DisplayAspectRatio::PAR1_1() ||
+      user_ratio == DisplayAspectRatio{4, 3})
   {
-    g_settings.display_aspect_ratio = g_settings.gpu_widescreen_hack ? DisplayAspectRatio::R16_9 : user_ratio;
+    g_settings.display_aspect_ratio = g_settings.gpu_widescreen_hack ? DisplayAspectRatio{16, 9} : user_ratio;
   }
   else
   {
-    g_settings.display_aspect_ratio = g_settings.gpu_widescreen_hack ? user_ratio : DisplayAspectRatio::Auto;
+    g_settings.display_aspect_ratio = g_settings.gpu_widescreen_hack ? user_ratio : DisplayAspectRatio::Auto();
   }
 
   if (g_settings.gpu_widescreen_hack)
@@ -5887,8 +5887,8 @@ void System::ToggleWidescreen()
     Host::AddIconOSDMessage(
       "ToggleWidescreen", ICON_FA_SHAPES,
       fmt::format(TRANSLATE_FS("OSDMessage", "Widescreen rendering is now disabled, and aspect ratio is set to {}."),
-                  Settings::GetDisplayAspectRatioDisplayName(g_settings.display_aspect_ratio),
-                  Host::OSD_QUICK_DURATION));
+                  Settings::GetDisplayAspectRatioDisplayName(g_settings.display_aspect_ratio)),
+      Host::OSD_QUICK_DURATION);
   }
 
   UpdateGTEAspectRatio();
@@ -5958,18 +5958,12 @@ void System::UpdateGTEAspectRatio()
   DisplayAspectRatio gte_ar = g_settings.display_aspect_ratio;
   u32 custom_num = 0;
   u32 custom_denom = 0;
-  if (!g_settings.gpu_widescreen_hack)
+  if (!g_settings.gpu_widescreen_hack || gte_ar == DisplayAspectRatio::PAR1_1())
   {
     // No WS hack => no correction.
-    gte_ar = DisplayAspectRatio::R4_3;
+    gte_ar = DisplayAspectRatio::Auto();
   }
-  else if (gte_ar == DisplayAspectRatio::Custom)
-  {
-    // Custom AR => use values.
-    custom_num = g_settings.display_aspect_ratio_custom_numerator;
-    custom_denom = g_settings.display_aspect_ratio_custom_denominator;
-  }
-  else if (gte_ar == DisplayAspectRatio::MatchWindow)
+  else if (gte_ar == DisplayAspectRatio::Stretch())
   {
     if (const WindowInfo& main_window_info = GPUThread::GetRenderWindowInfo(); !main_window_info.IsSurfaceless())
     {
@@ -5979,16 +5973,16 @@ void System::UpdateGTEAspectRatio()
       custom_num =
         static_cast<u32>(std::max(std::round(static_cast<float>(main_window_info.surface_width) / correction), 1.0f));
       custom_denom = std::max<u32>(main_window_info.surface_height, 1u);
-      gte_ar = DisplayAspectRatio::Custom;
+      gte_ar = DisplayAspectRatio{static_cast<s16>(custom_num), static_cast<s16>(custom_denom)};
     }
     else
     {
       // Assume 4:3 until we get a window.
-      gte_ar = DisplayAspectRatio::R4_3;
+      gte_ar = DisplayAspectRatio::Auto();
     }
   }
 
-  GTE::SetAspectRatio(gte_ar, custom_num, custom_denom);
+  GTE::SetAspectRatio(gte_ar);
 }
 
 void System::UpdateAutomaticResolutionScale()
@@ -6214,14 +6208,13 @@ void System::UpdateRichPresence(bool update_session_time)
   rp.largeImageText = "DuckStation PS1/PSX Emulator";
   rp.startTimestamp = s_state.discord_presence_time_epoch;
 
-  TinyString game_details = "No Game Running";
+  TinyString game_details("No Game Running");
   if (IsValidOrInitializing())
   {
     // Use disc set name if it's not a custom title.
-    if (s_state.running_game_entry && !s_state.running_game_entry->disc_set_name.empty() &&
-        s_state.running_game_title == s_state.running_game_entry->title)
+    if (!s_state.running_game_custom_title && s_state.running_game_entry && s_state.running_game_entry->disc_set)
     {
-      game_details = s_state.running_game_entry->disc_set_name;
+      game_details = s_state.running_game_entry->disc_set->GetDisplayTitle(true);
     }
     else
     {

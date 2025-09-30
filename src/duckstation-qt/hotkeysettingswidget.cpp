@@ -4,6 +4,7 @@
 #include "hotkeysettingswidget.h"
 #include "controllersettingswindow.h"
 #include "inputbindingwidgets.h"
+#include "mainwindow.h"
 #include "qtutils.h"
 #include "settingswindow.h"
 #include "settingwidgetbinder.h"
@@ -23,6 +24,7 @@ HotkeySettingsWidget::HotkeySettingsWidget(QWidget* parent, ControllerSettingsWi
   : QWidget(parent), m_dialog(dialog)
 {
   createUi();
+  connect(g_main_window, &MainWindow::themeChanged, this, &HotkeySettingsWidget::onThemeChanged);
 }
 
 HotkeySettingsWidget::~HotkeySettingsWidget() = default;
@@ -51,6 +53,24 @@ void HotkeySettingsWidget::Container::repositionSearchBox()
   m_search->setGeometry(x, box_padding, box_width, h);
 }
 
+QPalette HotkeySettingsWidget::getLabelPalette(bool is_dark_theme) const
+{
+  QPalette pal = qApp->palette("QLabel");
+  const QColor label_default_color = pal.color(QPalette::Text);
+  const QColor label_color = is_dark_theme ? label_default_color.darker(120) : label_default_color.lighter();
+  pal.setColor(QPalette::Text, label_color);
+  return pal;
+}
+
+QPalette HotkeySettingsWidget::getRowPalette() const
+{
+  // This is super jank. The native theme on MacOS does not set AlternateBase like the Windows/Fusion themes do, but
+  // instead overrides it in QAbstractItemView.
+  QPalette pal = qApp->palette("QWidget");
+  pal.setColor(QPalette::AlternateBase, qApp->palette("QAbstractItemView").color(QPalette::AlternateBase));
+  return pal;
+}
+
 void HotkeySettingsWidget::createUi()
 {
   QGridLayout* layout = new QGridLayout(this);
@@ -59,6 +79,8 @@ void HotkeySettingsWidget::createUi()
   m_scroll_area = new QScrollArea(this);
   m_container = new Container(m_scroll_area);
   m_layout = new QVBoxLayout(m_container);
+  m_layout->setContentsMargins(0, 0, 0, 0);
+  m_layout->setSpacing(0);
   m_scroll_area->setWidget(m_container);
   m_scroll_area->setWidgetResizable(true);
   m_scroll_area->setBackgroundRole(QPalette::Base);
@@ -76,50 +98,61 @@ void HotkeySettingsWidget::createUi()
 
 void HotkeySettingsWidget::createButtons()
 {
+  static constexpr int LR_MARGIN = 8;
+  static constexpr int TB_MARGIN = 4;
+
+  const QPalette label_palette = getLabelPalette(QtHost::IsDarkApplicationTheme());
+  const QPalette row_palette = getRowPalette();
   const std::vector<const HotkeyInfo*> hotkeys(InputManager::GetHotkeyList());
   for (const HotkeyInfo* hotkey : hotkeys)
   {
     const QString category(qApp->translate("Hotkeys", hotkey->category));
 
     auto iter = m_categories.find(category);
-    int target_row = 0;
     if (iter == m_categories.end())
     {
       CategoryWidgets cw;
-      cw.label = new QLabel(category, m_container);
+      cw.heading = new QWidget(m_container);
+      QVBoxLayout* row_layout = new QVBoxLayout(cw.heading);
+      row_layout->setContentsMargins(LR_MARGIN, TB_MARGIN + 4, LR_MARGIN, TB_MARGIN);
+      m_layout->addWidget(cw.heading);
+
+      cw.label = new QLabel(category, cw.heading);
       QFont label_font(cw.label->font());
       label_font.setPixelSize(19);
       label_font.setBold(true);
       cw.label->setFont(label_font);
-      m_layout->addWidget(cw.label);
+      cw.label->setPalette(label_palette);
+      row_layout->addWidget(cw.label);
 
-      cw.line = new QLabel(m_container);
+      cw.line = new QLabel(cw.heading);
       cw.line->setFrameShape(QFrame::HLine);
       cw.line->setFixedHeight(4);
-      m_layout->addWidget(cw.line);
+      cw.line->setPalette(label_palette);
+      row_layout->addWidget(cw.line);
 
-      cw.layout = new QGridLayout();
+      cw.layout = new QVBoxLayout();
       cw.layout->setContentsMargins(0, 0, 0, 0);
+      cw.layout->setSpacing(0);
       m_layout->addLayout(cw.layout);
       iter = m_categories.insert(category, cw);
-
-      // row count starts at 1 for some reason
-      target_row = 0;
-    }
-    else
-    {
-      target_row = iter->layout->rowCount();
     }
 
-    QGridLayout* layout = iter->layout;
+    QWidget* const row = new QWidget(m_container);
+    row->setAutoFillBackground(true);
+    row->setBackgroundRole((((iter->layout->count()) % 2) == 0) ? QPalette::Base : QPalette::AlternateBase);
+    row->setPalette(row_palette);
+    iter->layout->addWidget(row);
 
-    QLabel* label = new QLabel(qApp->translate("Hotkeys", hotkey->display_name), m_container);
-    layout->addWidget(label, target_row, 0);
+    QHBoxLayout* row_layout = new QHBoxLayout(row);
+    row_layout->setContentsMargins(LR_MARGIN, TB_MARGIN, LR_MARGIN, TB_MARGIN);
 
-    InputBindingWidget* bind = new InputBindingWidget(m_container, m_dialog->getEditingSettingsInterface(),
-                                                      InputBindingInfo::Type::Button, "Hotkeys", hotkey->name);
+    row_layout->addWidget(new QLabel(qApp->translate("Hotkeys", hotkey->display_name), row));
+
+    InputBindingWidget* const bind = new InputBindingWidget(row, m_dialog->getEditingSettingsInterface(),
+                                                            InputBindingInfo::Type::Button, "Hotkeys", hotkey->name);
     bind->setMinimumWidth(300);
-    layout->addWidget(bind, target_row, 1);
+    row_layout->addWidget(bind);
   }
 }
 
@@ -127,23 +160,42 @@ void HotkeySettingsWidget::setFilter(const QString& filter)
 {
   for (const CategoryWidgets& cw : m_categories)
   {
-    const int row_count = cw.layout->rowCount();
+    const int count = cw.layout->count();
     int visible_row_count = 0;
-    for (int i = 0; i < row_count; i++)
+    for (int i = 0; i < count; i++)
     {
-      QLabel* label = qobject_cast<QLabel*>(cw.layout->itemAtPosition(i, 0)->widget());
-      InputBindingWidget* bind = qobject_cast<InputBindingWidget*>(cw.layout->itemAtPosition(i, 1)->widget());
-      if (!label || !bind)
+      QWidget* row = qobject_cast<QWidget*>(cw.layout->itemAt(i)->widget());
+      if (!row)
         continue;
 
+      QLabel* label = row->findChild<QLabel*>(Qt::FindDirectChildrenOnly);
       const bool visible = (filter.isEmpty() || label->text().indexOf(filter, 0, Qt::CaseInsensitive) >= 0);
-      label->setVisible(visible);
-      bind->setVisible(visible);
+      row->setVisible(visible);
       visible_row_count += static_cast<int>(visible);
+
+      // Keep alternating row colors in the same relative position when filtering
+      if (visible)
+        row->setBackgroundRole((visible_row_count - 1) % 2 == 0 ? QPalette::Base : QPalette::AlternateBase);
     }
 
-    const bool heading_visible = (visible_row_count > 0);
-    cw.label->setVisible(heading_visible);
-    cw.line->setVisible(heading_visible);
+    cw.heading->setVisible(visible_row_count > 0);
+  }
+}
+
+void HotkeySettingsWidget::onThemeChanged(bool is_dark_theme)
+{
+  const QPalette label_palette = getLabelPalette(is_dark_theme);
+  const QPalette row_palette = getRowPalette();
+  for (const CategoryWidgets& cw : m_categories)
+  {
+    cw.label->setPalette(label_palette);
+    cw.line->setPalette(label_palette);
+
+    const int count = cw.layout->count();
+    for (int i = 0; i < count; i++)
+    {
+      if (QWidget* const row = qobject_cast<QWidget*>(cw.layout->itemAt(i)->widget()))
+        row->setPalette(row_palette);
+    }
   }
 }
