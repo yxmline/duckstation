@@ -36,11 +36,6 @@ ControllerType AnalogController::GetType() const
   return ControllerType::AnalogController;
 }
 
-bool AnalogController::InAnalogMode() const
-{
-  return m_analog_mode;
-}
-
 void AnalogController::Reset()
 {
   m_command = Command::Idle;
@@ -153,31 +148,16 @@ bool AnalogController::DoState(StateWrapper& sw, bool apply_input_state)
 
 float AnalogController::GetBindState(u32 index) const
 {
-  if (index >= static_cast<u32>(Button::Count))
-  {
-    const u32 sub_index = index - static_cast<u32>(Button::Count);
-    if (sub_index >= static_cast<u32>(m_half_axis_state.size()))
-      return 0.0f;
-
-    return static_cast<float>(m_half_axis_state[sub_index]) * (1.0f / 255.0f);
-  }
+  if (index >= LED_BIND_START_INDEX)
+    return BoolToFloat(index == LED_BIND_START_INDEX && m_analog_mode);
+  else if (index >= MOTOR_BIND_START_INDEX)
+    return GetMotorStrength(index - MOTOR_BIND_START_INDEX);
+  else if (index >= HALFAXIS_BIND_START_INDEX)
+    return static_cast<float>(m_half_axis_state[index - HALFAXIS_BIND_START_INDEX]) * (1.0f / 255.0f);
   else if (index < static_cast<u32>(Button::Analog))
-  {
     return static_cast<float>(((m_button_state >> index) & 1u) ^ 1u);
-  }
   else
-  {
     return 0.0f;
-  }
-}
-
-float AnalogController::GetVibrationMotorState(u32 index) const
-{
-  // this uses the InputManager definition, where 0 = large motor, 1 = small motor
-  if (index == 0)
-    return static_cast<float>(m_motor_state[LargeMotor]) * (1.0f / 255.0f);
-  else
-    return (m_motor_state[SmallMotor] > 0) ? 1.0f : 0.0f;
 }
 
 void AnalogController::SetBindState(u32 index, float value)
@@ -206,11 +186,13 @@ void AnalogController::SetBindState(u32 index, float value)
       return;
 
     m_half_axis_state[sub_index] = u8_value;
-    System::SetRunaheadReplayFlag();
 
 #define MERGE(pos, neg)                                                                                                \
   ((m_half_axis_state[static_cast<u32>(pos)] != 0) ? (127u + ((m_half_axis_state[static_cast<u32>(pos)] + 1u) / 2u)) : \
                                                      (127u - (m_half_axis_state[static_cast<u32>(neg)] / 2u)))
+
+    const auto prev_axis_state = m_axis_state;
+
     switch (static_cast<HalfAxis>(sub_index))
     {
       case HalfAxis::LLeft:
@@ -264,7 +246,6 @@ void AnalogController::SetBindState(u32 index, float value)
       {
         pos_x = ((m_invert_right_stick & 1u) != 0u) ? MERGE_F(HalfAxis::RLeft, HalfAxis::RRight) :
                                                       MERGE_F(HalfAxis::RRight, HalfAxis::RLeft);
-        ;
         pos_y = ((m_invert_right_stick & 2u) != 0u) ? MERGE_F(HalfAxis::RUp, HalfAxis::RDown) :
                                                       MERGE_F(HalfAxis::RDown, HalfAxis::RUp);
       }
@@ -280,6 +261,9 @@ void AnalogController::SetBindState(u32 index, float value)
 #undef MERGE_F
     }
 
+    if (std::memcmp(m_axis_state.data(), prev_axis_state.data(), m_axis_state.size()) != 0)
+      System::SetRunaheadReplayFlag(true);
+
 #undef MERGE
 
     return;
@@ -290,14 +274,14 @@ void AnalogController::SetBindState(u32 index, float value)
   if (value >= m_button_deadzone)
   {
     if (m_button_state & bit)
-      System::SetRunaheadReplayFlag();
+      System::SetRunaheadReplayFlag(false);
 
     m_button_state &= ~(bit);
   }
   else
   {
     if (!(m_button_state & bit))
-      System::SetRunaheadReplayFlag();
+      System::SetRunaheadReplayFlag(false);
 
     m_button_state |= bit;
   }
@@ -313,11 +297,6 @@ std::optional<u32> AnalogController::GetAnalogInputBytes() const
 {
   return m_axis_state[static_cast<size_t>(Axis::LeftY)] << 24 | m_axis_state[static_cast<size_t>(Axis::LeftX)] << 16 |
          m_axis_state[static_cast<size_t>(Axis::RightY)] << 8 | m_axis_state[static_cast<size_t>(Axis::RightX)];
-}
-
-u32 AnalogController::GetInputOverlayIconColor() const
-{
-  return m_analog_mode ? 0xFF2534F0u : 0xFFCCCCCCu;
 }
 
 void AnalogController::ResetTransferState()
@@ -338,6 +317,8 @@ void AnalogController::SetAnalogMode(bool enabled, bool show_message)
     return;
 
   m_analog_mode = enabled;
+
+  InputManager::SetPadLEDState(m_index, BoolToFloat(enabled));
 
   INFO_LOG("Controller {} switched to {} mode.", m_index + 1u, m_analog_mode ? "analog" : "digital");
   if (show_message)
@@ -395,29 +376,25 @@ void AnalogController::SetMotorState(u32 motor, u8 value)
   if (m_motor_state[motor] != value)
   {
     m_motor_state[motor] = value;
-    UpdateHostVibration();
+
+    const float hvalue = GetMotorStrength(motor);
+    DEV_LOG("Set {} motor to {} (raw {})", (motor == LargeMotor) ? "large" : "small", hvalue, m_motor_state[motor]);
+    InputManager::SetPadVibrationIntensity(m_index, MOTOR_BIND_START_INDEX + motor, hvalue);
   }
 }
 
-void AnalogController::UpdateHostVibration()
+float AnalogController::GetMotorStrength(u32 motor) const
 {
-  std::array<float, NUM_MOTORS> hvalues;
-  for (u32 motor = 0; motor < NUM_MOTORS; motor++)
-  {
-    // Small motor is only 0/1.
-    const u8 state =
-      (motor == SmallMotor) ? (((m_motor_state[SmallMotor] & 0x01) != 0x00) ? 255 : 0) : m_motor_state[LargeMotor];
+  // Small motor is only 0/1.
+  const u8 state =
+    (motor == SmallMotor) ? (((m_motor_state[SmallMotor] & 0x01) != 0x00) ? 255 : 0) : m_motor_state[LargeMotor];
 
-    // Curve from https://github.com/KrossX/Pokopom/blob/master/Pokopom/Input_XInput.cpp#L210
-    const double x = static_cast<double>(std::clamp<s32>(static_cast<s32>(state) + m_vibration_bias[motor], 0, 255));
-    const double strength = 0.006474549734772402 * std::pow(x, 3.0) - 1.258165252213538 * std::pow(x, 2.0) +
-                            156.82454281087692 * x + 3.637978807091713e-11;
+  // Curve from https://github.com/KrossX/Pokopom/blob/master/Pokopom/Input_XInput.cpp#L210
+  const double x = static_cast<double>(std::clamp<s32>(static_cast<s32>(state) + m_vibration_bias[motor], 0, 255));
+  const double strength = 0.006474549734772402 * std::pow(x, 3.0) - 1.258165252213538 * std::pow(x, 2.0) +
+                          156.82454281087692 * x + 3.637978807091713e-11;
 
-    hvalues[motor] = (state != 0) ? static_cast<float>(strength / 65535.0) : 0.0f;
-  }
-
-  DEV_LOG("Set small motor to {}, large motor to {}", hvalues[SmallMotor], hvalues[LargeMotor]);
-  InputManager::SetPadVibrationIntensity(m_index, hvalues[LargeMotor], hvalues[SmallMotor]);
+  return (state != 0) ? static_cast<float>(strength / 65535.0) : 0.0f;
 }
 
 u16 AnalogController::GetExtraButtonMask() const
@@ -773,18 +750,20 @@ std::unique_ptr<AnalogController> AnalogController::Create(u32 index)
   return std::make_unique<AnalogController>(index);
 }
 
-static const Controller::ControllerBindingInfo s_binding_info[] = {
+constinit const Controller::ControllerBindingInfo AnalogController::s_binding_info[] = {
 #define BUTTON(name, display_name, icon_name, button, genb)                                                            \
   {name, display_name, icon_name, static_cast<u32>(button), InputBindingInfo::Type::Button, genb}
 #define AXIS(name, display_name, icon_name, halfaxis, genb)                                                            \
   {name,                                                                                                               \
    display_name,                                                                                                       \
    icon_name,                                                                                                          \
-   static_cast<u32>(AnalogController::Button::Count) + static_cast<u32>(halfaxis),                                     \
+   HALFAXIS_BIND_START_INDEX + static_cast<u32>(halfaxis),                                                             \
    InputBindingInfo::Type::HalfAxis,                                                                                   \
    genb}
 #define MOTOR(name, display_name, icon_name, index, genb)                                                              \
-  {name, display_name, icon_name, index, InputBindingInfo::Type::Motor, genb}
+  {name, display_name, icon_name, MOTOR_BIND_START_INDEX + index, InputBindingInfo::Type::Motor, genb}
+#define MODE_LED(name, display_name, icon_name, index, genb)                                                           \
+  {name, display_name, icon_name, LED_BIND_START_INDEX + index, InputBindingInfo::Type::LED, genb}
 
   // clang-format off
   BUTTON("Up", TRANSLATE_NOOP("AnalogController", "D-Pad Up"), ICON_PF_DPAD_UP, AnalogController::Button::Up, GenericInputBinding::DPadUp),
@@ -814,13 +793,17 @@ static const Controller::ControllerBindingInfo s_binding_info[] = {
   AXIS("RDown", TRANSLATE_NOOP("AnalogController", "Right Stick Down"), ICON_PF_RIGHT_ANALOG_DOWN, AnalogController::HalfAxis::RDown, GenericInputBinding::RightStickDown),
   AXIS("RUp", TRANSLATE_NOOP("AnalogController", "Right Stick Up"), ICON_PF_RIGHT_ANALOG_UP, AnalogController::HalfAxis::RUp, GenericInputBinding::RightStickUp),
 
-  MOTOR("LargeMotor", TRANSLATE_NOOP("AnalogController", "Large Motor"), ICON_PF_VIBRATION_L, 0, GenericInputBinding::LargeMotor),
-  MOTOR("SmallMotor", TRANSLATE_NOOP("AnalogController", "Small Motor"), ICON_PF_VIBRATION, 1, GenericInputBinding::SmallMotor),
+  MOTOR("LargeMotor", TRANSLATE_NOOP("AnalogController", "Large Motor"), ICON_PF_VIBRATION_L, LargeMotor, GenericInputBinding::LargeMotor),
+  MOTOR("SmallMotor", TRANSLATE_NOOP("AnalogController", "Small Motor"), ICON_PF_VIBRATION, SmallMotor, GenericInputBinding::SmallMotor),
+
+  MODE_LED("AnalogLED", TRANSLATE_NOOP("AnalogController", "Analog LED"), ICON_PF_ANALOG_LEFT_RIGHT, 0, GenericInputBinding::ModeLED),
+
 // clang-format on
 
 #undef MOTOR
 #undef AXIS
 #undef BUTTON
+#undef MODE_LED
 };
 
 static constexpr const char* s_invert_settings[] = {

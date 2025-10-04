@@ -32,11 +32,13 @@ public:
   void PollEvents() override;
   std::optional<float> GetCurrentValue(InputBindingKey key) override;
   InputManager::DeviceList EnumerateDevices() override;
-  InputManager::VibrationMotorList EnumerateVibrationMotors(std::optional<InputBindingKey> for_device) override;
+  InputManager::DeviceEffectList EnumerateEffects(std::optional<InputBindingInfo::Type> type,
+                                                  std::optional<InputBindingKey> for_device) override;
   bool GetGenericBindingMapping(std::string_view device, GenericInputBindingMapping* mapping) override;
   void UpdateMotorState(InputBindingKey key, float intensity) override;
   void UpdateMotorState(InputBindingKey large_key, InputBindingKey small_key, float large_intensity,
                         float small_intensity) override;
+  void UpdateLEDState(InputBindingKey key, float intensity) override;
 
   bool ContainsDevice(std::string_view device) const override;
   std::optional<InputBindingKey> ParseKeyString(std::string_view device, std::string_view binding) override;
@@ -49,8 +51,8 @@ public:
 
   SDL_Joystick* GetJoystickForDevice(std::string_view device);
 
-  static u32 GetRGBForPlayerId(const SettingsInterface& si, u32 player_id);
-  static u32 ParseRGBForPlayerId(std::string_view str, u32 player_id);
+  static u32 GetRGBForPlayerId(const SettingsInterface& si, u32 player_id, bool active);
+  static u32 ParseRGBForPlayerId(std::string_view str, u32 player_id, bool active);
 
   static std::span<const SettingInfo> GetAdvancedSettingsInfo();
 
@@ -70,8 +72,12 @@ private:
     int player_id;
     float last_touch_x;
     float last_touch_y;
+    float rgb_led_intensity;
     bool use_gamepad_rumble : 1;
     bool has_led : 1;
+    bool has_rgb_led : 1;
+    bool has_mode_led : 1;
+    bool mode_led_state : 1;
 
     // Used to disable Joystick controls that are used in GameController inputs so we don't get double events
     std::vector<bool> joy_button_used_in_gc;
@@ -103,9 +109,13 @@ private:
   bool HandleJoystickHatEvent(const SDL_JoyHatEvent* ev);
   void SendRumbleUpdate(ControllerData* cd);
 
+  static bool ControllerHasMicLED(SDL_Gamepad* gp);
+  static void SetControllerRGBLED(SDL_Gamepad* gp, bool has_rgb_led, const std::array<u32, 2>& colors, float intensity);
+  static void SetControllerMicMuteLED(SDL_Gamepad* gp, bool enabled);
+
   ControllerDataVector m_controllers;
 
-  std::array<u32, MAX_LED_COLORS> m_led_colors{};
+  std::array<std::array<u32, 2>, MAX_LED_COLORS> m_led_colors{};
   std::vector<std::pair<std::string, std::string>> m_sdl_hints;
 
   bool m_sdl_subsystem_initialized = false;

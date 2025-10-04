@@ -266,9 +266,6 @@
     </QtTs>
   </ItemGroup>
   <ItemGroup>
-    <QtUi Include="controllerledsettingsdialog.ui">
-      <FileType>Document</FileType>
-    </QtUi>
     <QtUi Include="setupwizarddialog.ui">
       <FileType>Document</FileType>
     </QtUi>

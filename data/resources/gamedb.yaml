@@ -4850,6 +4850,7 @@ SLES-02913:
     - PlayStationMouse
   traits:
     - ForcePGXPCPUMode # Fixes gaps in geometry.
+    - DisableAutoAnalogMode # Vibration breaks if forced.
   metadata:
     publisher: "Acclaim"
     developer: "Argonaut Games"
@@ -4880,6 +4881,7 @@ SLUS-00633:
     - PlayStationMouse
   traits:
     - ForcePGXPCPUMode # Fixes gaps in geometry.
+    - DisableAutoAnalogMode # Vibration breaks if forced.
   metadata:
     publisher: "Fox Interactive"
     developer: "Argonaut Games"

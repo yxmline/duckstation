@@ -14,12 +14,15 @@ struct InputBindingInfo
     Button,
     Axis,
     HalfAxis,
-    Motor,
+    Motor,           // Vibration motors, generic_mapping gets used for motor selection.
+    LED,             // Status LEDs, e.g. analog/digital mode indicator.
     Pointer,         // Absolute pointer, does not receive any events, but is queryable.
     RelativePointer, // Receive relative mouse movement events, bind_index is offset by the axis.
     Device,          // Used for special-purpose device selection, e.g. force feedback.
     Macro,
   };
+
+  ALWAYS_INLINE static bool IsEffectType(Type type) { return (type >= Type::Motor && type <= Type::LED); }
 
   const char* name;
   const char* display_name;
@@ -67,6 +70,8 @@ enum class GenericInputBinding : u8
 
   LargeMotor, // Low frequency vibration.
   SmallMotor, // High frequency vibration.
+
+  ModeLED, // Indicates Digital/Analog mode.
 
   Count,
 };

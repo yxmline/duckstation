@@ -108,10 +108,10 @@ public:
 
   float getCoverScale() const { return m_cover_scale; }
   void setCoverScale(float scale);
-  int getCoverArtSize() const;
+  QSize getCoverArtSize() const;
   int getCoverArtSpacing() const;
   void refreshCovers();
-  void updateCacheSize(int num_rows, int num_columns);
+  void updateCacheSize(int num_rows, int num_columns, QSortFilterProxyModel* const sort_model, int top_left_row);
 
   qreal getDevicePixelRatio() const { return m_device_pixel_ratio; }
   void setDevicePixelRatio(qreal dpr);
@@ -123,6 +123,13 @@ Q_SIGNALS:
   void iconSizeChanged(int size);
 
 private:
+  struct CoverPixmapCacheEntry
+  {
+    QPixmap pixmap;
+    float scale;
+    bool is_loading;
+  };
+
   void rowsChanged(const QList<int>& rows);
   QVariant data(const QModelIndex& index, int role, const GameList::Entry* ge) const;
 
@@ -133,10 +140,10 @@ private:
   void invalidateCoverForPath(const std::string& path);
   void coverLoaded(const std::string& path, const QImage& image, float scale);
 
-  static void loadOrGenerateCover(QImage& image, const QImage& placeholder_image, int width, int height, float scale,
+  static void loadOrGenerateCover(QImage& image, const QImage& placeholder_image, const QSize& size, float scale,
                                   qreal dpr, const std::string& path, const std::string& serial,
                                   const std::string& save_title, const QString& display_title, bool is_custom_title);
-  static void createPlaceholderImage(QImage& image, const QImage& placeholder_image, int width, int height, float scale,
+  static void createPlaceholderImage(QImage& image, const QImage& placeholder_image, const QSize& size, float scale,
                                      const QString& title);
 
   const QPixmap& getIconPixmapForEntry(const GameList::Entry* ge) const;
@@ -167,7 +174,7 @@ private:
 
   mutable LRUCache<std::string, QPixmap> m_icon_pixmap_cache;
 
-  mutable LRUCache<std::string, QPixmap> m_cover_pixmap_cache;
+  mutable LRUCache<std::string, CoverPixmapCacheEntry> m_cover_pixmap_cache;
 };
 
 class GameListListView final : public QTableView
@@ -230,6 +237,7 @@ protected:
 
 private:
   GameListModel* m_model = nullptr;
+  GameListSortModel* m_sort_model = nullptr;
   int m_horizontal_offset = 0;
   int m_vertical_offset = 0;
 };

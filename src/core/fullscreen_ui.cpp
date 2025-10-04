@@ -229,6 +229,7 @@ static bool CompileTransitionPipelines();
 //////////////////////////////////////////////////////////////////////////
 
 static constexpr const char* DEFAULT_BACKGROUND_NAME = "StaticGray";
+static constexpr const char* NONE_BACKGROUND_NAME = "None";
 
 static bool HasBackground();
 static void LoadBackground();
@@ -382,8 +383,8 @@ static void PopulateGraphicsAdapterList();
 static void PopulateGameListDirectoryCache(SettingsInterface* si);
 static void PopulatePatchesAndCheatsList();
 static void PopulatePostProcessingChain(SettingsInterface* si, const char* section);
-static void BeginVibrationMotorBinding(SettingsInterface* bsi, InputBindingInfo::Type type, const char* section,
-                                       const char* key, std::string_view display_name);
+static void BeginEffectBinding(SettingsInterface* bsi, InputBindingInfo::Type type, const char* section,
+                               const char* key, std::string_view display_name);
 static void DrawInputBindingButton(SettingsInterface* bsi, InputBindingInfo::Type type, const char* section,
                                    const char* name, std::string_view display_name, std::string_view icon_name,
                                    bool show_type = true);
@@ -1929,7 +1930,7 @@ ChoiceDialogOptions FullscreenUI::GetBackgroundOptions(const TinyString& current
   static constexpr const char* dir = FS_OSPATH_SEPARATOR_STR "fullscreenui" FS_OSPATH_SEPARATOR_STR "backgrounds";
 
   ChoiceDialogOptions options;
-  options.emplace_back(FSUI_STR("None"), current_value == "None");
+  options.emplace_back(FSUI_STR("None"), (current_value == NONE_BACKGROUND_NAME));
 
   FileSystem::FindResultsArray results;
   FileSystem::FindFiles(Path::Combine(EmuFolders::UserResources, dir).c_str(), "*",
@@ -2478,6 +2479,9 @@ void FullscreenUI::DrawInputBindingButton(SettingsInterface* bsi, InputBindingIn
         case InputBindingInfo::Type::Motor:
           title.format(ICON_FA_BELL " {}", display_name);
           break;
+        case InputBindingInfo::Type::LED:
+          title.format(ICON_FA_LIGHTBULB " {}", display_name);
+          break;
         case InputBindingInfo::Type::Macro:
           title.format(ICON_FA_PIZZA_SLICE " {}", display_name);
           break;
@@ -2512,8 +2516,8 @@ void FullscreenUI::DrawInputBindingButton(SettingsInterface* bsi, InputBindingIn
 
   if (clicked)
   {
-    if (type == InputBindingInfo::Type::Motor)
-      BeginVibrationMotorBinding(bsi, type, section, name, display_name);
+    if (type == InputBindingInfo::Type::Motor || type == InputBindingInfo::Type::LED)
+      BeginEffectBinding(bsi, type, section, name, display_name);
     else
       s_state.input_binding_dialog.Start(bsi, type, section, name, display_name);
   }
@@ -2672,46 +2676,49 @@ void FullscreenUI::InputBindingDialog::Draw()
   EndRender();
 }
 
-void FullscreenUI::BeginVibrationMotorBinding(SettingsInterface* bsi, InputBindingInfo::Type type, const char* section,
-                                              const char* key, std::string_view display_name)
+void FullscreenUI::BeginEffectBinding(SettingsInterface* bsi, InputBindingInfo::Type type, const char* section,
+                                      const char* key, std::string_view display_name)
 {
   // vibration motors use a list to select
   const bool game_settings = IsEditingGameSettings(bsi);
-  InputManager::VibrationMotorList motors = InputManager::EnumerateVibrationMotors();
-  if (motors.empty())
+  const InputManager::DeviceEffectList effects = InputManager::EnumerateDeviceEffects(type);
+  if (effects.empty())
   {
     ShowToast({}, FSUI_STR("No devices with vibration motors were detected."));
     return;
   }
 
   const TinyString current_binding = bsi->GetTinyStringValue(section, key);
-  size_t current_index = motors.size();
+  size_t current_index = effects.size();
   ChoiceDialogOptions options;
-  options.reserve(motors.size() + 1);
-  for (size_t i = 0; i < motors.size(); i++)
+  options.reserve(effects.size() + 1);
+  for (size_t i = 0; i < effects.size(); i++)
   {
-    const TinyString text = InputManager::ConvertInputBindingKeyToString(InputBindingInfo::Type::Motor, motors[i]);
+    const TinyString text = InputManager::ConvertInputBindingKeyToString(effects[i].first, effects[i].second);
     const bool this_index = (current_binding.view() == text);
     current_index = this_index ? i : current_index;
     options.emplace_back(text, this_index);
   }
 
   // empty/no mapping value
-  options.emplace_back(FSUI_STR("No Vibration"), current_binding.empty());
+  if (type == InputBindingInfo::Type::Motor)
+    options.emplace_back(FSUI_STR("No Vibration"), current_binding.empty());
+  else if (type == InputBindingInfo::Type::LED)
+    options.emplace_back(FSUI_STR("No LED"), current_binding.empty());
 
   // add current value to list if it's not currently available
-  if (!current_binding.empty() && current_index == motors.size())
+  if (!current_binding.empty() && current_index == effects.size())
     options.emplace_back(std::make_pair(std::string(current_binding.view()), true));
 
   OpenChoiceDialog(display_name, false, std::move(options),
                    [game_settings, section = std::string(section), key = std::string(key),
-                    motors = std::move(motors)](s32 index, const std::string& title, bool checked) {
+                    effects = std::move(effects)](s32 index, const std::string& title, bool checked) {
                      if (index < 0)
                        return;
 
                      auto lock = Host::GetSettingsLock();
                      SettingsInterface* bsi = GetEditingSettingsInterface(game_settings);
-                     if (static_cast<size_t>(index) == motors.size())
+                     if (static_cast<size_t>(index) == effects.size())
                        bsi->DeleteValue(section.c_str(), key.c_str());
                      else
                        bsi->SetStringValue(section.c_str(), key.c_str(), title.c_str());
@@ -4162,7 +4169,7 @@ void FullscreenUI::DrawInterfaceSettingsPage()
       MenuButtonWithValue(FSUI_ICONVSTR(ICON_FA_IMAGE, "Menu Background"),
                           FSUI_VSTR("Shows a background image or shader when a game isn't running. Backgrounds are "
                                     "located in resources/fullscreenui/backgrounds in the data directory."),
-                          current_value.c_str()))
+                          (current_value == NONE_BACKGROUND_NAME) ? FSUI_VSTR("None") : current_value.view()))
   {
     ChoiceDialogOptions options = GetBackgroundOptions(current_value);
     OpenChoiceDialog(FSUI_ICONVSTR(ICON_FA_IMAGE, "Menu Background"), false, std::move(options),
@@ -4171,7 +4178,8 @@ void FullscreenUI::DrawInterfaceSettingsPage()
                          return;
 
                        SettingsInterface* bsi = GetEditingSettingsInterface();
-                       bsi->SetStringValue("Main", "FullscreenUIBackground", (index == 0) ? "None" : title.c_str());
+                       bsi->SetStringValue("Main", "FullscreenUIBackground",
+                                           (index == 0) ? NONE_BACKGROUND_NAME : title.c_str());
                        SetSettingsChanged(bsi);
 
                        // Have to defer the reload, because we've already drawn the bg for this frame.
@@ -4656,6 +4664,11 @@ void FullscreenUI::DrawEmulationSettingsPage()
                                "high system requirements."),
                      "Main", "RunaheadFrameCount", 0, runahead_options);
 
+  DrawToggleSetting(
+    bsi, FSUI_ICONVSTR(ICON_PF_ANALOG_ANY, "Runahead for Analog Input"),
+    FSUI_VSTR("Activates runahead when analog input changes, which significantly increases system requirements."),
+    "Main", "RunaheadForAnalogInput", false, runahead_enabled);
+
   TinyString rewind_summary;
   if (runahead_enabled)
   {
@@ -4866,8 +4879,7 @@ void FullscreenUI::DrawControllerSettingsPage()
                     "SDLControllerEnhancedMode", false, bsi->GetBoolValue("InputSources", "SDL", true), false);
   DrawToggleSetting(bsi, FSUI_ICONVSTR(ICON_FA_LIGHTBULB, "SDL DualSense Player LED"),
                     FSUI_VSTR("Enable/Disable the Player LED on DualSense controllers."), "InputSources",
-                    "SDLPS5PlayerLED", false, bsi->GetBoolValue("InputSources", "SDLControllerEnhancedMode", true),
-                    false);
+                    "SDLPS5PlayerLED", false, bsi->GetBoolValue("InputSources", "SDL", true), false);
 #ifdef _WIN32
   DrawToggleSetting(bsi, FSUI_ICONVSTR(ICON_FA_GEAR, "Enable XInput Input Source"),
                     FSUI_VSTR("Support for controllers that use the XInput protocol. XInput should only be used if you "
@@ -9554,6 +9566,7 @@ TRANSLATE_NOOP("FullscreenUI", "Achievements");
 TRANSLATE_NOOP("FullscreenUI", "Achievements Settings");
 TRANSLATE_NOOP("FullscreenUI", "Achievements are not enabled.");
 TRANSLATE_NOOP("FullscreenUI", "Achievements: ");
+TRANSLATE_NOOP("FullscreenUI", "Activates runahead when analog input changes, which significantly increases system requirements.");
 TRANSLATE_NOOP("FullscreenUI", "Add Search Directory");
 TRANSLATE_NOOP("FullscreenUI", "Add Shader");
 TRANSLATE_NOOP("FullscreenUI", "Adds a new directory to the game search list.");
@@ -9935,6 +9948,7 @@ TRANSLATE_NOOP("FullscreenUI", "Mute CD Audio");
 TRANSLATE_NOOP("FullscreenUI", "Navigate");
 TRANSLATE_NOOP("FullscreenUI", "No");
 TRANSLATE_NOOP("FullscreenUI", "No Game Selected");
+TRANSLATE_NOOP("FullscreenUI", "No LED");
 TRANSLATE_NOOP("FullscreenUI", "No Vibration");
 TRANSLATE_NOOP("FullscreenUI", "No cheats are available for this game.");
 TRANSLATE_NOOP("FullscreenUI", "No devices with vibration motors were detected.");
@@ -10050,6 +10064,7 @@ TRANSLATE_NOOP("FullscreenUI", "Right: ");
 TRANSLATE_NOOP("FullscreenUI", "Round Upscaled Texture Coordinates");
 TRANSLATE_NOOP("FullscreenUI", "Rounds texture coordinates instead of flooring when upscaling. Can fix misaligned textures in some games, but break others, and is incompatible with texture filtering.");
 TRANSLATE_NOOP("FullscreenUI", "Runahead");
+TRANSLATE_NOOP("FullscreenUI", "Runahead for Analog Input");
 TRANSLATE_NOOP("FullscreenUI", "Runahead/Rewind");
 TRANSLATE_NOOP("FullscreenUI", "Runs the software renderer in parallel for VRAM readbacks. On some systems, this may result in greater performance when using graphical enhancements with the hardware renderer.");
 TRANSLATE_NOOP("FullscreenUI", "SDL DualSense Player LED");

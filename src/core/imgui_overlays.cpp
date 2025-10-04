@@ -69,7 +69,6 @@ struct InputOverlayState
     u8 slot;
     bool multitap;
     u32 icon_color;
-    float vibration_state[InputManager::MAX_MOTORS_PER_PAD];
     float bind_state[MAX_BINDS];
   };
 
@@ -562,11 +561,11 @@ void ImGuiManager::DrawEnhancementsOverlay(const GPUBackend* gpu)
   if (g_settings.rewind_enable)
     text.append_format(" RW={}/{}", g_settings.rewind_save_frequency, g_settings.rewind_save_slots);
   if (g_settings.IsRunaheadEnabled())
-    text.append_format(" RA={}", g_settings.runahead_frames);
+    text.append_format(" RA={}{}", g_settings.runahead_frames, g_settings.runahead_for_analog_input ? "+A" : "");
 
   if (g_settings.cpu_overclock_active)
     text.append_format(" CPU={}%", g_settings.GetCPUOverclockPercent());
-  if (g_settings.enable_8mb_ram)
+  if (g_settings.cpu_enable_8mb_ram)
     text.append(" 8MB");
   if (g_settings.cdrom_read_speedup != 1)
     text.append_format(" CDR={}x", g_settings.cdrom_read_speedup);
@@ -769,6 +768,9 @@ void ImGuiManager::DrawFrameTimeOverlay(float& position_y, float scale, float ma
 
 void ImGuiManager::UpdateInputOverlay()
 {
+  static constexpr u32 NORMAL_ICON_COLOR = 0xFFCCCCCCu;
+  static constexpr u32 ALTERNATE_ICON_COLOR = 0xFF2534F0u;
+
   u32 num_active_pads = 0;
   for (u32 port = 0; port < NUM_CONTROLLER_AND_CARD_PORTS; port++)
   {
@@ -798,7 +800,7 @@ void ImGuiManager::UpdateInputOverlay()
     pstate.slot = Truncate8(slot);
     pstate.multitap = multitap;
     pstate.ctype = ctype;
-    pstate.icon_color = controller->GetInputOverlayIconColor();
+    pstate.icon_color = NORMAL_ICON_COLOR;
 
     const Controller::ControllerInfo& cinfo = Controller::GetControllerInfo(ctype);
     for (const Controller::ControllerBindingInfo& bi : cinfo.bindings)
@@ -806,15 +808,18 @@ void ImGuiManager::UpdateInputOverlay()
       const u32 bidx = bi.bind_index;
 
       // this will leave some uninitalized, but who cares, it won't be read on the other side
-      if (bi.type >= InputBindingInfo::Type::Button && bi.type <= InputBindingInfo::Type::HalfAxis)
+      if (bi.type >= InputBindingInfo::Type::Button && bi.type <= InputBindingInfo::Type::Motor)
       {
         DebugAssert(bidx < InputOverlayState::MAX_BINDS);
         pstate.bind_state[bidx] = controller->GetBindState(bidx);
       }
-      else if (bi.type == InputBindingInfo::Type::Motor)
+      else if (bi.type == InputBindingInfo::Type::LED)
       {
-        DebugAssert(bidx < InputManager::MAX_MOTORS_PER_PAD);
-        pstate.vibration_state[bidx] = controller->GetVibrationMotorState(bidx);
+        const float intensity = controller->GetBindState(bidx);
+        pstate.icon_color = (GSVector4::cxpr_rgba32(NORMAL_ICON_COLOR) + (GSVector4::cxpr_rgba32(ALTERNATE_ICON_COLOR) -
+                                                                          GSVector4::cxpr_rgba32(NORMAL_ICON_COLOR)) *
+                                                                           GSVector4(intensity))
+                              .rgba32();
       }
     }
   }
@@ -895,7 +900,7 @@ void ImGuiManager::DrawInputsOverlay()
       }
       else if (bi.type == InputBindingInfo::Type::Motor)
       {
-        const float value = pstate.vibration_state[bi.bind_index];
+        const float value = pstate.bind_state[bi.bind_index];
         if (value >= 1.0f)
           text.append_format(" {}", bi.icon_name ? bi.icon_name : bi.name);
         else if (value > 0.0f)
@@ -1158,7 +1163,7 @@ void SaveStateSelectorUI::InitializeListEntry(ListEntry* li, ExtendedSaveStateIn
     li->game_details = fmt::format(TRANSLATE_FS("SaveStateSelectorUI", "{} ({})"), ssi->title, ssi->serial);
 
   li->summary = fmt::format(TRANSLATE_FS("SaveStateSelectorUI", DATE_TIME_FORMAT),
-                            Common::LocalTime(static_cast<std::time_t>(ssi->timestamp)));
+                            Common::LocalTime(static_cast<std::time_t>(ssi->timestamp)).value_or(std::tm{}));
   li->filename = Path::GetFileName(path);
   li->slot = slot;
   li->global = global;
@@ -1458,9 +1463,14 @@ void SaveStateSelectorUI::ShowSlotOSDMessage()
   FILESYSTEM_STAT_DATA sd;
   std::string date;
   if (!path.empty() && FileSystem::StatFile(path.c_str(), &sd))
-    date = fmt::format(TRANSLATE_FS("SaveStateSelectorUI", DATE_TIME_FORMAT), Common::LocalTime(sd.ModificationTime));
+  {
+    date = fmt::format(TRANSLATE_FS("SaveStateSelectorUI", DATE_TIME_FORMAT),
+                       Common::LocalTime(sd.ModificationTime).value_or(std::tm{}));
+  }
   else
+  {
     date = TRANSLATE_STR("SaveStateSelectorUI", "no save yet");
+  }
 
   Host::AddIconOSDMessage(
     "ShowSlotOSDMessage", ICON_EMOJI_MAGNIFIYING_GLASS_TILTED_LEFT,

@@ -42,10 +42,6 @@ ControllerType NeGconRumble::GetType() const
 {
   return ControllerType::NeGconRumble;
 }
-bool NeGconRumble::InAnalogMode() const
-{
-  return m_analog_mode;
-}
 
 void NeGconRumble::Reset()
 {
@@ -123,27 +119,32 @@ bool NeGconRumble::DoState(StateWrapper& sw, bool apply_input_state)
 
 float NeGconRumble::GetBindState(u32 index) const
 {
-  if (index >= static_cast<u32>(Button::Count))
+  if (index >= LED_BIND_START_INDEX)
   {
-    const u32 sub_index = index - static_cast<u32>(Button::Count);
-    if (sub_index >= static_cast<u32>(m_half_axis_state.size()))
-      return 0.0f;
-
-    return static_cast<float>(m_half_axis_state[sub_index]) * (1.0f / 255.0f);
+    return BoolToFloat(index == LED_BIND_START_INDEX && m_analog_mode);
+  }
+  else if (index >= MOTOR_BIND_START_INDEX)
+  {
+    return GetMotorStrength(index - MOTOR_BIND_START_INDEX);
+  }
+  else if (index >= (HALFAXIS_BIND_START_INDEX + static_cast<u32>(HalfAxis::I)))
+  {
+    return static_cast<float>(m_axis_state[index - (HALFAXIS_BIND_START_INDEX + static_cast<u32>(HalfAxis::I)) + 1]) *
+           (1.0f / 255.0f);
+  }
+  else if (index >= HALFAXIS_BIND_START_INDEX)
+  {
+    return static_cast<float>(m_half_axis_state[index - HALFAXIS_BIND_START_INDEX]) * (1.0f / 255.0f);
   }
   else if (index < static_cast<u32>(Button::Analog))
   {
-    return static_cast<float>(((m_button_state >> index) & 1u) ^ 1u);
+    const u16 bit = u16(1) << s_button_indices[static_cast<u8>(index)];
+    return BoolToFloat((m_button_state & bit) == 0);
   }
   else
   {
     return 0.0f;
   }
-}
-
-float NeGconRumble::GetVibrationMotorState(u32 index) const
-{
-  return ((index < m_motor_state.size()) ? m_motor_state[index] : 0) * (1.0f / 255.0f);
 }
 
 void NeGconRumble::SetBindState(u32 index, float value)
@@ -193,14 +194,14 @@ void NeGconRumble::SetBindState(u32 index, float value)
     if (value >= 0.5f)
     {
       if (m_button_state & bit)
-        System::SetRunaheadReplayFlag();
+        System::SetRunaheadReplayFlag(false);
 
       m_button_state &= ~bit;
     }
     else
     {
       if (!(m_button_state & bit))
-        System::SetRunaheadReplayFlag();
+        System::SetRunaheadReplayFlag(false);
 
       m_button_state |= bit;
     }
@@ -234,6 +235,8 @@ void NeGconRumble::SetAnalogMode(bool enabled, bool show_message)
 {
   if (m_analog_mode == enabled)
     return;
+
+  InputManager::SetPadLEDState(m_index, BoolToFloat(enabled));
 
   INFO_LOG("Controller {} switched to {} mode.", m_index + 1u, m_analog_mode ? "analog" : "digital");
   if (show_message)
@@ -275,25 +278,22 @@ void NeGconRumble::SetMotorState(u32 motor, u8 value)
   if (m_motor_state[motor] != value)
   {
     m_motor_state[motor] = value;
-    UpdateHostVibration();
+
+    const float hvalue = GetMotorStrength(motor);
+    DEV_LOG("Set {} motor to {} (raw {})", (motor == LargeMotor) ? "large" : "small", hvalue, m_motor_state[motor]);
+    InputManager::SetPadVibrationIntensity(m_index, MOTOR_BIND_START_INDEX + motor, hvalue);
   }
 }
 
-void NeGconRumble::UpdateHostVibration()
+float NeGconRumble::GetMotorStrength(u32 motor) const
 {
-  std::array<float, NUM_MOTORS> hvalues;
-  for (u32 motor = 0; motor < NUM_MOTORS; motor++)
-  {
-    // Curve from https://github.com/KrossX/Pokopom/blob/master/Pokopom/Input_XInput.cpp#L210
-    const u8 state = m_motor_state[motor];
-    const double x = static_cast<double>(std::clamp<s32>(static_cast<s32>(state) + m_vibration_bias[motor], 0, 255));
-    const double strength = 0.006474549734772402 * std::pow(x, 3.0) - 1.258165252213538 * std::pow(x, 2.0) +
-                            156.82454281087692 * x + 3.637978807091713e-11;
+  // Curve from https://github.com/KrossX/Pokopom/blob/master/Pokopom/Input_XInput.cpp#L210
+  const u8 state = m_motor_state[motor];
+  const double x = static_cast<double>(std::clamp<s32>(static_cast<s32>(state) + m_vibration_bias[motor], 0, 255));
+  const double strength = 0.006474549734772402 * std::pow(x, 3.0) - 1.258165252213538 * std::pow(x, 2.0) +
+                          156.82454281087692 * x + 3.637978807091713e-11;
 
-    hvalues[motor] = (state != 0) ? static_cast<float>(strength / 65535.0) : 0.0f;
-  }
-
-  InputManager::SetPadVibrationIntensity(m_index, hvalues[0], hvalues[1]);
+  return (state != 0) ? static_cast<float>(strength / 65535.0) : 0.0f;
 }
 
 u8 NeGconRumble::GetExtraButtonMaskLSB() const
@@ -713,18 +713,20 @@ std::unique_ptr<NeGconRumble> NeGconRumble::Create(u32 index)
   return std::make_unique<NeGconRumble>(index);
 }
 
-static const Controller::ControllerBindingInfo s_binding_info[] = {
+constinit const Controller::ControllerBindingInfo NeGconRumble::s_binding_info[] = {
 #define BUTTON(name, display_name, icon_name, button, genb)                                                            \
   {name, display_name, icon_name, static_cast<u32>(button), InputBindingInfo::Type::Button, genb}
 #define AXIS(name, display_name, icon_name, halfaxis, genb)                                                            \
   {name,                                                                                                               \
    display_name,                                                                                                       \
    icon_name,                                                                                                          \
-   static_cast<u32>(NeGconRumble::Button::Count) + static_cast<u32>(halfaxis),                                         \
+   HALFAXIS_BIND_START_INDEX + static_cast<u32>(halfaxis),                                                             \
    InputBindingInfo::Type::HalfAxis,                                                                                   \
    genb}
 #define MOTOR(name, display_name, icon_name, index, genb)                                                              \
-  {name, display_name, icon_name, index, InputBindingInfo::Type::Motor, genb}
+  {name, display_name, icon_name, MOTOR_BIND_START_INDEX + index, InputBindingInfo::Type::Motor, genb}
+#define MODE_LED(name, display_name, icon_name, index, genb)                                                           \
+  {name, display_name, icon_name, LED_BIND_START_INDEX + index, InputBindingInfo::Type::LED, genb}
 
   // clang-format off
   BUTTON("Up", TRANSLATE_NOOP("NeGconRumble", "D-Pad Up"), ICON_PF_DPAD_UP, NeGconRumble::Button::Up, GenericInputBinding::DPadUp),
@@ -739,11 +741,13 @@ static const Controller::ControllerBindingInfo s_binding_info[] = {
   AXIS("L", TRANSLATE_NOOP("NeGconRumble", "Left Trigger"), ICON_PF_LEFT_ANALOG_LEFT, NeGconRumble::HalfAxis::L, GenericInputBinding::L1),
   BUTTON("R", TRANSLATE_NOOP("NeGconRumble", "Right Trigger"), ICON_PF_RIGHT_SHOULDER_R1, NeGconRumble::Button::R, GenericInputBinding::R1),
   AXIS("SteeringLeft", TRANSLATE_NOOP("NeGconRumble", "Steering (Twist) Left"), ICON_PF_LEFT_ANALOG_LEFT, NeGconRumble::HalfAxis::SteeringLeft, GenericInputBinding::LeftStickLeft),
-  AXIS("SteeringRight", TRANSLATE_NOOP("NeGconRumble", "Steering (Twist) Right"), ICON_PF_LEFT_ANALOG_LEFT, NeGconRumble::HalfAxis::SteeringRight, GenericInputBinding::LeftStickRight),
+  AXIS("SteeringRight", TRANSLATE_NOOP("NeGconRumble", "Steering (Twist) Right"), ICON_PF_LEFT_ANALOG_RIGHT, NeGconRumble::HalfAxis::SteeringRight, GenericInputBinding::LeftStickRight),
   BUTTON("Analog", TRANSLATE_NOOP("NeGconRumble", "Analog Toggle"), ICON_PF_ANALOG_LEFT_RIGHT, NeGconRumble::Button::Analog, GenericInputBinding::System),
   
-  MOTOR("LargeMotor", TRANSLATE_NOOP("AnalogController", "Large Motor"), ICON_PF_VIBRATION_L, 0, GenericInputBinding::LargeMotor),
-  MOTOR("SmallMotor", TRANSLATE_NOOP("AnalogController", "Small Motor"), ICON_PF_VIBRATION, 1, GenericInputBinding::SmallMotor),
+  MOTOR("LargeMotor", TRANSLATE_NOOP("AnalogController", "Large Motor"), ICON_PF_VIBRATION_L, LargeMotor, GenericInputBinding::LargeMotor),
+  MOTOR("SmallMotor", TRANSLATE_NOOP("AnalogController", "Small Motor"), ICON_PF_VIBRATION, SmallMotor, GenericInputBinding::SmallMotor),
+
+  MODE_LED("ModeLED", TRANSLATE_NOOP("AnalogController", "Mode LED"), ICON_PF_ANALOG_LEFT_RIGHT, 0, GenericInputBinding::ModeLED),
 // clang-format on
 
 #undef MOTOR

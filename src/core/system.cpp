@@ -353,7 +353,7 @@ static StateVars s_state;
 
 static TinyString GetTimestampStringForFileName()
 {
-  return TinyString::from_format("{:%Y-%m-%d-%H-%M-%S}", Common::LocalTime(std::time(nullptr)));
+  return TinyString::from_format("{:%Y-%m-%d-%H-%M-%S}", Common::LocalTime(std::time(nullptr)).value_or(std::tm{}));
 }
 
 bool System::PerformEarlyHardwareChecks(Error* error)
@@ -2037,7 +2037,7 @@ void System::DestroySystem()
     Host::ClearOSDMessages(true);
   });
 
-  InputManager::PauseVibration();
+  InputManager::ClearEffects();
   InputManager::UpdateHostMouseMode();
 
   if (g_settings.inhibit_screensaver)
@@ -2629,7 +2629,7 @@ bool System::AllocateMemoryStates(size_t state_count, bool recycle_old_textures)
 
   // Allocate CPU buffers.
   // TODO: Maybe look at host memory limits here...
-  const size_t size = GetMaxSaveStateSize();
+  const size_t size = GetMaxMemorySaveStateSize();
   for (MemorySaveState& mss : s_state.memory_save_states)
   {
     mss.state_size = 0;
@@ -2781,10 +2781,8 @@ void System::DoMemoryState(StateWrapper& sw, MemorySaveState& mss, bool update_d
   sw.Do(&s_state.internal_frame_number);
 
   SAVE_COMPONENT("CPU", CPU::DoState(sw));
+  CPU::PGXP::DoState(sw);
 
-  // don't need to reset pgxp because the value checks will save us from broken rendering, and it
-  // saves using imprecise values for a frame in 30fps games.
-  // TODO: Save PGXP state to memory state instead. It'll be 8MB, but potentially worth it.
   if (sw.IsReading())
     CPU::CodeCache::InvalidateAllRAMBlocks();
 
@@ -2904,8 +2902,13 @@ size_t System::GetMaxSaveStateSize()
   // 5 megabytes is sufficient for now, at the moment they're around 4.3MB, or 10.3MB with 8MB RAM enabled.
   static constexpr u32 MAX_2MB_SAVE_STATE_SIZE = 5 * 1024 * 1024;
   static constexpr u32 MAX_8MB_SAVE_STATE_SIZE = 11 * 1024 * 1024;
-  const bool is_8mb_ram = (System::IsValid() ? (Bus::g_ram_size > Bus::RAM_2MB_SIZE) : g_settings.enable_8mb_ram);
+  const bool is_8mb_ram = (System::IsValid() ? (Bus::g_ram_size > Bus::RAM_2MB_SIZE) : g_settings.cpu_enable_8mb_ram);
   return is_8mb_ram ? MAX_8MB_SAVE_STATE_SIZE : MAX_2MB_SAVE_STATE_SIZE;
+}
+
+size_t System::GetMaxMemorySaveStateSize()
+{
+  return GetMaxSaveStateSize() + CPU::PGXP::GetStateSize();
 }
 
 std::string System::GetMediaPathFromSaveState(const char* path)
@@ -4487,6 +4490,7 @@ void System::CheckForSettingsChanges(const Settings& old_settings)
              g_settings.gpu_pgxp_texture_correction != old_settings.gpu_pgxp_texture_correction ||
              g_settings.gpu_pgxp_color_correction != old_settings.gpu_pgxp_color_correction ||
              g_settings.gpu_pgxp_depth_buffer != old_settings.gpu_pgxp_depth_buffer ||
+             g_settings.gpu_pgxp_vertex_cache != old_settings.gpu_pgxp_vertex_cache ||
              g_settings.display_active_start_offset != old_settings.display_active_start_offset ||
              g_settings.display_active_end_offset != old_settings.display_active_end_offset ||
              g_settings.display_line_start_offset != old_settings.display_line_start_offset ||
@@ -4713,7 +4717,7 @@ void System::SetTaintsFromSettings()
     SetTaint(Taint::CPUOverclock);
   if (g_settings.gpu_force_video_timing != ForceVideoTimingMode::Disabled)
     SetTaint(Taint::ForceFrameTimings);
-  if (g_settings.enable_8mb_ram)
+  if (g_settings.cpu_enable_8mb_ram)
     SetTaint(Taint::RAM8MB);
   if (Cheats::GetActivePatchCount() > 0)
     SetTaint(Taint::Patches);
@@ -4801,7 +4805,7 @@ void System::WarnAboutUnsafeSettings()
           TRANSLATE_SV("System", "PGXP Geometry Tolerance is not set to default. This may cause rendering errors."));
       }
     }
-    if (g_settings.enable_8mb_ram)
+    if (g_settings.cpu_enable_8mb_ram)
     {
       append(ICON_EMOJI_WARNING,
              TRANSLATE_SV("System", "8MB RAM is enabled, this may be incompatible with some games."));
@@ -4844,7 +4848,7 @@ void System::WarnAboutUnsafeSettings()
 
     if (g_settings.cpu_overclock_active)
       APPEND_SUBMESSAGE(TRANSLATE_SV("System", "Overclock disabled."));
-    if (g_settings.enable_8mb_ram)
+    if (g_settings.cpu_enable_8mb_ram)
       APPEND_SUBMESSAGE(TRANSLATE_SV("System", "8MB RAM disabled."));
     if (g_settings.gpu_resolution_scale != 1)
       APPEND_SUBMESSAGE(TRANSLATE_SV("System", "Resolution scale set to 1x."));
@@ -4877,7 +4881,7 @@ void System::WarnAboutUnsafeSettings()
       APPEND_SUBMESSAGE(TRANSLATE_SV("System", "Mute CD-ROM audio disabled."));
     if (g_settings.texture_replacements.enable_vram_write_replacements)
       APPEND_SUBMESSAGE(TRANSLATE_SV("System", "VRAM write texture replacements disabled."));
-    if (g_settings.use_old_mdec_routines)
+    if (g_settings.mdec_use_old_routines)
       APPEND_SUBMESSAGE(TRANSLATE_SV("System", "Use old MDEC routines disabled."));
     if (g_settings.pio_device_type != PIODeviceType::None)
       APPEND_SUBMESSAGE(TRANSLATE_SV("System", "PIO device removed."));
@@ -4938,7 +4942,7 @@ void System::LogUnsafeSettingsToConsole(const SmallStringBase& messages)
 void System::CalculateRewindMemoryUsage(u32 num_saves, u32 resolution_scale, u64* ram_usage, u64* vram_usage)
 {
   const u64 real_resolution_scale = std::max<u64>(g_settings.gpu_resolution_scale, 1u);
-  *ram_usage = GetMaxSaveStateSize() * static_cast<u64>(num_saves);
+  *ram_usage = GetMaxMemorySaveStateSize() * static_cast<u64>(num_saves);
   *vram_usage = ((VRAM_WIDTH * real_resolution_scale) * (VRAM_HEIGHT * real_resolution_scale) * 4) *
                 static_cast<u64>(g_settings.gpu_multisamples) * static_cast<u64>(num_saves);
 }
@@ -5145,9 +5149,12 @@ bool System::DoRunahead()
   return false;
 }
 
-void System::SetRunaheadReplayFlag()
+void System::SetRunaheadReplayFlag(bool is_analog_input)
 {
   if (s_state.runahead_frames == 0 || s_state.memory_save_state_count == 0)
+    return;
+
+  if (is_analog_input && !g_settings.runahead_for_analog_input)
     return;
 
 #ifdef PROFILE_MEMORY_SAVE_STATES

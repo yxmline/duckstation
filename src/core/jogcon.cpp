@@ -34,7 +34,7 @@ ControllerType JogCon::GetType() const
 void JogCon::Reset()
 {
   // Reset starts in jogcon mode?
-  m_jogcon_mode = true;
+  SetJogConMode(true, false);
   ResetTransferState();
   ResetMotorConfig();
 }
@@ -78,27 +78,16 @@ bool JogCon::DoState(StateWrapper& sw, bool apply_input_state)
 
 float JogCon::GetBindState(u32 index) const
 {
-  if (index >= static_cast<u32>(Button::MaxCount))
-  {
-    const u32 sub_index = index - static_cast<u32>(Button::MaxCount);
-    if (sub_index >= static_cast<u32>(m_half_axis_state.size()))
-      return 0.0f;
-
-    return static_cast<float>(m_half_axis_state[sub_index]) * (1.0f / 255.0f);
-  }
+  if (index >= LED_BIND_START_INDEX)
+    return BoolToFloat(index == LED_BIND_START_INDEX && m_jogcon_mode);
+  else if (index >= MOTOR_BIND_START_INDEX)
+    return m_last_strength;
+  else if (index >= HALFAXIS_BIND_START_INDEX)
+    return static_cast<float>(m_half_axis_state[index - HALFAXIS_BIND_START_INDEX]) * (1.0f / 255.0f);
   else if (index < static_cast<u32>(Button::Mode))
-  {
     return static_cast<float>(((m_button_state >> index) & 1u) ^ 1u);
-  }
   else
-  {
     return 0.0f;
-  }
-}
-
-float JogCon::GetVibrationMotorState(u32 index) const
-{
-  return (index == 0) ? m_last_strength : 0.0f;
 }
 
 void JogCon::SetBindState(u32 index, float value)
@@ -128,12 +117,16 @@ void JogCon::SetBindState(u32 index, float value)
       return;
 
     m_half_axis_state[sub_index] = u8_value;
-    System::SetRunaheadReplayFlag();
+
+    const s8 prev_steering_state = m_steering_state;
 
     m_steering_state =
       (m_half_axis_state[static_cast<u32>(HalfAxis::SteeringRight)] != 0) ?
         static_cast<s8>((m_half_axis_state[static_cast<u32>(HalfAxis::SteeringRight)] / 2)) :
         -static_cast<s8>((static_cast<u32>(m_half_axis_state[static_cast<u32>(HalfAxis::SteeringLeft)]) + 1) / 2);
+
+    if (m_steering_state != prev_steering_state)
+      System::SetRunaheadReplayFlag(true);
   }
 
   const u16 bit = u16(1) << static_cast<u8>(index);
@@ -141,14 +134,14 @@ void JogCon::SetBindState(u32 index, float value)
   if (value >= m_button_deadzone)
   {
     if (m_button_state & bit)
-      System::SetRunaheadReplayFlag();
+      System::SetRunaheadReplayFlag(false);
 
     m_button_state &= ~(bit);
   }
   else
   {
     if (!(m_button_state & bit))
-      System::SetRunaheadReplayFlag();
+      System::SetRunaheadReplayFlag(false);
 
     m_button_state |= bit;
   }
@@ -171,11 +164,6 @@ void JogCon::ResetTransferState()
   m_command_step = 0;
 }
 
-u32 JogCon::GetInputOverlayIconColor() const
-{
-  return m_jogcon_mode ? 0xFF2534F0u : 0xFFCCCCCCu;
-}
-
 void JogCon::SetJogConMode(bool enabled, bool show_message)
 {
   if (m_jogcon_mode == enabled)
@@ -183,6 +171,8 @@ void JogCon::SetJogConMode(bool enabled, bool show_message)
 
   m_jogcon_mode = enabled;
   m_configuration_mode = enabled && m_configuration_mode;
+
+  InputManager::SetPadLEDState(m_index, BoolToFloat(enabled));
 
   INFO_LOG("Controller {} switched to {} mode.", m_index + 1u, m_jogcon_mode ? "JogCon" : "Digital");
   if (show_message)
@@ -284,7 +274,7 @@ void JogCon::SetMotorDirection(u8 direction_command, u8 strength)
     if (m_last_strength != 0.0f)
     {
       m_last_strength = 0.0f;
-      InputManager::SetPadVibrationIntensity(m_index, 0.0f, 0.0f);
+      InputManager::SetPadVibrationIntensity(m_index, MOTOR_BIND_START_INDEX, 0.0f);
     }
 
     return;
@@ -304,7 +294,7 @@ void JogCon::SetMotorDirection(u8 direction_command, u8 strength)
   if (f_strength != m_last_strength)
   {
     m_last_strength = f_strength;
-    InputManager::SetPadVibrationIntensity(m_index, f_strength, 0.0f);
+    InputManager::SetPadVibrationIntensity(m_index, MOTOR_BIND_START_INDEX, f_strength);
   }
 }
 
@@ -614,14 +604,14 @@ std::unique_ptr<JogCon> JogCon::Create(u32 index)
   return std::make_unique<JogCon>(index);
 }
 
-static const Controller::ControllerBindingInfo s_binding_info[] = {
+constinit const Controller::ControllerBindingInfo JogCon::s_binding_info[] = {
 #define BUTTON(name, display_name, icon_name, button, genb)                                                            \
   {name, display_name, icon_name, static_cast<u32>(button), InputBindingInfo::Type::Button, genb}
 #define AXIS(name, display_name, icon_name, halfaxis, genb)                                                            \
   {name,                                                                                                               \
    display_name,                                                                                                       \
    icon_name,                                                                                                          \
-   static_cast<u32>(JogCon::Button::MaxCount) + static_cast<u32>(halfaxis),                                            \
+   HALFAXIS_BIND_START_INDEX + static_cast<u32>(halfaxis),                                                             \
    InputBindingInfo::Type::HalfAxis,                                                                                   \
    genb}
 
@@ -647,11 +637,13 @@ static const Controller::ControllerBindingInfo s_binding_info[] = {
 
   // clang-format on
 
-  {"Motor", TRANSLATE_NOOP("JogCon", "Vibration Motor"), ICON_PF_VIBRATION, 0u, InputBindingInfo::Type::Motor,
-   GenericInputBinding::LargeMotor},
+  {"ModeLED", TRANSLATE_NOOP("JogCon", "Mode LED"), ICON_PF_ANALOG_LEFT_RIGHT, LED_BIND_START_INDEX,
+   InputBindingInfo::Type::LED, GenericInputBinding::ModeLED},
 
-  {"ForceFeedbackDevice", TRANSLATE_NOOP("JogCon", "Force Feedback Device"), nullptr,
-   static_cast<u32>(JogCon::Button::MaxCount) + static_cast<u32>(JogCon::HalfAxis::MaxCount),
+  {"Motor", TRANSLATE_NOOP("JogCon", "Vibration Motor"), ICON_PF_VIBRATION, MOTOR_BIND_START_INDEX,
+   InputBindingInfo::Type::Motor, GenericInputBinding::LargeMotor},
+
+  {"ForceFeedbackDevice", TRANSLATE_NOOP("JogCon", "Force Feedback Device"), nullptr, FFDEVICE_BIND_START_INDEX,
    InputBindingInfo::Type::Device, GenericInputBinding::Unknown},
 
 #undef BUTTON

@@ -195,7 +195,7 @@ void Settings::Load(const SettingsInterface& si, const SettingsInterface& contro
     ParseConsoleRegionName(
       si.GetStringValue("Console", "Region", Settings::GetConsoleRegionName(Settings::DEFAULT_CONSOLE_REGION)).c_str())
       .value_or(DEFAULT_CONSOLE_REGION);
-  enable_8mb_ram = si.GetBoolValue("Console", "Enable8MBRAM", false);
+  cpu_enable_8mb_ram = si.GetBoolValue("Console", "Enable8MBRAM", false);
 
   emulation_speed = si.GetFloatValue("Main", "EmulationSpeed", 1.0f);
   fast_forward_speed = si.GetFloatValue("Main", "FastForwardSpeed", 0.0f);
@@ -216,6 +216,7 @@ void Settings::Load(const SettingsInterface& si, const SettingsInterface& contro
   rewind_save_frequency = si.GetFloatValue("Main", "RewindFrequency", 10.0f);
   rewind_save_slots = static_cast<u16>(std::min(si.GetUIntValue("Main", "RewindSaveSlots", 10u), 65535u));
   runahead_frames = static_cast<u8>(std::min(si.GetUIntValue("Main", "RunaheadFrameCount", 0u), 255u));
+  runahead_for_analog_input = si.GetBoolValue("Main", "RunaheadForAnalogInput", false);
 
   cpu_execution_mode =
     ParseCPUExecutionMode(
@@ -409,7 +410,7 @@ void Settings::Load(const SettingsInterface& si, const SettingsInterface& contro
 
   audio_output_muted = si.GetBoolValue("Audio", "OutputMuted", false);
 
-  use_old_mdec_routines = si.GetBoolValue("Hacks", "UseOldMDECRoutines", false);
+  mdec_use_old_routines = si.GetBoolValue("Hacks", "UseOldMDECRoutines", false);
   export_shared_memory = si.GetBoolValue("Hacks", "ExportSharedMemory", false);
 
   dma_max_slice_ticks = si.GetIntValue("Hacks", "DMAMaxSliceTicks", DEFAULT_DMA_MAX_SLICE_TICKS);
@@ -573,7 +574,7 @@ void Settings::LoadPGXPSettings(const SettingsInterface& si)
 void Settings::Save(SettingsInterface& si, bool ignore_base) const
 {
   si.SetStringValue("Console", "Region", GetConsoleRegionName(region));
-  si.SetBoolValue("Console", "Enable8MBRAM", enable_8mb_ram);
+  si.SetBoolValue("Console", "Enable8MBRAM", cpu_enable_8mb_ram);
 
   si.SetFloatValue("Main", "EmulationSpeed", emulation_speed);
   si.SetFloatValue("Main", "FastForwardSpeed", fast_forward_speed);
@@ -598,6 +599,7 @@ void Settings::Save(SettingsInterface& si, bool ignore_base) const
   si.SetFloatValue("Main", "RewindFrequency", rewind_save_frequency);
   si.SetUIntValue("Main", "RewindSaveSlots", rewind_save_slots);
   si.SetUIntValue("Main", "RunaheadFrameCount", runahead_frames);
+  si.SetBoolValue("Main", "RunaheadForAnalogInput", runahead_for_analog_input);
 
   si.SetStringValue("CPU", "ExecutionMode", GetCPUExecutionModeName(cpu_execution_mode));
   si.SetBoolValue("CPU", "OverclockEnable", cpu_overclock_enable);
@@ -728,7 +730,7 @@ void Settings::Save(SettingsInterface& si, bool ignore_base) const
   si.SetUIntValue("Audio", "FastForwardVolume", audio_fast_forward_volume);
   si.SetBoolValue("Audio", "OutputMuted", audio_output_muted);
 
-  si.SetBoolValue("Hacks", "UseOldMDECRoutines", use_old_mdec_routines);
+  si.SetBoolValue("Hacks", "UseOldMDECRoutines", mdec_use_old_routines);
   si.SetBoolValue("Hacks", "ExportSharedMemory", export_shared_memory);
 
   if (!ignore_base)
@@ -1036,7 +1038,7 @@ void Settings::ApplySettingRestrictions()
   {
     g_settings.cpu_overclock_enable = false;
     g_settings.cpu_overclock_active = false;
-    g_settings.enable_8mb_ram = false;
+    g_settings.cpu_enable_8mb_ram = false;
     g_settings.gpu_resolution_scale = 1;
     g_settings.gpu_multisamples = 1;
     g_settings.gpu_automatic_resolution_scale = false;
@@ -1058,9 +1060,10 @@ void Settings::ApplySettingRestrictions()
     g_settings.cdrom_seek_speedup = 1;
     g_settings.cdrom_mute_cd_audio = false;
     g_settings.texture_replacements.enable_vram_write_replacements = false;
-    g_settings.use_old_mdec_routines = false;
+    g_settings.mdec_use_old_routines = false;
     g_settings.bios_patch_fast_boot = false;
     g_settings.runahead_frames = 0;
+    g_settings.runahead_for_analog_input = false;
     g_settings.rewind_enable = false;
     g_settings.pio_device_type = PIODeviceType::None;
     g_settings.pcdrv_enable = false;
